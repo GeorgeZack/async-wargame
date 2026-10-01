@@ -23,10 +23,16 @@ type TurnReport struct {
 	Players   []string  `json:"players"`
 	Referee   []string  `json:"referee"`
 
-	Corrected    string      `json:"corrected,omitempty"` // why the referee reopened and republished this turn
-	Replays      []*Replay   `json:"replays,omitempty"`
-	PlayerLinks  map[int]int `json:"playerLinks,omitempty"` // line index → replay ID
-	RefereeLinks map[int]int `json:"refereeLinks,omitempty"`
+	Corrected string `json:"corrected,omitempty"` // why the referee reopened and republished this turn
+	// An opening narrative: drafted by the assistant (or the referee), and
+	// shown to players only once approved.
+	Narrative       string      `json:"narrative,omitempty"`
+	NarrativeStatus string      `json:"narrativeStatus,omitempty"`
+	NarrativeModel  string      `json:"narrativeModel,omitempty"`
+	NarrativeEdited bool        `json:"narrativeEdited,omitempty"`
+	Replays         []*Replay   `json:"replays,omitempty"`
+	PlayerLinks     map[int]int `json:"playerLinks,omitempty"` // line index → replay ID
+	RefereeLinks    map[int]int `json:"refereeLinks,omitempty"`
 }
 
 // OpStats are the running totals for the after-action review.
@@ -253,6 +259,7 @@ func (r *Room) publish(mod *Module, now time.Time) {
 	rep.Summary = fmt.Sprintf("Turn %d: %s.", r.Turn, strings.Join(parts, "; "))
 	r.Reports = append(r.Reports, rep)
 	res.Published = true
+	r.assistAtPublish(now)
 	r.logKind(VisAll, "sitrep", "%s The full turn report is on the Reports screen.", rep.Summary)
 	r.openTurn(r.Turn+1, now)
 	r.carryOver(mod, now)

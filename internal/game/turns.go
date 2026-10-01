@@ -244,6 +244,7 @@ func (r *Room) lock(mod *Module, now time.Time) {
 		r.takeover(mod, now)
 		return
 	}
+	r.assistAtLock(mod, now)
 	if ref := r.Referee(); ref != nil {
 		body := "Every move is worked out and ready to publish."
 		if n := len(r.Resolution.Encounters); n > 0 {

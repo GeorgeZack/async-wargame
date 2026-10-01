@@ -151,6 +151,24 @@ chown async-wargame: /var/lib/async-wargame/campaigns.json
 systemctl start async-wargame
 ```
 
+## The AI assistant
+
+Add the flags to `ExecStart` in the service and the key to the env file:
+
+```sh
+# /etc/async-wargame/env
+AW_AI_KEY=your-opencode-key
+```
+
+```ini
+ExecStart=/usr/local/bin/async-wargame -addr 127.0.0.1:8080 -proxy -data /var/lib/async-wargame/campaigns.json -ai opencode -ai-model big-pickle
+```
+
+For `-ai local`, put the GGUF file somewhere the service can read (say
+`/var/lib/async-wargame/models/`) and `llama-server` in `/usr/local/bin`. If
+it runs on a GPU and fails to start under the service's sandbox, remove
+`MemoryDenyWriteExecute=true` and `PrivateDevices=true` from the unit.
+
 ## Notes
 
 - Notifications (web push) need HTTPS, which both Caddy and Tailscale give

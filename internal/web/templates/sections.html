@@ -442,6 +442,8 @@
       <details class="report"{{if eq $i 0}} open{{end}}>
         <summary><strong>{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}</strong>{{if $rp.Corrected}} <span class="tag">corrected</span>{{end}} <span class="muted small">{{$rp.Summary}}</span></summary>
         {{with $rp.Corrected}}<p class="small correction">The referee corrected this turn after publishing it: {{.}}</p>{{end}}
+        {{if $.IsReferee}}{{template "narrative-desk" (pair $ $rp)}}{{else if $rp.Narrative}}<div class="narrative"><p>{{$rp.Narrative}}</p>
+          <p class="muted small">{{if $rp.NarrativeModel}}Drafted with AI{{if $rp.NarrativeEdited}}, edited{{end}} and approved by the referee.{{else}}From the referee.{{end}}</p></div>{{end}}
         <ul class="small report-lines">{{range $rp.Lines}}<li>{{.Text}}{{if .Replay}} <a href="#replay" class="replay-link js-only" data-replay="{{$rp.ReplayKey .Replay}}">Replay</a>{{end}}</li>{{end}}</ul>
       </details>
       {{end}}
@@ -626,7 +628,7 @@
       <a class="button" href="#resolution-desk">Settle the fights</a>
       <form method="post" action="{{.Base}}/encounters/settle-all" data-enhance><button type="submit" class="secondary">Let the rules settle them all</button></form>
     {{else}}
-      <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Moves and fight results take effect, players get their reports, and turn {{.Clock.NextTurn}} opens.">
+      <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Moves and fight results take effect, players get their reports, and turn {{.Clock.NextTurn}} opens.{{if .AI.Blocking}} {{.AI.Blocking}} blocking assistant card(s) are still open.{{end}}">
         <button type="submit">Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>
       {{if not .Resolution}}<span class="small muted">This turn was locked by an earlier version of the game, so there's nothing to review here; publishing moves you on.</span>{{end}}
     {{end}}
@@ -722,4 +724,67 @@
       <p class="muted small">On iPhone or iPad, add this site to your Home Screen first (Share → Add to Home Screen) and open it from there.</p>
       {{else}}<p class="muted small">This server isn't set up to send notifications.</p>{{end}}
     </section>
+{{end}}
+
+{{define "sec-assistant"}}
+<section class="panel assistant" id="assistant" data-live aria-labelledby="assistant-h">
+      <h2 id="assistant-h">Assistant {{with .AI.Open}}<span class="count">{{.}}</span>{{end}}</h2>
+      {{if .AI.On}}
+      {{with .AI.Runs}}<ul class="plain run-list small">{{range .}}<li class="run run-{{.Status}}">
+        <strong>{{if eq .Kind "order-review"}}Order review{{else}}Narrative{{end}}, turn {{.Turn}}:</strong>
+        {{if eq .Status "pending"}}waiting for the model…{{else if eq .Status "running"}}<span class="busy">{{.Model}} is working…</span>{{else if eq .Status "done"}}done{{with .Model}} by {{.}}{{end}}{{if .Tokens}} · {{.Tokens}} tokens{{end}}{{else}}failed: {{.Error}}{{end}}
+        {{if eq .Status "failed"}}<form method="post" action="{{$.Base}}/assistant/run" class="inline-form" data-enhance><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" class="link small">Try again</button></form>{{end}}
+      </li>{{end}}</ul>{{end}}
+      {{if eq .Phase "resolving"}}<form method="post" action="{{.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="order-review">
+        <button type="submit" class="secondary small-btn">Review this turn's orders{{if .AI.Runs}} again{{end}}</button></form>{{end}}
+      {{else if .AI.Available}}<p class="muted small">Rule checks run at every lock. Switch the AI model on for this room on the Room screen to have it read every order as well.</p>
+      {{else}}<p class="muted small">Rule checks run at every lock. This server has no AI model set up.</p>{{end}}
+      {{if not .AI.Issues}}<p class="muted small">No cards{{if eq .Phase "resolving"}} for this turn{{end}}.</p>{{end}}
+      {{range .AI.Issues}}<article class="issue sev-{{.Severity}}{{if ne .Status "open"}} closed{{end}}" aria-label="{{.Severity}} card">
+        <div class="issue-head"><span class="tag tag-sev-{{.Severity}}">{{.Severity}}</span>
+          {{with .UnitName}}<strong>{{.}}</strong>{{end}} <span class="muted small">turn {{.Turn}} · {{if eq .Source "ai"}}AI assessment{{with .Model}} ({{.}}){{end}}{{else}}rule check{{end}}{{if ne .Status "open"}} · {{.Status}}{{end}}</span></div>
+        <p class="small">{{.Text}}</p>
+        {{with .Suggestion}}<p class="small muted">Suggestion: {{.}}</p>{{end}}
+        {{with .Note}}<p class="small">Your note: {{.}}</p>{{end}}
+        {{if eq .Status "open"}}<form method="post" action="{{$.Base}}/assistant/issues/{{.ID}}" class="issue-form" data-enhance>
+          <input name="note" maxlength="300" class="compact-input grow-input" placeholder="Note, or the message to send (optional)" aria-label="Note">
+          <div class="row tight">
+            <button type="submit" name="action" value="noted" class="small-btn">Noted</button>
+            {{if .CanSend}}<button type="submit" name="action" value="send" class="secondary small-btn">Send to the player</button>{{end}}
+            <button type="submit" name="action" value="dismiss" class="link small">Dismiss</button>
+          </div></form>
+        {{else}}<form method="post" action="{{$.Base}}/assistant/issues/{{.ID}}" data-enhance><button type="submit" name="action" value="reopen" class="link small">Reopen</button></form>{{end}}
+      </article>{{end}}
+    </section>
+{{end}}
+
+{{define "sec-assistant-settings"}}
+<section class="panel" id="assistant-settings" data-live aria-labelledby="ai-h">
+      <h2 id="ai-h">AI assistant</h2>
+      {{if .AI.Available}}
+      <p class="small">This server's model is <strong>{{.AI.Model}}</strong>, through <strong>{{.AI.Provider}}</strong>. When it's on, the assistant reads every locked order with the units' positions, strengths, nearby enemies, and how resolution went, and raises cards for you. It can also draft an opening narrative for each report from the lines players already get. It never changes the game, and players see a narrative only after you approve it.</p>
+      <p class="small muted">What's sent: unit names and stats, orders and their intent text, positions, and report lines. Not sent: messages, or anyone's name or account. Some free hosted models keep or train on what they're sent; check the provider's terms.</p>
+      <form method="post" action="{{.Base}}/assistant" class="stack" data-enhance>
+        <label class="toggle"><input type="checkbox" name="on"{{if .AI.On}} checked{{end}}> Use the AI model in this room</label>
+        <label class="toggle"><input type="checkbox" name="review"{{if .AI.Review}} checked{{end}}> Review orders when a turn locks</label>
+        <label class="toggle"><input type="checkbox" name="narrative"{{if .AI.Narrative}} checked{{end}}> Draft a narrative when a turn is published</label>
+        <div class="row"><button type="submit" class="secondary">Save</button></div>
+      </form>
+      {{else}}<p class="small">No AI model is set up on this server. Rule checks still raise cards at every lock. To add a model, start the server with <code>-ai</code> (see the README): a hosted one such as OpenCode Zen, or one running on this machine.</p>{{end}}
+    </section>
+{{end}}
+
+{{define "narrative-desk"}}{{$v := index . 0}}{{$rp := index . 1}}
+{{if $rp.Narrative}}<form method="post" action="{{$v.Base}}/reports/{{$rp.Operation}}/{{$rp.Turn}}/narrative" class="stack narrative-desk" data-enhance>
+  <label class="small"><strong>Opening narrative</strong> <span class="tag">{{if eq $rp.NarrativeStatus "approved"}}shown to players{{else}}draft: only you see it{{end}}</span>
+    {{if $rp.NarrativeModel}}<span class="muted">drafted by {{$rp.NarrativeModel}}{{if $rp.NarrativeEdited}}, edited{{end}}</span>{{end}}
+    <textarea name="text" rows="5" maxlength="1500">{{$rp.Narrative}}</textarea></label>
+  <div class="row tight">
+    {{if ne $rp.NarrativeStatus "approved"}}<button type="submit" name="action" value="approve" class="small-btn">Approve for players</button>{{else}}<button type="submit" name="action" value="approve" class="small-btn">Save changes</button>
+    <button type="submit" name="action" value="withdraw" class="secondary small-btn">Hide from players</button>{{end}}
+    {{if ne $rp.NarrativeStatus "approved"}}<button type="submit" name="action" value="save" class="secondary small-btn">Save draft</button>{{end}}
+    <button type="submit" name="action" value="discard" class="link danger small">Discard</button>
+  </div></form>
+{{else if and $rp.Latest $v.AI.On}}<form method="post" action="{{$v.Base}}/assistant/run" class="row tight" data-enhance><input type="hidden" name="kind" value="narrative">
+  <button type="submit" class="secondary small-btn">Draft an opening narrative with AI</button></form>{{end}}
 {{end}}

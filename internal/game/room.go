@@ -73,6 +73,7 @@ type Room struct {
 	Sightings     map[string]Sighting `json:"sightings,omitempty"` // unit id -> where players last saw it
 	Log           []LogEntry          `json:"log"`
 	Messages      []*Message          `json:"messages,omitempty"`
+	Assistant     Assistant           `json:"assistant,omitzero"`    // the referee's AI assistant
 	Undo          *Undo               `json:"undo,omitempty"`        // the game just before the last publish
 	RemindAt      time.Time           `json:"remindAt,omitzero"`     // when to remind players their orders are due
 	AllInTurn     int                 `json:"allInTurn,omitempty"`   // last turn the referee was told every order was in

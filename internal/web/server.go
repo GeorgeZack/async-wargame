@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"asyncwargame/internal/ai"
 	"asyncwargame/internal/game"
 	"asyncwargame/internal/push"
 )
@@ -47,6 +48,7 @@ type Server struct {
 	opts    Options
 	guard   *failGuard
 	pushSem chan struct{} // limits concurrent push sends
+	ai      *ai.Client    // the assistant's model, if any
 	store   *game.Store
 	pages   map[string]*template.Template
 	assets  map[string]string // file name -> versioned URL
@@ -74,6 +76,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		"stamp": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04 UTC") },
 		"iso":   func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"list":  func(items ...string) []string { return items },
+		"pair":  func(a, b any) []any { return []any{a, b} },
 		"diceCtx": func(faces []game.DieFace, hits, dice int) map[string]any {
 			return map[string]any{"Faces": faces, "Hits": hits, "Dice": dice}
 		},
@@ -139,6 +142,10 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /turn/lock", s.lockNow)
 	seat("POST /turn/next", s.nextTurn)
 	seat("POST /turn/reopen", s.reopenTurn)
+	seat("POST /assistant", s.setAssistant)
+	seat("POST /assistant/run", s.assistantRun)
+	seat("POST /assistant/issues/{id}", s.decideIssue)
+	seat("POST /reports/{op}/{turn}/narrative", s.decideNarrative)
 	seat("GET /units/{id}", s.unitCard)
 	seat("GET /rules", s.rulesPage)
 	seat("POST /operation/end", s.endOperation)
@@ -333,6 +340,7 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 			if s.opts.Push != nil {
 				v.PushKey = s.opts.Push.PublicKey()
 			}
+			s.aiView(v)
 			switch {
 			case !me.Briefed:
 				page = "briefing"

@@ -34,6 +34,40 @@ AW_HOST_PASSWORD='something long' ./async-wargame -addr 127.0.0.1:8080 -proxy -d
 [deploy/](deploy/README.md) has a systemd unit, a Caddyfile, nightly
 backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
 
+### The AI assistant
+
+The referee's assistant can use a language model through any
+OpenAI-compatible chat API. Pick one with `-ai`:
+
+```sh
+# OpenCode Zen (an account and API key from opencode.ai; free models included)
+AW_AI_KEY=... ./async-wargame -ai opencode -ai-model big-pickle
+
+# Ollama running on the same machine
+./async-wargame -ai ollama -ai-model llama3.1
+
+# A model file run by the server itself, via llama.cpp's llama-server
+./async-wargame -ai local -ai-local-model /srv/models/qwen3-8b-q4_k_m.gguf
+
+# Anything else that speaks the API: LM Studio, vLLM, a llama-server you run yourself
+./async-wargame -ai http://127.0.0.1:1234/v1 -ai-model my-model
+```
+
+- **OpenCode Zen** needs `AW_AI_KEY`: without one, it refuses with "free tier
+  can only be used from within OpenCode". At startup the server checks the
+  model exists and lists the free ones if it doesn't. Free models change,
+  and several log prompts or use them for training (see
+  [opencode.ai/docs/zen](https://opencode.ai/docs/zen/)).
+- **`-ai local`** starts `llama-server` (from [llama.cpp](https://github.com/ggml-org/llama.cpp);
+  `-ai-llama-server` if it isn't on the `PATH`) on a private port with your
+  GGUF model, waits for it to load, and stops it on shutdown. `-ai-context`
+  sets the context size (default 8192). A 7–8B model at 4-bit
+  quantization needs about 6 GB of RAM and is slow without a GPU, but the
+  assistant works in the background, so slow is fine.
+- Nothing is sent until the referee switches the assistant on for their
+  room (Room screen). What's sent: unit names and stats, orders and their
+  intent, positions, and report lines. Not messages, and not anyone's name.
+
 ## What works so far
 
 - **Rooms:** a referee hosts a campaign and gets a six-character room code
@@ -250,6 +284,16 @@ backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
   The server keeps its push key in `vapid.pem` next to the `-data` file
   (`-push-key` to move it, `-no-push` to turn notifications off), and
   `AW_PUSH_CONTACT` is the address push services can reach you at.
+- **Referee assistant ("Jev"):** when a turn locks, cards on the Turn screen
+  flag what the referee should look at: rule checks (offensive orders from
+  units out of ammunition, moves with no stated intent, unconfirmed
+  standing orders) and, with an AI model on, a review of every order
+  against the situation. Each card says whether a rule or the model raised
+  it, and which model; the referee marks it noted, dismisses it, or sends it
+  to the player as a private message. After publishing, the model can draft
+  an opening narrative from the players' report lines; players see it only
+  once the referee approves or edits it. The assistant never changes the
+  game. Runs happen in the background, survive restarts, and can be retried.
 - **Messages:** discussion channels on the Messages screen, with unread
   badges: All hands (everyone), Players only, one per commander's command,
   and a private channel between each member and the referee. A blind referee
@@ -268,4 +312,8 @@ content/                      embedded module + scenario JSON
 internal/rules/               module schema and the rules engine (combat pools, sight)
 internal/game/                campaigns: rooms, orders, resolution, fog, views, store
 internal/web/                 HTTP handlers, templates, static JS/CSS
+internal/push/                web push: VAPID and payload encryption
+internal/ai/                  OpenAI-compatible model client; managed llama-server
+internal/assist/              background worker for the referee assistant
+deploy/                       systemd, Caddy, Tailscale, backups, deploy script
 ```

@@ -127,6 +127,17 @@ func (s *Store) Read(code string, fn func(*Room)) error {
 	return nil
 }
 
+// Codes lists the rooms.
+func (s *Store) Codes() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.rooms))
+	for code := range s.rooms {
+		out = append(out, code)
+	}
+	return out
+}
+
 // Touch makes a bookkeeping change that nobody else needs to see, such as a
 // read mark: no new version and no notifications. fn reports whether it
 // changed anything; only then is the state saved.

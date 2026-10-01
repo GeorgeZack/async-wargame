@@ -60,6 +60,7 @@ type View struct {
 	Channels    []Channel     // discussion channels the viewer can read
 	Correctable int           // referee: the published turn they can still reopen (0: none)
 	PushKey     string        // the server's web push key; empty when push is off
+	AI          AIView        // referee: the assistant
 	SetAside    int           // orders reopening it would set aside
 	Channel     Channel       // the one open on the Messages screen
 	Thread      []MessageView // its messages

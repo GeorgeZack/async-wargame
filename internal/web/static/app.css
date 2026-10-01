@@ -862,3 +862,24 @@ html.js #order-box > summary { list-style: none; }
 .correct-turn summary { cursor: pointer; color: var(--muted); }
 .correction { border-left: 3px solid var(--civilians); padding-left: .5rem; }
 .notify-panel .row { margin: .25rem 0 .5rem; }
+
+/* ---- Assistant ---- */
+.run-list { display: grid; gap: .2rem; margin: 0 0 .5rem; }
+.run-failed { color: var(--danger); }
+.busy::after { content: " ⏳"; }
+.inline-form { display: inline; }
+.issue { border: 1px solid var(--border); border-left-width: 4px; padding: .45rem .6rem; margin: .5rem 0; background: var(--surface); }
+.issue.sev-blocking { border-left-color: var(--danger); }
+.issue.sev-judgment { border-left-color: var(--civilians); }
+.issue.sev-info { border-left-color: var(--accent); }
+.issue.closed { opacity: .6; }
+.issue p { margin: .25rem 0; }
+.issue-head { display: flex; flex-wrap: wrap; gap: .4rem; align-items: baseline; }
+.issue-form { display: grid; gap: .35rem; }
+.tag-sev-blocking { background: var(--danger); color: #fff; }
+.tag-sev-judgment { background: var(--civilians); color: #fff; }
+.narrative { border-left: 3px solid var(--accent); padding: .1rem .7rem; margin: .4rem 0 .6rem; font-style: italic; }
+.narrative p { margin: .3rem 0; }
+.narrative .muted { font-style: normal; }
+.narrative-desk { margin: .4rem 0 .6rem; padding: .5rem; background: var(--surface-2); border: 1px solid var(--border); }
+.narrative-desk textarea { width: 100%; font-weight: normal; margin-top: .3rem; }

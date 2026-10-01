@@ -53,6 +53,11 @@ type ReportView struct {
 	Operation, Turn int
 	Summary         string
 	Corrected       string // why the referee reopened and republished it
+	Narrative       string // players: only once approved
+	NarrativeStatus string
+	NarrativeModel  string
+	NarrativeEdited bool
+	Latest          bool
 	Lines           []ReportLine
 }
 
@@ -116,6 +121,9 @@ func effectsText(o *rules.Outcome, winner string) string {
 func addResolution(v *View, r *Room, mod *Module, me *Member) {
 	ref := me.Role == RoleReferee
 	v.Stats = r.Stats
+	if ref {
+		v.AI = assistantView(r)
+	}
 	if ref && r.CanCorrect() {
 		v.Correctable, v.SetAside = r.Undo.Turn, r.NewTurnOrders()
 	}
@@ -125,7 +133,10 @@ func addResolution(v *View, r *Room, mod *Module, me *Member) {
 		if ref {
 			lines, links = rep.Referee, rep.RefereeLinks
 		}
-		rv := ReportView{Operation: rep.Operation, Turn: rep.Turn, Summary: rep.Summary, Corrected: rep.Corrected}
+		rv := ReportView{Operation: rep.Operation, Turn: rep.Turn, Summary: rep.Summary, Corrected: rep.Corrected, Latest: i == len(r.Reports)-1}
+		if ref || rep.NarrativeStatus == NarrativeApproved {
+			rv.Narrative, rv.NarrativeStatus, rv.NarrativeModel, rv.NarrativeEdited = rep.Narrative, rep.NarrativeStatus, rep.NarrativeModel, rep.NarrativeEdited
+		}
 		for j, text := range lines {
 			line := ReportLine{Text: text}
 			if id := links[j]; id > 0 && id <= len(rep.Replays) && (ref || !rep.Replays[id-1].Referee) {

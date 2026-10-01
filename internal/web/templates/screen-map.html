@@ -1,0 +1,14 @@
+{{define "content"}}{{template "shell-top" .}}
+<main id="main" class="screen screen-map" data-base="{{.Base}}" data-version="{{.Version}}">
+  {{template "sec-next" .}}
+  <div class="map-layout">
+    {{template "map-window" .}}
+    <aside class="info-col" aria-label="Selection">
+      <section class="panel"><h2>Selected</h2>{{template "sec-inspector" .}}</section>
+      {{if ne .Me.Status "pending"}}{{template "sec-order-box" .}}{{end}}
+      <section class="panel"><h2>Key and places</h2>{{template "legend" .}}{{template "sec-places" .}}</section>
+    </aside>
+  </div>
+</main>
+<script type="application/json" id="map-data" data-live>{{.Data}}</script>
+{{template "shell-bottom" .}}{{end}}

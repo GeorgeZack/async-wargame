@@ -1,0 +1,650 @@
+{{define "sec-next"}}
+<div class="next" id="next" data-live role="status">
+    <p><strong>Next:</strong> {{.NextAction}}</p>
+    {{if and .IsReferee .Clock.AllIn}}
+    <form method="post" action="{{.Base}}/turn/lock" data-enhance data-confirm="Lock turn {{.Turn}} now? Players can't change orders after this.">
+      <button type="submit">Lock turn {{.Turn}} now</button>
+    </form>
+    {{end}}
+    {{if and .IsReferee (eq .Phase "setup")}}
+    <p class="muted small">Setup: players see a holding page until you start. Check the map and event tables in the <a href="{{.Base}}/edit">scenario editor</a> first.</p>
+    <form method="post" action="{{.Base}}/start" data-confirm="Start the operation? Players will see the map and turn 1 opens.">
+      <button type="submit">Start the operation</button>
+    </form>
+    {{end}}
+  </div>
+{{end}}
+
+{{define "sec-map-tools"}}
+<div class="map-tools js-only" role="toolbar" aria-label="Map controls">
+        <button type="button" class="secondary icon" data-zoom="in" aria-label="Zoom in">+</button>
+        <button type="button" class="secondary icon" data-zoom="out" aria-label="Zoom out">−</button>
+        <button type="button" class="secondary" data-zoom="reset">Fit</button>
+        <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Labels</label>
+        <label class="toggle"><input type="checkbox" id="sectors-toggle" checked> Sectors</label>
+        {{if .IsReferee}}<label class="toggle" title="Show what players can't see"><input type="checkbox" id="fog-toggle"> Player fog</label>{{end}}
+      </div>
+{{end}}
+
+{{define "sec-inspector"}}
+<div id="inspector" class="inspector" aria-live="polite">
+      <p class="muted js-only">Select a hex to see its terrain, features, and units.</p>
+    </div>
+{{end}}
+
+{{define "sec-order-box"}}
+<details class="order-form" id="order-box"{{if or (not .Data.Orders.Open) (not .MyOrders)}} hidden{{end}}>
+      <summary>Write an order</summary>
+      <form method="post" action="{{.Base}}/orders" class="stack" id="order-form" data-enhance>
+        <label>Unit
+          <select name="unit" id="of-unit">{{range .MyOrders}}<option value="{{.Unit.ID}}">{{.Unit.Name}} · {{.Unit.Hex}} · movement {{.Movement}}</option>{{end}}</select></label>
+        <label>Task
+          <select name="task" id="of-task">{{range .OrderSpec.Tasks}}<option value="{{.ID}}" data-note="{{.Note}}">{{.Name}}</option>{{end}}</select></label>
+        <p class="muted small" id="of-task-note"></p>
+        <div id="of-dest-row">
+          <label>Destination hex
+            <input name="dest" id="of-dest" class="mono compact-input" maxlength="4" placeholder="0712" autocomplete="off"></label>
+          <button type="button" class="secondary small-btn js-only" id="of-pick">Pick on map</button>
+          <p class="small dest-hint" id="of-dest-hint">Click a highlighted hex on the map. Highlighted hexes are within this unit's movement this turn; the number in each is the movement it costs to get there.</p>
+        </div>
+        <div id="of-transport-row">
+          <label>Transport
+            <select name="transport" id="of-transport">{{range .Forces}}{{range .Units}}{{if .Radio}}{{end}}{{end}}{{end}}{{range $id, $list := .Data.Orders.Transports}}{{range $list}}<option value="{{.ID}}">{{.Name}} · {{.Hex}}</option>{{end}}{{end}}</select></label>
+          <p class="small dest-hint" id="of-transport-hint">The unit moves to the transport and climbs in at the end of its move.</p>
+        </div>
+        <label>Intent <span class="muted small">What should this achieve? Who are you supporting?</span>
+          <textarea name="intent" id="of-intent" rows="3" maxlength="400"></textarea></label>
+        <fieldset class="plain-fieldset">
+          <legend>Acceptable risk</legend>
+          {{range $i, $r := .OrderSpec.Risks}}<label class="toggle"><input type="radio" name="risk" value="{{$r.ID}}"{{if $r.Default}} checked data-default{{end}}> {{$r.Name}}</label>{{end}}
+        </fieldset>
+        <label>If the plan fails
+          <select name="fallback" id="of-fallback">{{range .OrderSpec.Fallbacks}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+        <label id="of-then-row">Then, on arrival <span class="muted small">A second step once the move is done.</span>
+          <select name="then" id="of-then"><option value="">Nothing more</option>{{range .OrderSpec.Tasks}}{{if not (or .Destination .Embark .Disembark)}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}</select></label>
+        <label class="toggle"><input type="checkbox" name="standing" id="of-standing">
+          Standing order <span class="muted small">Comes back each turn as a draft. You confirm it every round, or it lapses at the lock.</span></label>
+        <label class="toggle" id="of-stack-row"><input type="checkbox" name="stack" id="of-stack">
+          Give this order to my other units in the same hex too <span class="muted small" id="of-stack-names"></span></label>
+        <p class="small" id="of-status" role="status"></p>
+        <div class="row">
+          <button type="submit" name="submit" value="commit">Commit order</button>
+          <button type="submit" name="submit" value="draft" class="secondary">Save draft</button>
+          <button type="submit" class="link danger js-only" id="of-withdraw" hidden>Withdraw</button>
+        </div>
+      </form>
+    </details>
+{{end}}
+
+{{define "sec-places"}}
+<details class="legend" id="feature-list" data-live>
+      <summary>Places on the map</summary>
+      <table>
+        <thead><tr><th scope="col">Hex</th><th scope="col">Place</th><th scope="col">Notes</th></tr></thead>
+        <tbody>
+          {{range .Map.Features}}<tr><td class="mono">{{.Hex}}</td><td>{{.Name}}{{if .Hidden}} <span class="tag tag-hidden">hidden</span>{{end}}</td><td>{{.Note}}</td></tr>{{end}}
+        </tbody>
+      </table>
+    </details>
+{{end}}
+
+{{define "sec-desk"}}
+<section class="panel desk" id="resolution-desk" data-live aria-labelledby="desk-h"{{if not .Resolution}} hidden{{end}}>
+    {{with .Resolution}}
+    <div class="desk-head">
+      <h2 id="desk-h">Turn {{.Turn}} resolution</h2>
+      <p class="small">{{len .Moves}} moves · {{len .Encounters}} {{if eq (len .Encounters) 1}}fight{{else}}fights{{end}}{{if .Unsettled}} · <strong>{{.Unsettled}} to settle</strong>{{end}}. Units moved together through {{.Slices}} time slices; fights started where opposing units met.</p>
+      <div class="row">
+        {{if .Unsettled}}<form method="post" action="{{$.Base}}/encounters/settle-all" data-enhance>
+          <button type="submit" class="secondary">Settle the rest by the rules</button></form>{{end}}
+        <form method="post" action="{{$.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Moves and fight results take effect, players get their reports, and turn {{$.Clock.NextTurn}} opens.">
+          <button type="submit"{{if .Unsettled}} disabled title="Settle every fight first"{{end}}>Publish turn {{.Turn}} and open turn {{$.Clock.NextTurn}}</button></form>
+      </div>
+      {{with .Notes}}<ul class="small notes">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    </div>
+    {{range .Encounters}}
+    <article class="encounter{{if .Settled}} settled{{end}}" aria-label="Fight at {{.Hex}}">
+      <header class="enc-head">
+        <strong>Fight at <a href="{{$.Base}}?hex={{.Hex}}" class="mono" data-goto="{{.Hex}}">{{.Hex}}</a></strong>
+        <span class="muted small">sector {{.Sector}} · slice {{.Slice}} of {{.Slices}}</span>
+        <span class="tag {{if .Settled}}tag-order-committed{{else}}tag-order-none{{end}}">{{if .Settled}}settled · {{.Source}}{{else}}to settle{{end}}</span>
+      </header>
+      <div class="enc-sides">
+        <div class="enc-side friend">
+          <h3>Our side</h3>
+          <ul class="plain small fighters">{{range .Friend}}<li><span class="abbr side-{{.Side}}" aria-hidden="true">{{.Abbr}}</span>{{.Name}} <span class="muted">{{.Strength}}</span></li>{{end}}</ul>
+          <p class="muted small">{{range $i, $x := index .Situation 0}}{{if $i}}; {{end}}{{$x}}{{end}}</p>
+          {{template "pool" (index .Suggested 0)}}
+          {{if .Settled}}{{template "dice" (diceCtx (index .Faces 0) (index .Hits 0) (index .Dice 0))}}{{end}}
+        </div>
+        <div class="enc-side enemy">
+          <h3>The infected</h3>
+          <ul class="plain small fighters">{{range .Enemy}}<li><span class="abbr side-{{.Side}}" aria-hidden="true">{{.Abbr}}</span>{{.Name}} <span class="muted">{{.Strength}}</span></li>{{end}}</ul>
+          <p class="muted small">{{range $i, $x := index .Situation 1}}{{if $i}}; {{end}}{{$x}}{{end}}</p>
+          {{template "pool" (index .Suggested 1)}}
+          {{if .Settled}}{{template "dice" (diceCtx (index .Faces 1) (index .Hits 1) (index .Dice 1))}}{{end}}
+        </div>
+      </div>
+      {{if .Settled}}
+      <p class="enc-result"><strong>{{.WinnerText}}</strong> {{.Outcome.Result}}{{with .Effects}} <span class="muted small">({{.}})</span>{{end}}{{with .Reason}}<br><span class="small">Ruling: {{.}}</span>{{end}}</p>
+      {{end}}
+      <form method="post" action="{{$.Base}}/encounters/{{.ID}}/settle" class="enc-form" data-enhance>
+        <div class="row">
+          <label class="inline small">Our dice <input type="number" name="dice_f" value="{{index .Dice 0}}" min="0" max="60" class="num-xs"></label>
+          <label class="inline small">Their dice <input type="number" name="dice_e" value="{{index .Dice 1}}" min="0" max="60" class="num-xs"></label>
+          <input name="reason" maxlength="200" placeholder="Reason, if you change anything" class="compact-input grow-input" aria-label="Reason for the ruling">
+        </div>
+        <div class="row">
+          <button type="submit" name="mode" value="rules"{{if .Settled}} class="secondary"{{end}}>{{if .Settled}}Re-roll suggested pools{{else}}Roll suggested pools{{end}}</button>
+          <button type="submit" name="mode" value="roll" class="secondary">Roll these pools</button>
+        </div>
+        <details class="small"><summary>Rolled at the table?</summary>
+          <div class="row">
+            <label class="inline">Our hits <input type="number" name="hits_f" min="0" max="60" class="num-xs"></label>
+            <label class="inline">Their hits <input type="number" name="hits_e" min="0" max="60" class="num-xs"></label>
+            <button type="submit" name="mode" value="hits" class="secondary small-btn">Use these hits</button>
+          </div>
+        </details>
+      </form>
+    </article>
+    {{end}}
+    {{if .Moves}}<details class="moves"><summary>All moves this turn ({{len .Moves}})</summary>
+      <ul class="plain small">{{range .Moves}}<li class="r-{{.Role}}"><strong>{{.Name}}</strong> {{.From}} → {{.To}} <span class="muted">{{.Reason}}</span></li>{{end}}</ul>
+    </details>{{end}}
+    {{end}}
+  </section>
+{{end}}
+
+{{define "sec-clock"}}
+<section class="panel" id="turn-clock" data-live aria-labelledby="clock-h">
+      <h2 id="clock-h">Turn clock</h2>
+      {{if eq .Phase "setup"}}
+      <p class="small">The clock starts when you start the operation. {{.Clock.ScheduleText}}</p>
+      {{else if eq .Phase "planning"}}
+      {{if .Blind}}<p class="small blind-note">You're refereeing blind: player orders stay hidden until lock so you can run the infected without bias.</p>{{end}}
+      <p class="small orders-in{{if .Clock.AllIn}} all-in{{end}}"><strong>Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}</strong> player units.
+        {{if .Clock.AllIn}}Everyone is done.{{else if .Clock.Waiting}}Waiting on {{range $i, $w := .Clock.Waiting}}{{if $i}}, {{end}}{{$w}}{{end}}.{{else}}No units are assigned to players yet.{{end}}</p>
+      <p class="small">Turn {{.Turn}} orders lock <strong><time datetime="{{iso .Clock.Deadline}}" data-local data-tz="{{.Clock.TZ}}">{{.Clock.DeadlineText}}</time></strong>{{if .Clock.Deferred}} <span class="tag">deferred</span>{{end}}.</p>
+      <form method="post" action="{{.Base}}/turn/defer" class="row tight" data-enhance>
+        <label class="inline small" for="defer-preset">Defer</label>
+        <select name="preset" id="defer-preset" class="compact">
+          <option value="1">by 1 hour</option><option value="3">by 3 hours</option><option value="12">by 12 hours</option>
+          <option value="24">by 1 day</option><option value="next">to the next scheduled time</option>
+        </select>
+        <button type="submit" class="secondary small-btn">Defer</button>
+      </form>
+      <form method="post" action="{{.Base}}/turn/defer" class="row tight" data-enhance>
+        <label class="inline small" for="defer-until">Or until</label>
+        <input type="datetime-local" name="until" id="defer-until" value="{{.Clock.DeferDefault}}" class="compact-input">
+        <button type="submit" class="secondary small-btn">Set</button>
+      </form>
+      <form method="post" action="{{.Base}}/turn/lock" data-enhance data-confirm="Lock turn {{.Turn}} now? Players can't change orders after this.">
+        <button type="submit" class="link small">Lock now</button>
+      </form>
+      {{else}}
+      <p class="small">Turn {{.Turn}} locked {{.Clock.LockedText}}. Settle the fights and publish from the procedure at the top of this screen.</p>
+      <p class="small">{{if .Clock.TakeoverText}}If you haven't published by <strong><time datetime="{{iso .Clock.Takeover}}" data-local data-tz="{{.Clock.TZ}}">{{.Clock.TakeoverText}}</time></strong>, the rules settle the fights and publish it for you.{{else}}The turn waits for you.{{end}}</p>
+      {{end}}
+      {{if ne .Phase "setup"}}
+      <form method="post" action="{{.Base}}/operation/end" class="end-op" data-enhance
+            data-confirm="End this operation? Every friendly unit still on the map survives it and gains experience. Lost units come back as green replacements, and the map resets to the scenario for the next operation.">
+        <button type="submit" class="link small">End this operation and start the next</button>
+      </form>
+      {{end}}
+      <details class="schedule">
+        <summary>Schedule</summary>
+        <p class="muted small">{{.Clock.ScheduleText}} Pick times that suit people who work: each turn locks at the next of these, leaving at least an hour to plan.</p>
+        <form method="post" action="{{.Base}}/turn/schedule" class="stack" data-enhance>
+          <label>Time zone
+            <select name="tz">{{$tz := .Clock.TZ}}{{range zoneOptions}}<option value="{{.ID}}"{{if eq .ID $tz}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+          <fieldset class="plain-fieldset">
+            <legend>Lock times</legend>
+            <div class="row">{{range .Clock.Times}}<input type="time" name="time" value="{{.}}" class="compact-input" aria-label="Lock time">{{end}}</div>
+          </fieldset>
+          <fieldset class="plain-fieldset">
+            <legend>Days</legend>
+            <div class="row">{{$days := .Clock.Days}}{{range $i, $d := weekdays}}<label class="toggle"><input type="checkbox" name="day" value="{{$i}}"{{if index $days $i}} checked{{end}}> {{$d}}</label>{{end}}</div>
+          </fieldset>
+          <label>If I haven't resolved a locked turn, the enemy AI takes over
+            <select name="takeover">{{$h := .Clock.TakeoverHours}}{{range takeoverChoices}}<option value="{{.}}"{{if eq . $h}} selected{{end}}>{{takeoverLabel .}}</option>{{end}}</select></label>
+          <button type="submit" class="secondary">Save schedule</button>
+        </form>
+      </details>
+    </section>
+{{end}}
+
+{{define "sec-orders"}}
+<section class="panel" id="orders-panel" data-live aria-labelledby="orders-h"{{if not .MyOrders}} hidden{{end}}>
+      <h2 id="orders-h">Orders, turn {{.Turn}}</h2>
+      {{if eq .Phase "planning"}}<p class="muted small">Orders lock {{.Clock.DeadlineText}}. Commit before then: a unit without a committed order holds where it is and won't attack.</p>
+      {{else}}<p class="muted small">Orders are locked while the referee resolves the turn.</p>{{end}}
+      {{if and (eq .Phase "planning") .StandingDrafts}}<form method="post" action="{{.Base}}/orders/confirm-standing" class="row standing-bar" data-enhance>
+        <span class="small">{{.StandingDrafts}} standing {{if eq .StandingDrafts 1}}order carried over{{else}}orders carried over{{end}} from last turn. Check them against the new situation.</span>
+        <button type="submit" class="small-btn">Confirm all</button>
+      </form>{{end}}
+      <ul class="plain list">
+        {{range .MyOrders}}<li class="order-slot">
+          <div>{{template "radio" .Unit}}<span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><strong>{{.Unit.Name}}</strong>
+            <a href="{{$.Base}}?hex={{.Unit.Hex}}" class="mono small" data-goto="{{.Unit.Hex}}">{{.Unit.Hex}}</a>
+            {{with .Unit.Aboard}}<span class="small muted">aboard {{.}}</span>{{end}}
+            <span class="tag tag-order-{{if .Order}}{{.Order.Status}}{{else}}none{{end}}">{{if .Order}}{{.Order.Status}}{{else}}no order{{end}}</span></div>
+          {{if .NoContact}}<div class="small no-contact">{{.Unit.RadioText}}. Its orders stay with {{if .Holder}}{{.Holder}}{{else}}the unit{{end}} until it's back on the net.</div>{{end}}
+          {{with .Order}}<div class="small">{{.Summary}}{{with .Intent}} · “{{.}}”{{end}}{{if .Author}} <span class="muted">· {{.Author}}</span>{{end}}</div>
+          {{if and .Carried (eq .Status "draft") .Editable}}<div class="small standing-note">Carried over from last turn. Confirm it, edit it, or let it lapse.</div>{{end}}
+          {{if eq .Review "approved"}}<div class="small review ok">Approved by {{.ReviewedBy}}{{with .ReviewNote}}: “{{.}}”{{end}}</div>{{end}}
+          {{if eq .Review "returned"}}<div class="small review back">Returned by {{.ReviewedBy}}: “{{.ReviewNote}}” Revise and commit again before the lock.</div>{{end}}
+          {{if .CanReview}}<form method="post" action="{{$.Base}}/orders/{{.ID}}/review" class="review-form" data-enhance>
+            <input name="note" maxlength="300" placeholder="Note to {{.Holder}} (needed to return it)" class="compact-input grow-input" aria-label="Review note">
+            <button type="submit" name="action" value="approve" class="small-btn">Approve</button>
+            <button type="submit" name="action" value="return" class="secondary small-btn">Return for revision</button>
+          </form>{{end}}{{end}}
+          {{if and $.Data.Orders.Open (not .NoContact)}}<div class="row tight slot-actions">
+            {{with .Order}}{{if and .Carried (eq .Status "draft") .Editable}}<form method="post" action="{{$.Base}}/orders/{{.ID}}/confirm" data-enhance><button type="submit" class="small-btn">Confirm</button></form>{{end}}{{end}}
+            <a class="button secondary small-btn" href="{{$.Base}}?order={{.Unit.ID}}" data-order-unit="{{.Unit.ID}}">{{if .Order}}Edit order{{else}}Give order{{end}}</a></div>{{end}}
+        </li>{{end}}
+      </ul>
+      {{if .OtherOrders}}
+      <h3>Other units</h3>
+      <ul class="plain list small">
+        {{range .OtherOrders}}<li><strong>{{.UnitName}}</strong>: {{.Summary}} <span class="tag tag-order-{{.Status}}">{{.Status}}</span>{{with .Author}} <span class="muted">by {{.}}</span>{{end}}</li>{{end}}
+      </ul>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-events"}}
+<section class="panel" id="threat-events" data-live aria-labelledby="ev-h">
+      <h2 id="ev-h">Threat and random events {{if .Proposals}}<span class="count">{{len .Proposals}}</span>{{end}}</h2>
+      <div class="threat row">
+        <span class="threat-label">Threat</span>
+        <span class="pips" role="img" aria-label="Threat {{.Threat}} of {{.MaxThreat}}">{{range $i := seq .MaxThreat}}<span class="pip{{if le $i $.Threat}} on{{end}}"></span>{{end}}</span>
+        <strong>{{.Threat}}</strong>
+        <form method="post" action="{{.Base}}/threat" class="row tight" data-enhance>
+          <button type="submit" name="delta" value="-1" class="secondary icon" aria-label="Lower threat"{{if le .Threat 1}} disabled{{end}}>−</button>
+          <button type="submit" name="delta" value="1" class="secondary icon" aria-label="Raise threat"{{if ge .Threat .MaxThreat}} disabled{{end}}>+</button>
+        </form>
+      </div>
+      <p class="muted small">Higher threat makes spawns bigger and unlocks waves, monsters, and the Brood Mother. Rolled events are proposals: nothing changes until you apply one.</p>
+      <form method="post" action="{{.Base}}/game-events" data-enhance>
+        <button type="submit" class="wide">Roll random event</button>
+      </form>
+      <form method="post" action="{{.Base}}/game-events" class="row pick-event" data-enhance>
+        <label class="sr-only" for="ev-pick">Choose a specific event</label>
+        <select name="event" id="ev-pick" required>
+          <option value="">Choose a specific event…</option>
+          {{range .EventOptions}}<option value="{{.ID}}">{{.Category}} · {{.Title}}{{if .Why}} ({{.Why}}){{end}}</option>{{end}}
+        </select>
+        <button type="submit" class="secondary">Trigger</button>
+      </form>
+      {{range .Proposals}}
+      <article class="proposal cat-{{.Category}}" aria-label="Proposed event: {{.Title}}">
+        <div class="proposal-head"><strong>{{.Title}}</strong> <span class="tag tag-cat">{{.Category}}</span></div>
+        <p class="muted small">{{.RollText}}</p>
+        <p class="small">{{.Summary}}</p>
+        {{if .Effects}}<ul class="effects small">{{range .Effects}}<li>{{.Text}}</li>{{end}}</ul>{{end}}
+        <p class="small"><strong>Players are told:</strong> {{if .Report}}“{{.Report}}”{{else}}<span class="muted">nothing</span>{{end}}</p>
+        <form method="post" class="row" data-enhance>
+          <button type="submit" formaction="{{$.Base}}/game-events/{{.ID}}/apply">Apply</button>
+          <button type="submit" class="secondary" formaction="{{$.Base}}/game-events/{{.ID}}/discard">Discard</button>
+        </form>
+      </article>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-assign"}}
+<section class="panel" id="assign" data-live aria-labelledby="assign-h">
+      <h2 id="assign-h">Assign forces</h2>
+      {{if .IsCommander}}<p class="muted small">Units under your command. Give them to yourself or to your players.</p>{{end}}
+      {{if and .Players .Assignable}}
+      <ul class="plain list">
+        {{range $u := .Assignable}}<li>
+          <form method="post" action="{{$.Base}}/units/{{$u.ID}}/assign" class="assign" data-enhance data-autosubmit>
+            <label for="as-{{$u.ID}}"><span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span><strong>{{$u.Name}}</strong> <span class="muted small">{{$u.ClassName}} · {{$u.Hex}}</span></label>
+            <div class="row">
+              <select name="member" id="as-{{$u.ID}}">
+                {{if $.IsReferee}}<option value="">Held by referee</option>{{end}}
+                {{range $.Players}}<option value="{{.ID}}"{{if eq .ID $u.AssignedTo}} selected{{end}}>{{.Name}}{{if eq .Role "commander"}} (commander){{end}}</option>{{end}}
+              </select>
+              <button type="submit" class="secondary js-hide">Save</button>
+            </div>
+          </form>
+        </li>{{end}}
+      </ul>
+      {{else if .IsCommander}}
+      <p class="muted">The referee hasn't placed any units under your command yet.</p>
+      {{else}}
+      <p class="muted">Approve or invite a player to assign them units.</p>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-forces"}}
+<section class="panel" id="forces" data-live aria-labelledby="forces-h">
+      <h2 id="forces-h">Known forces</h2>
+      {{range .Forces}}
+      <h3 class="side-h side-{{.Side}}">{{.Name}} <span class="muted small">{{len .Units}}</span></h3>
+      <ul class="plain list">{{range .Units}}{{template "unit" (unitCtx $.Base .)}}{{end}}</ul>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-requests"}}
+<section class="panel" id="requests" data-live aria-labelledby="req-h">
+      <h2 id="req-h">Access requests {{if .Pending}}<span class="count">{{len .Pending}}</span>{{end}}</h2>
+      {{if .Pending}}
+      <ul class="plain list">
+        {{range .Pending}}<li class="request">
+          <div><strong>{{.Name}}</strong> <span class="muted small">requested <time datetime="{{iso .RequestedAt}}">{{ago .RequestedAt}}</time></span></div>
+          <form method="post" class="row" data-enhance>
+            <button type="submit" formaction="{{$.Base}}/members/{{.ID}}/approve">Approve</button>
+            <button type="submit" class="secondary" formaction="{{$.Base}}/members/{{.ID}}/decline">Decline</button>
+          </form>
+        </li>{{end}}
+      </ul>
+      {{else}}
+      <p class="muted">No one is waiting. Players join with room code <strong class="mono">{{.CodeDisplay}}</strong>.</p>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-roster"}}
+<section class="panel" id="roster" data-live aria-labelledby="roster-h">
+      <h2 id="roster-h">Operation members</h2>
+      <ul class="plain list">
+        {{range .Roster}}<li class="member">
+          <div><strong>{{.Name}}</strong>{{if .IsMe}} <span class="muted small">(you)</span>{{end}}
+            <span class="tag tag-{{.Role}}">{{.Role}}</span>{{if .Test}} <span class="tag">test seat</span>{{end}}</div>
+          {{if ne .Role "referee"}}<div class="muted small">{{if .ReportsName}}Reports to {{.ReportsName}} · {{end}}{{if .Units}}Commands {{range $i, $u := .Units}}{{if $i}}, {{end}}{{$u}}{{end}}{{else}}No units assigned{{end}}</div>{{end}}
+          {{if and $.IsReferee (ne .Role "referee")}}
+          <div class="row member-tools">
+            {{if eq .Role "player"}}
+            <form method="post" action="{{$.Base}}/members/{{.ID}}/promote" data-enhance>
+              <button type="submit" class="link small">Promote to commander</button></form>
+            {{if $.Commanders}}
+            <form method="post" action="{{$.Base}}/members/{{.ID}}/reports-to" class="row tight" data-enhance data-autosubmit>
+              <label class="inline small" for="rt-{{.ID}}">Reports to</label>
+              <select name="commander" id="rt-{{.ID}}" class="compact">
+                <option value="">Referee</option>
+                {{$rt := .ReportsTo}}{{range $.Commanders}}<option value="{{.ID}}"{{if eq .ID $rt}} selected{{end}}>{{.Name}}</option>{{end}}
+              </select>
+              <button type="submit" class="secondary js-hide">Save</button>
+            </form>{{end}}
+            {{else}}
+            <form method="post" action="{{$.Base}}/members/{{.ID}}/demote" data-enhance data-confirm="Make {{.Name}} a regular player? Their players will report to you again.">
+              <button type="submit" class="link small">Demote to player</button></form>
+            {{end}}
+            <form method="post" action="{{$.Base}}/members/{{.ID}}/remove" data-enhance data-confirm="Remove {{.Name}} from the operation? Their units return to you.">
+              <button type="submit" class="link danger small">Remove</button></form>
+          </div>{{end}}
+        </li>{{end}}
+      </ul>
+    </section>
+{{end}}
+
+{{define "sec-invites"}}
+<section class="panel" id="invites" data-live aria-labelledby="inv-h">
+      <h2 id="inv-h">Invites</h2>
+      <p class="muted small">Send a link to someone you want in. Accepting it counts as your approval. Links expire after 7 days.</p>
+      <form method="post" action="{{.Base}}/invites" class="stack invite-form" data-enhance>
+        <div class="row">
+          <label class="inline">Invite a
+            <select name="role" class="compact"><option value="player">player</option><option value="commander">commander</option></select></label>
+          <label class="inline">Uses
+            <select name="uses" class="compact"><option>1</option><option>5</option><option>20</option></select></label>
+        </div>
+        {{if .Commanders}}<label class="inline">Player reports to
+          <select name="reports_to" class="compact"><option value="">Referee</option>{{range .Commanders}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{end}}
+        <button type="submit" class="secondary">Create invite link</button>
+      </form>
+      {{if .Invites}}<ul class="plain list invites">
+        {{range .Invites}}<li class="{{if not .Open}}closed{{end}}">
+          <div><span class="tag tag-{{.Role}}">{{.Role}}</span> <span class="small">Join {{.Summary}}</span></div>
+          <div class="muted small">{{.Uses}} of {{.MaxUses}} used{{with .Joined}} ({{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}){{end}} ·
+            {{if .Open}}expires {{stamp .Expires}}{{else}}closed{{end}}</div>
+          {{if .Open}}<div class="row">
+            <input readonly value="{{.Link}}" class="mono small grow-input" aria-label="Invite link">
+            <button type="button" class="secondary js-only small-btn" data-copy="{{.Link}}">Copy</button>
+            <form method="post" action="{{$.Base}}/invites/{{.ID}}/revoke" data-enhance>
+              <button type="submit" class="link danger small">Revoke</button></form>
+          </div>{{end}}
+        </li>{{end}}
+      </ul>{{end}}
+    </section>
+{{end}}
+
+{{define "sec-seats"}}
+<section class="panel" id="test-seats" data-live aria-labelledby="seats-h">
+      <h2 id="seats-h">Test seats</h2>
+      <p class="muted small">Puppet players for trying the game yourself. Open each in its own tab or window; each tab acts as a separate member.</p>
+      {{if .TestSeats}}<ul class="plain list">
+        {{range .TestSeats}}<li class="row"><strong>{{.Name}}</strong>
+          <a href="/r/{{$.Code}}/k/{{.Key}}" target="_blank" rel="noopener">Open in new tab</a></li>{{end}}
+      </ul>{{end}}
+      <form method="post" action="{{.Base}}/test-seats" data-enhance>
+        <button type="submit" class="secondary">Add test player</button>
+      </form>
+    </section>
+{{end}}
+
+{{define "sec-reports"}}
+<section class="panel" id="reports" data-live aria-labelledby="reports-h">
+      <h2 id="reports-h">Reports</h2>
+      {{if not .Reports}}<p class="muted small">Turn reports appear here after each turn is published.</p>
+      {{else}}<p class="muted small js-only">Replay plays a move or a fight back on a close-up of the map.</p>{{end}}
+      {{range $i, $rp := .Reports}}
+      <details class="report"{{if eq $i 0}} open{{end}}>
+        <summary><strong>{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}</strong> <span class="muted small">{{$rp.Summary}}</span></summary>
+        <ul class="small report-lines">{{range $rp.Lines}}<li>{{.Text}}{{if .Replay}} <a href="#replay" class="replay-link js-only" data-replay="{{$rp.ReplayKey .Replay}}">Replay</a>{{end}}</li>{{end}}</ul>
+      </details>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-aars"}}
+<section class="panel" id="aars" data-live aria-labelledby="aars-h">
+      <h2 id="aars-h">After-action reviews</h2>
+      {{if not .AARs}}<p class="muted small">When an operation ends, its after-action review appears here.</p>{{end}}
+      {{range .AARs}}
+      <details class="report aar">
+        <summary><strong>After-action review: operation {{.Number}}</strong> <span class="muted small">{{.Scenario}}, {{.Turns}} turns</span></summary>
+        <dl class="aar-stats small">
+          <div><dt>Civilians evacuated</dt><dd>{{.Stats.Evacuated}} of {{.Stats.CiviliansStart}}</dd></div>
+          <div><dt>Civilians lost</dt><dd>{{.Stats.CiviliansLost}}</dd></div>
+          <div><dt>Fights</dt><dd>{{.Stats.Encounters}} ({{.Stats.Won}} won, {{.Stats.Lost}} lost)</dd></div>
+          <div><dt>Our casualties</dt><dd>{{.Stats.FriendlyCasualties}}</dd></div>
+          <div><dt>Infected killed</dt><dd>{{.Stats.EnemyKilled}}</dd></div>
+          <div><dt>Contacts destroyed</dt><dd>{{.Stats.EnemyDestroyed}}</dd></div>
+        </dl>
+        <p class="small">Survived: {{range $i, $n := .Survivors}}{{if $i}}, {{end}}{{$n}}{{end}}.{{with .Lost}} Lost: {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}.{{end}}</p>
+      </details>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-log"}}
+<section class="panel" id="log" data-live aria-labelledby="log-h">
+      <h2 id="log-h">Activity</h2>
+      <ol class="plain log">
+        {{range .Log}}<li><time datetime="{{iso .At}}" title="{{stamp .At}}">{{ago .At}}</time> {{if eq .Kind "sitrep"}}<span class="tag tag-sitrep">sitrep</span> {{else if eq .Kind "event"}}<span class="tag tag-cat">event</span> {{end}}{{.Text}}{{if eq .Visibility "referee"}} <span class="tag tag-hidden">referee only</span>{{end}}</li>{{end}}
+      </ol>
+    </section>
+{{end}}
+
+{{define "sec-command"}}
+<section class="panel" id="my-command" data-live aria-labelledby="cmd-h">
+      <h2 id="cmd-h">Your command</h2>
+      {{if .MyPlayers}}<ul class="plain list">
+        {{range .MyPlayers}}<li><strong>{{.Name}}</strong>
+          <div class="muted small">{{if .Units}}{{range $i, $u := .Units}}{{if $i}}, {{end}}{{$u}}{{end}}{{else}}No units yet{{end}}</div></li>{{end}}
+      </ul>{{else}}<p class="muted small">No players report to you yet. The referee can place players under you, or invite new ones who do.</p>{{end}}
+    </section>
+{{end}}
+
+{{define "sec-myforce"}}
+<section class="panel" id="my-force" data-live aria-labelledby="mine-h">
+      <h2 id="mine-h">Your force</h2>
+      {{if .MyUnits}}
+      <ul class="plain list">{{range .MyUnits}}{{template "unit" (unitCtx $.Base .)}}{{end}}</ul>
+      {{else}}
+      <p class="muted">You haven't been given any units yet.</p>
+      {{end}}
+    </section>
+{{end}}
+
+{{define "sec-notes"}}
+<details class="panel" aria-label="Referee notes">
+      <summary><h2>Referee notes</h2></summary>
+      <p>{{.RefereeNotes}}</p>
+      <p class="muted small">Only you see this, along with units and places marked <span class="tag tag-hidden">hidden</span>.</p>
+    </details>
+{{end}}
+
+{{define "sec-danger"}}
+<details class="panel danger-zone">
+      <summary><h2>Close the room</h2></summary>
+      <p class="small">Closing ends the operation for everyone: players see that it has ended, the turn clock stops, and invites stop working. You can reopen it later, or delete it for good once it's closed.</p>
+      <form method="post" action="{{.Base}}/close" data-confirm="Close {{.Name}}? Play stops for everyone until you reopen it.">
+        <button type="submit" class="danger-btn">Close the room</button>
+      </form>
+    </details>
+{{end}}
+
+{{define "sec-access"}}
+<details class="panel access">
+      <summary><h2>Your access link</h2></summary>
+      <p class="small">Opens <strong>your seat</strong> on another device, or in another tab without cookies. Anyone with this link acts as you, so keep it private.</p>
+      <div class="row"><input readonly value="{{.AccessLink}}" class="mono small" aria-label="Your access link">
+        <button type="button" class="secondary js-only" data-copy="{{.AccessLink}}">Copy</button></div>
+    </details>
+{{end}}
+
+{{define "unit"}}{{$u := .U}}<li class="unit{{if $u.Hidden}} is-hidden{{end}}" data-h="{{$u.Hex}}">
+  <div><span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span>
+    <a href="{{.Base}}/units/{{$u.ID}}" class="unit-link" data-card><strong>{{$u.Name}}</strong></a>
+    <a href="#map" class="mono small" data-goto="{{$u.Hex}}" aria-label="Show hex {{$u.Hex}} on the map">{{$u.Hex}}</a>
+    {{if $u.Hidden}}<span class="tag tag-hidden">hidden</span>{{end}}{{if $u.Ghost}}<span class="tag">last seen</span>{{end}}
+    {{if and $u.Level (gt $u.LevelRank 0)}}<span class="tag tag-xp">{{$u.Level}}</span>{{end}}</div>
+  <div class="muted small">{{$u.ClassName}} · {{$u.Strength}}{{with $u.AssignedName}} · {{.}}{{end}}</div>
+  {{with $u.Stats}}<div class="muted small">{{.}}{{with $u.Supply}} · {{.}}{{end}}</div>{{end}}
+  {{with $u.Traits}}<details class="traits small"><summary>Traits</summary>{{.}}</details>{{end}}
+</li>{{end}}
+
+{{define "pool"}}<table class="pool small"><tbody>{{range .Factors}}<tr><td>{{.Label}}</td><td class="num">{{if gt .Dice 0}}+{{end}}{{.Dice}}</td></tr>{{end}}
+  <tr class="total"><th scope="row">Suggested pool</th><td class="num">{{.Dice}}</td></tr></tbody></table>{{end}}
+
+{{define "dice"}}<p class="dice" aria-label="{{.Hits}} hits from {{.Dice}} dice">{{range .Faces}}<span class="die{{if .Hit}} hit{{end}}">{{.Face}}</span>{{end}}{{if not .Faces}}<span class="muted small">hits entered by hand</span>{{end}} <strong>{{.Hits}} {{if eq .Hits 1}}hit{{else}}hits{{end}}</strong></p>{{end}}
+
+{{define "sec-odds"}}
+<section class="panel" id="odds" data-live aria-labelledby="odds-h">
+  <h2 id="odds-h">Event table</h2>
+  <p class="muted small">Chance that a random roll picks each event at each threat level, given what's on the map now. Current threat: {{.Threat}}.</p>
+  <div class="table-scroll">
+    <table class="events ledger">
+      <thead><tr><th scope="col">Event</th>{{range .ThreatLevels}}<th scope="col" class="odds{{if eq . $.Threat}} now{{end}}">T{{.}}</th>{{end}}<th scope="col">What it does</th></tr></thead>
+      <tbody>{{range .EventTable}}<tr class="cat-{{.Category}}{{if not .Now}} off{{end}}">
+        <th scope="row"><strong>{{.Title}}</strong> <span class="tag tag-cat">{{.Category}}</span>{{with .Limits}}<br><span class="muted small">{{.}}</span>{{end}}</th>
+        {{range $i, $o := .Odds}}<td class="odds{{if eq (index $.ThreatLevels $i) $.Threat}} now{{end}}">{{$o}}</td>{{end}}
+        <td class="small">{{range $i, $e := .Effects}}{{if $i}}; {{end}}{{$e}}{{end}}</td></tr>{{end}}</tbody>
+    </table>
+  </div>
+</section>
+{{end}}
+
+{{define "sec-ledger"}}
+<section class="panel ledger-panel" id="ledger" data-live aria-labelledby="ledger-h">
+  <h2 id="ledger-h">Forces</h2>
+  {{if .CanAssign}}<p class="muted small">{{if .IsReferee}}Assign units to players or commanders from the Commander column.{{else}}You can hand out units in your command from the Commander column.{{end}}</p>{{end}}
+  {{range .Forces}}
+  <h3 class="side-h side-{{.Side}}">{{.Name}} <span class="muted small">{{len .Units}}</span></h3>
+  <div class="table-scroll">
+  <table class="ledger">
+    <thead><tr><th scope="col">Unit</th><th scope="col">Type</th><th scope="col">Hex</th><th scope="col">Sector</th><th scope="col">Strength</th>
+      <th scope="col">Supply</th><th scope="col">Experience</th>{{if $.CommsActive}}<th scope="col">Radio</th>{{end}}<th scope="col">Commander</th><th scope="col">Order</th></tr></thead>
+    <tbody>
+    {{range $u := .Units}}<tr class="{{if $u.Hidden}}is-hidden{{end}}{{if $u.Ghost}} ghost{{end}}">
+      <th scope="row"><span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span><a href="{{$.Base}}/units/{{$u.ID}}" class="unit-link" data-card>{{$u.Name}}</a>
+        {{if $u.Hidden}}<span class="tag tag-hidden">hidden</span>{{end}}</th>
+      <td class="small">{{$u.ClassName}}</td>
+      <td><a href="{{$.Base}}?hex={{$u.Hex}}" class="mono small" data-goto="{{$u.Hex}}">{{$u.Hex}}</a>{{with $u.Aboard}}<br><span class="small muted">aboard {{.}}</span>{{end}}</td>
+      <td class="small">{{$u.Sector}}</td>
+      <td class="small">{{$u.Strength}}</td>
+      <td class="small">{{$u.AmmoText}}</td>
+      <td class="small">{{with $u.Level}}{{.}}{{if $u.XPDice}} (+{{$u.XPDice}}){{end}}{{end}}</td>
+      {{if $.CommsActive}}<td class="small radio-cell">{{if $u.Radio}}{{template "radio" $u}} {{$u.RadioText}}
+        {{if $.IsReferee}}<form method="post" action="{{$.Base}}/units/{{$u.ID}}/radio" data-enhance data-autosubmit class="radio-set">
+          <label class="sr-only" for="radio-{{$u.ID}}">Radio for {{$u.Name}}</label>
+          <select name="radio" id="radio-{{$u.ID}}" class="compact">
+            <option value=""{{if eq $u.RadioSetting ""}} selected{{end}}>Auto</option>
+            <option value="up"{{if eq $u.RadioSetting "up"}} selected{{end}}>Force contact</option>
+            <option value="down"{{if eq $u.RadioSetting "down"}} selected{{end}}>Lost / no radio</option>
+          </select><button type="submit" class="secondary small-btn js-hide">Set</button></form>{{end}}{{end}}</td>{{end}}
+      <td class="small">{{if $u.Assignable}}
+        <form method="post" action="{{$.Base}}/units/{{$u.ID}}/assign" data-enhance data-autosubmit class="row tight">
+          <label class="sr-only" for="as-{{$u.ID}}">Commander of {{$u.Name}}</label>
+          <select name="member" id="as-{{$u.ID}}" class="compact">
+            {{if $.IsReferee}}<option value="">Referee</option>{{end}}
+            {{range $.Players}}<option value="{{.ID}}"{{if eq .ID $u.AssignedTo}} selected{{end}}>{{.Name}}</option>{{end}}
+          </select>
+          <button type="submit" class="secondary small-btn js-hide">Save</button>
+        </form>{{else}}{{$u.AssignedName}}{{end}}</td>
+      <td class="small">{{with $u.OrderStatus}}<span class="tag tag-order-{{.}}">{{.}}</span>{{end}}</td>
+    </tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "sec-steps"}}
+<section class="panel steps-panel" id="turn-steps" data-live aria-labelledby="steps-h">
+  <h2 id="steps-h">Turn {{.Turn}} procedure</h2>
+  {{$stage := "plan"}}{{if eq .Phase "setup"}}{{$stage = "setup"}}{{else if eq .Phase "resolving"}}{{if .Clock.Unsettled}}{{$stage = "settle"}}{{else}}{{$stage = "publish"}}{{end}}{{end}}
+  <ol class="turn-steps">
+    <li class="{{if eq $stage "plan"}}now{{else if ne $stage "setup"}}done{{end}}"><strong>1 · Plan</strong><span>Players write and commit orders.</span></li>
+    <li class="{{if eq $stage "plan"}}next{{else if ne $stage "setup"}}done{{end}}"><strong>2 · Lock</strong><span>At the deadline, or when you lock early. Every move and fight is worked out.</span></li>
+    <li class="{{if eq $stage "settle"}}now{{else if eq $stage "publish"}}done{{end}}"><strong>3 · Settle fights</strong><span>{{if eq .Phase "resolving"}}{{if .Clock.Unsettled}}{{.Clock.Unsettled}} still to settle, below.{{else}}All settled.{{end}}{{else}}Roll or rule on each fight.{{end}}</span></li>
+    <li class="{{if eq $stage "publish"}}now{{end}}"><strong>4 · Publish</strong><span>Results take effect, players get their reports, and the next turn opens.</span></li>
+  </ol>
+  <div class="row step-action">
+    {{if eq $stage "setup"}}
+      <form method="post" action="{{.Base}}/start" data-confirm="Start the operation? Players will see the map and turn 1 opens.">
+        <button type="submit">Start the operation</button></form>
+    {{else if eq $stage "plan"}}
+      <form method="post" action="{{.Base}}/turn/lock" data-enhance data-confirm="Lock turn {{.Turn}} now? Players can't change orders after this.">
+        <button type="submit"{{if not .Clock.AllIn}} class="secondary"{{end}}>Lock turn {{.Turn}} now</button></form>
+      <span class="small">{{if .Clock.AllIn}}Every player has committed.{{else}}Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}.{{end}} Otherwise it locks {{.Clock.DeadlineText}}.</span>
+    {{else if eq $stage "settle"}}
+      <a class="button" href="#resolution-desk">Settle the fights</a>
+      <form method="post" action="{{.Base}}/encounters/settle-all" data-enhance><button type="submit" class="secondary">Let the rules settle them all</button></form>
+    {{else}}
+      <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Moves and fight results take effect, players get their reports, and turn {{.Clock.NextTurn}} opens.">
+        <button type="submit">Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>
+      {{if not .Resolution}}<span class="small muted">This turn was locked by an earlier version of the game, so there's nothing to review here; publishing moves you on.</span>{{end}}
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{define "radio"}}{{if .Radio}}<span class="radio-light r-{{.Radio}}" role="img" aria-label="{{.RadioText}}" title="{{.RadioText}}"></span>{{end}}{{end}}
+
+{{define "replay-dialog"}}
+<dialog class="order-dialog replay-dialog" id="replay-dialog" aria-labelledby="replay-title">
+  <div class="od-head"><h2 id="replay-title">Replay</h2>
+    <button type="button" class="secondary small-btn" data-close>Close</button></div>
+  <div class="replay-body">
+    {{template "replay-board" .}}
+    <div class="replay-side">
+      <p class="replay-caption" id="replay-caption" aria-live="polite"></p>
+      <div class="dice-tray" id="replay-dice" hidden>
+        <div class="tray-side"><strong class="tray-name" id="replay-side-0"></strong><div class="tray-dice" id="replay-dice-0"></div><span class="tray-hits" id="replay-hits-0"></span></div>
+        <div class="tray-side"><strong class="tray-name" id="replay-side-1"></strong><div class="tray-dice" id="replay-dice-1"></div><span class="tray-hits" id="replay-hits-1"></span></div>
+      </div>
+      <p class="replay-result" id="replay-result"></p>
+      <div class="row"><button type="button" class="secondary small-btn" id="replay-again">Play again</button></div>
+    </div>
+  </div>
+</dialog>
+<script type="application/json" id="replay-data" data-live>{{.Replays}}</script>
+{{end}}

@@ -1,0 +1,1469 @@
+{
+  "id": "dark-coast-tactical",
+  "version": "0.9.0",
+  "name": "Dark Coast Tactical",
+  "engineApi": "0",
+  "profile": "tactical",
+  "scale": {
+    "hex": "about 200 m across",
+    "turn": "1 hour",
+    "slices": 6,
+    "provisional": true
+  },
+  "sides": [
+    {
+      "id": "marines",
+      "name": "Colonial Marines",
+      "playable": true
+    },
+    {
+      "id": "civilians",
+      "name": "Civilians"
+    },
+    {
+      "id": "infected",
+      "name": "Infected",
+      "enemy": true
+    }
+  ],
+  "terrain": [
+    {
+      "code": "~",
+      "id": "sea",
+      "name": "Open water",
+      "move": 0,
+      "cover": 0,
+      "note": "Dropships may hover here. Impassable to ground units.",
+      "stack": 8
+    },
+    {
+      "code": "=",
+      "id": "river",
+      "name": "Wide water",
+      "move": 0,
+      "cover": 0,
+      "note": "Lakes and wide rivers. Impassable to ground units.",
+      "stack": 0
+    },
+    {
+      "code": "b",
+      "id": "beach",
+      "name": "Beach",
+      "move": 2,
+      "cover": 0,
+      "note": "Embarkation point when adjacent to open water.",
+      "stack": 6
+    },
+    {
+      "code": ".",
+      "id": "open",
+      "name": "Open ground",
+      "move": 1,
+      "cover": 0,
+      "stack": 6
+    },
+    {
+      "code": "u",
+      "id": "urban",
+      "name": "Urban",
+      "move": 2,
+      "cover": 2,
+      "stack": 6
+    },
+    {
+      "code": "U",
+      "id": "dense",
+      "name": "Dense urban",
+      "move": 3,
+      "cover": 3,
+      "note": "Short sight lines. Contacts are hard to detect.",
+      "stack": 4
+    },
+    {
+      "code": "i",
+      "id": "industrial",
+      "name": "Industrial",
+      "move": 2,
+      "cover": 2,
+      "stack": 6
+    },
+    {
+      "code": "f",
+      "id": "forest",
+      "name": "Woods",
+      "move": 2,
+      "cover": 2,
+      "stack": 4
+    },
+    {
+      "code": "h",
+      "id": "hills",
+      "name": "Hills",
+      "move": 3,
+      "cover": 1,
+      "note": "Elevated. Good for observation and comms relays.",
+      "stack": 4
+    },
+    {
+      "code": "m",
+      "id": "marsh",
+      "name": "Marsh",
+      "move": 3,
+      "cover": 1,
+      "stack": 3
+    }
+  ],
+  "classes": [
+    {
+      "id": "rifle_squad",
+      "name": "Marine rifle squad",
+      "abbr": "RIF",
+      "side": "marines",
+      "domain": "land",
+      "movement": 4,
+      "attack": 3,
+      "range": 2,
+      "armor": 2,
+      "ammo": {
+        "rifle": 6,
+        "grenade": 2
+      },
+      "symbol": "infantry",
+      "stack": 2,
+      "embarks": true
+    },
+    {
+      "id": "hmg_squad",
+      "name": "Heavy machine-gun squad",
+      "abbr": "HMG",
+      "side": "marines",
+      "domain": "land",
+      "movement": 3,
+      "attack": 5,
+      "range": 3,
+      "armor": 2,
+      "ammo": {
+        "belt": 4
+      },
+      "symbol": "mg",
+      "stack": 1,
+      "embarks": true
+    },
+    {
+      "id": "medic_team",
+      "name": "Corpsman team",
+      "abbr": "MED",
+      "side": "marines",
+      "domain": "land",
+      "movement": 4,
+      "attack": 1,
+      "range": 1,
+      "armor": 1,
+      "ammo": {
+        "rifle": 3,
+        "medical": 5
+      },
+      "symbol": "medic",
+      "stack": 1,
+      "embarks": true
+    },
+    {
+      "id": "engineer_squad",
+      "name": "Engineer squad",
+      "abbr": "ENG",
+      "side": "marines",
+      "domain": "land",
+      "movement": 3,
+      "attack": 2,
+      "range": 1,
+      "armor": 2,
+      "ammo": {
+        "rifle": 4,
+        "demolition": 3
+      },
+      "symbol": "engineer",
+      "stack": 2,
+      "embarks": true
+    },
+    {
+      "id": "transport",
+      "name": "Armored transport",
+      "abbr": "APC",
+      "side": "marines",
+      "domain": "land",
+      "movement": 6,
+      "attack": 2,
+      "range": 2,
+      "armor": 4,
+      "capacity": 20,
+      "ammo": {
+        "autocannon": 4
+      },
+      "symbol": "mech",
+      "stack": 3
+    },
+    {
+      "id": "dropship",
+      "name": "Heavy dropship",
+      "abbr": "DS",
+      "side": "marines",
+      "domain": "water",
+      "movement": 2,
+      "attack": 0,
+      "range": 0,
+      "armor": 5,
+      "capacity": 200,
+      "symbol": "air",
+      "stack": 4
+    },
+    {
+      "id": "civilian_group",
+      "name": "Civilian group",
+      "abbr": "CIV",
+      "side": "civilians",
+      "domain": "land",
+      "movement": 2,
+      "attack": 0,
+      "range": 0,
+      "armor": 0,
+      "symbol": "civilian"
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "?",
+        "label": "Unidentified contact"
+      },
+      "id": "horde",
+      "name": "Shambler horde",
+      "abbr": "Z",
+      "kind": "group",
+      "movement": 2,
+      "attack": 4,
+      "range": 0,
+      "armor": 1,
+      "traits": [
+        "slow",
+        "noise_drawn",
+        "swarm"
+      ],
+      "symbol": "horde",
+      "ai": {
+        "sense": 5,
+        "behavior": "hunt",
+        "wanders": true,
+        "answersCall": true
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "?",
+        "label": "Unidentified contact"
+      },
+      "id": "runners",
+      "name": "Runner pack",
+      "abbr": "RUN",
+      "kind": "group",
+      "movement": 5,
+      "attack": 3,
+      "range": 0,
+      "armor": 0,
+      "traits": [
+        "fast",
+        "pursuit"
+      ],
+      "symbol": "runner",
+      "ai": {
+        "sense": 8,
+        "behavior": "hunt",
+        "wanders": true
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "?",
+        "label": "Unidentified contact"
+      },
+      "id": "crawlers",
+      "name": "Crawlers",
+      "abbr": "CRW",
+      "kind": "group",
+      "movement": 1,
+      "attack": 3,
+      "range": 0,
+      "armor": 1,
+      "traits": [
+        "ambush",
+        "rubble"
+      ],
+      "symbol": "crawler",
+      "ai": {
+        "sense": 2,
+        "behavior": "ambush"
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "?",
+        "label": "Unidentified contact"
+      },
+      "id": "bloaters",
+      "name": "Bloater cluster",
+      "abbr": "BLT",
+      "kind": "group",
+      "movement": 1,
+      "attack": 2,
+      "range": 0,
+      "armor": 0,
+      "traits": [
+        "slow",
+        "burst"
+      ],
+      "symbol": "bloater",
+      "ai": {
+        "sense": 5,
+        "behavior": "hunt",
+        "wanders": true
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "!",
+        "label": "Single contact"
+      },
+      "id": "screamer",
+      "name": "Screamer",
+      "abbr": "SCR",
+      "kind": "special",
+      "movement": 2,
+      "attack": 1,
+      "range": 0,
+      "armor": 1,
+      "traits": [
+        "howl",
+        "fragile"
+      ],
+      "symbol": "screamer",
+      "ai": {
+        "sense": 6,
+        "behavior": "call",
+        "callRange": 4
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "!",
+        "label": "Large contact"
+      },
+      "id": "brute",
+      "name": "Brute",
+      "abbr": "BRT",
+      "kind": "monster",
+      "movement": 3,
+      "attack": 6,
+      "range": 0,
+      "armor": 4,
+      "traits": [
+        "armored",
+        "charge"
+      ],
+      "symbol": "brute",
+      "ai": {
+        "sense": 6,
+        "behavior": "hunt",
+        "wanders": true
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "!",
+        "label": "Single contact"
+      },
+      "id": "stalker",
+      "name": "Stalker",
+      "abbr": "STK",
+      "kind": "monster",
+      "movement": 4,
+      "attack": 5,
+      "range": 0,
+      "armor": 2,
+      "traits": [
+        "hunter",
+        "ambush"
+      ],
+      "symbol": "stalker",
+      "ai": {
+        "sense": 10,
+        "behavior": "hunt",
+        "prefers": "isolated",
+        "wanders": true
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "?",
+        "label": "Biological mass"
+      },
+      "id": "brood_nest",
+      "name": "Brood nest",
+      "abbr": "NST",
+      "kind": "nest",
+      "movement": 0,
+      "attack": 0,
+      "range": 0,
+      "armor": 3,
+      "traits": [
+        "stationary",
+        "spawns"
+      ],
+      "symbol": "nest",
+      "ai": {
+        "behavior": "hold"
+      }
+    },
+    {
+      "side": "infected",
+      "domain": "land",
+      "contact": {
+        "abbr": "!",
+        "label": "Massive contact"
+      },
+      "id": "brood_mother",
+      "name": "Brood Mother",
+      "abbr": "MOM",
+      "kind": "monster",
+      "movement": 1,
+      "attack": 7,
+      "range": 1,
+      "armor": 5,
+      "traits": [
+        "armored",
+        "spawns",
+        "hive_mind"
+      ],
+      "symbol": "mother",
+      "ai": {
+        "sense": 6,
+        "behavior": "hold"
+      }
+    }
+  ],
+  "traits": [
+    {
+      "id": "slow",
+      "name": "Slow",
+      "text": "Loses movement in difficult terrain; easy to outpace."
+    },
+    {
+      "id": "noise_drawn",
+      "name": "Drawn by noise",
+      "text": "Drifts toward gunfire, engines, and screamers."
+    },
+    {
+      "id": "swarm",
+      "name": "Swarm",
+      "text": "Adds dice for every 20 bodies in contact."
+    },
+    {
+      "id": "fast",
+      "name": "Fast",
+      "text": "Can close two hexes of distance in a single time slice."
+    },
+    {
+      "id": "pursuit",
+      "name": "Pursuit",
+      "text": "Follows retreating units; disengaging costs a slice."
+    },
+    {
+      "id": "ambush",
+      "name": "Ambush",
+      "text": "Undetected until adjacent; strikes first when revealed."
+    },
+    {
+      "id": "rubble",
+      "name": "Rubble dwellers",
+      "text": "Only found in dense urban or industrial hexes."
+    },
+    {
+      "id": "burst",
+      "name": "Burst",
+      "text": "When destroyed in close combat, infects or suppresses everyone in the hex."
+    },
+    {
+      "id": "howl",
+      "name": "Howl",
+      "text": "Each turn, nearby hordes drift toward the screamer's target."
+    },
+    {
+      "id": "fragile",
+      "name": "Fragile",
+      "text": "Any hit destroys it."
+    },
+    {
+      "id": "armored",
+      "name": "Armored",
+      "text": "Ignores rifle hits; needs heavy weapons, demolition, or massed fire."
+    },
+    {
+      "id": "charge",
+      "name": "Charge",
+      "text": "Breaks through cover and walls; scatters units it hits."
+    },
+    {
+      "id": "hunter",
+      "name": "Hunter",
+      "text": "Targets isolated units and the wounded; avoids massed fire."
+    },
+    {
+      "id": "stationary",
+      "name": "Stationary",
+      "text": "Does not move. Destroying it requires demolition or fire."
+    },
+    {
+      "id": "spawns",
+      "name": "Spawns",
+      "text": "Produces new infected groups through brood events."
+    },
+    {
+      "id": "hive_mind",
+      "name": "Hive mind",
+      "text": "Hordes within four hexes act together and ignore panic."
+    }
+  ],
+  "events": [
+    {
+      "id": "stragglers",
+      "title": "Stragglers drift in",
+      "category": "horde",
+      "weight": 14,
+      "referee": "A small group of infected wanders in from outside the city.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "horde",
+          "count": [
+            1,
+            2
+          ],
+          "strength": [
+            10,
+            25
+          ],
+          "scale": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "dead_rise",
+      "title": "The dead rise",
+      "category": "horde",
+      "weight": 10,
+      "referee": "Victims in the streets turn. Existing hordes in the city grow.",
+      "report": "Radio intercepts: more infected sighted across the city.",
+      "effects": [
+        {
+          "op": "grow",
+          "classes": [
+            "horde",
+            "runners"
+          ],
+          "count": [
+            1,
+            3
+          ],
+          "percent": [
+            15,
+            35
+          ],
+          "scale": true
+        }
+      ]
+    },
+    {
+      "id": "follow_noise",
+      "title": "They follow the noise",
+      "category": "horde",
+      "weight": 10,
+      "referee": "Hordes drift toward the nearest marines.",
+      "effects": [
+        {
+          "op": "drift",
+          "classes": [
+            "horde",
+            "bloaters"
+          ],
+          "count": [
+            1,
+            3
+          ],
+          "toward": "players",
+          "steps": [
+            1,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runner_pack",
+      "title": "Runner pack",
+      "category": "horde",
+      "weight": 10,
+      "minThreat": 2,
+      "referee": "A pack of fast infected appears at the city edge.",
+      "report": "Fast movers glimpsed between buildings to the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "runners",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            8,
+            16
+          ],
+          "scale": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "crawler_ambush",
+      "title": "Crawlers in the rubble",
+      "category": "horde",
+      "weight": 8,
+      "referee": "Crawlers lie hidden in collapsed buildings, waiting for anyone who passes.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "crawlers",
+          "count": [
+            1,
+            2
+          ],
+          "strength": [
+            6,
+            14
+          ],
+          "where": {
+            "terrain": [
+              "dense",
+              "industrial"
+            ],
+            "awayFromMarines": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "bloaters",
+      "title": "Bloater cluster",
+      "category": "horde",
+      "weight": 6,
+      "referee": "Swollen infected gather in the industrial district.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "bloaters",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            4,
+            9
+          ],
+          "where": {
+            "terrain": [
+              "industrial",
+              "urban"
+            ],
+            "awayFromMarines": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "screamer",
+      "title": "A screamer calls",
+      "category": "special",
+      "weight": 6,
+      "minThreat": 2,
+      "referee": "A screamer appears and its howl draws nearby hordes toward the marines.",
+      "report": "An inhuman shriek echoes from the {dir}. Something is calling.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "screamer",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "where": {
+            "terrain": [
+              "urban",
+              "dense"
+            ],
+            "awayFromMarines": 3
+          }
+        },
+        {
+          "op": "drift",
+          "classes": [
+            "horde",
+            "runners"
+          ],
+          "count": [
+            2,
+            4
+          ],
+          "toward": "players",
+          "steps": [
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wave",
+      "title": "Horde wave",
+      "category": "wave",
+      "weight": 6,
+      "minThreat": 2,
+      "referee": "A large wave of infected arrives from inland. Dropship sensors spot it.",
+      "report": "Dropship sensors track a mass of infected moving in from the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "horde",
+          "count": [
+            2,
+            3
+          ],
+          "strength": [
+            40,
+            90
+          ],
+          "scale": true,
+          "known": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 5
+          }
+        },
+        {
+          "op": "threat",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "great_wave",
+      "title": "The great wave",
+      "category": "wave",
+      "weight": 3,
+      "minThreat": 4,
+      "referee": "The whole region empties toward the coast. Hordes and runner packs pour in from inland.",
+      "report": "The ground trembles. Every sensor inland lights up at once, moving toward the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "horde",
+          "count": [
+            3,
+            4
+          ],
+          "strength": [
+            60,
+            120
+          ],
+          "scale": true,
+          "known": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 5
+          }
+        },
+        {
+          "op": "spawn",
+          "class": "runners",
+          "count": [
+            1,
+            2
+          ],
+          "strength": [
+            10,
+            20
+          ],
+          "scale": true,
+          "known": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 5
+          }
+        },
+        {
+          "op": "threat",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "brood_hatch",
+      "title": "Brood hatch",
+      "category": "brood",
+      "weight": 8,
+      "requires": "brood_nest",
+      "referee": "A brood nest splits open and releases a new group.",
+      "report": "Seismic sensors register rhythmic tremors to the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "horde",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            20,
+            40
+          ],
+          "scale": true,
+          "where": {
+            "nearClass": "brood_nest"
+          }
+        },
+        {
+          "op": "spawn",
+          "class": "runners",
+          "count": [
+            0,
+            1
+          ],
+          "strength": [
+            6,
+            12
+          ],
+          "scale": true,
+          "where": {
+            "nearClass": "brood_nest"
+          }
+        }
+      ]
+    },
+    {
+      "id": "new_nest",
+      "title": "A new nest takes root",
+      "category": "brood",
+      "weight": 4,
+      "minThreat": 3,
+      "referee": "Infected biomass roots itself in sheltered ground, away from the marines.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "brood_nest",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "where": {
+            "terrain": [
+              "marsh",
+              "forest",
+              "industrial"
+            ],
+            "awayFromMarines": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "brute",
+      "title": "Brute",
+      "category": "monster",
+      "weight": 5,
+      "minThreat": 2,
+      "referee": "A hulking brute crashes into the city from inland.",
+      "report": "Something heavy smashes through a wall to the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "brute",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "stalker",
+      "title": "Stalker",
+      "category": "monster",
+      "weight": 4,
+      "minThreat": 3,
+      "referee": "A stalker begins hunting isolated marines from the dense blocks.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "stalker",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "where": {
+            "terrain": [
+              "dense",
+              "forest"
+            ],
+            "awayFromMarines": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "brood_mother",
+      "title": "The Brood Mother wakes",
+      "category": "monster",
+      "weight": 2,
+      "minThreat": 4,
+      "requires": "brood_nest",
+      "unique": "brood_mother",
+      "referee": "The Brood Mother emerges at the hive. Every horde turns toward the marines.",
+      "report": "Every infected in the city stops, turns toward the marsh, and screams.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "brood_mother",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "where": {
+            "nearFeature": "hive"
+          }
+        },
+        {
+          "op": "drift",
+          "classes": [
+            "horde",
+            "runners",
+            "brute"
+          ],
+          "count": [
+            0,
+            0
+          ],
+          "toward": "players",
+          "steps": [
+            1,
+            1
+          ]
+        },
+        {
+          "op": "threat",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "drone_feed",
+      "title": "Drone feed restored",
+      "category": "respite",
+      "weight": 8,
+      "referee": "A recon drone marks hidden infected near the marines.",
+      "report": "Drone feed restored: {n:contact} marked near friendly positions.",
+      "effects": [
+        {
+          "op": "reveal",
+          "side": "infected",
+          "count": [
+            1,
+            3
+          ],
+          "within": 6
+        }
+      ]
+    },
+    {
+      "id": "survivor_signal",
+      "title": "Survivor signal",
+      "category": "respite",
+      "weight": 5,
+      "referee": "An unknown civilian group signals for help.",
+      "report": "A flashlight signal blinks from a rooftop to the {dir}.",
+      "effects": [
+        {
+          "op": "reveal",
+          "side": "civilians",
+          "count": [
+            1,
+            1
+          ],
+          "within": 0
+        }
+      ]
+    },
+    {
+      "id": "lull",
+      "title": "Eerie quiet",
+      "category": "respite",
+      "weight": 6,
+      "maxThreat": 3,
+      "referee": "Nothing happens. Give the players a moment.",
+      "report": "An eerie quiet settles over Port Ines.",
+      "effects": []
+    },
+    {
+      "id": "blackout",
+      "title": "Comms blackout",
+      "category": "special",
+      "weight": 5,
+      "minThreat": 2,
+      "referee": "Interference knocks out the radios of a few units for a while.",
+      "report": "Static floods the command net. Some units have gone quiet.",
+      "effects": [
+        {
+          "op": "jam",
+          "count": [
+            1,
+            2
+          ],
+          "turns": [
+            1,
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "river",
+      "name": "River",
+      "blocks": true,
+      "cost": 0,
+      "crossings": [
+        "bridge",
+        "ford"
+      ],
+      "note": "Runs along hex sides. Ground units cross only at a bridge or ford."
+    },
+    {
+      "id": "stream",
+      "name": "Stream",
+      "blocks": false,
+      "cost": 1,
+      "crossings": [
+        "bridge",
+        "ford"
+      ],
+      "note": "Crossable anywhere at extra cost."
+    },
+    {
+      "id": "ridge",
+      "name": "Ridge",
+      "blocks": true,
+      "cost": 0,
+      "crossings": [
+        "pass"
+      ],
+      "note": "Steep high ground. Ground units cross only at a pass."
+    },
+    {
+      "id": "cliff",
+      "name": "Cliff",
+      "blocks": true,
+      "cost": 0,
+      "crossings": [],
+      "note": "Impassable to ground units."
+    },
+    {
+      "id": "wall",
+      "name": "Wall or barricade",
+      "blocks": true,
+      "cost": 0,
+      "crossings": [
+        "gate"
+      ],
+      "note": "Built obstacle. Engineers can breach it."
+    }
+  ],
+  "crossings": [
+    {
+      "id": "bridge",
+      "name": "Bridge",
+      "cost": 0,
+      "note": "Can be held, blocked, or demolished."
+    },
+    {
+      "id": "ford",
+      "name": "Ford",
+      "cost": 2,
+      "note": "Slow and exposed. Vehicles may stall."
+    },
+    {
+      "id": "pass",
+      "name": "Pass",
+      "cost": 1,
+      "note": "Narrow route through high ground."
+    },
+    {
+      "id": "gate",
+      "name": "Gate",
+      "cost": 0,
+      "note": "Can be opened, barred, or breached."
+    }
+  ],
+  "orders": {
+    "tasks": [
+      {
+        "id": "move",
+        "name": "Move",
+        "destination": true,
+        "note": "Move to the destination along the route shown."
+      },
+      {
+        "id": "clear",
+        "name": "Clear and attack",
+        "destination": true,
+        "offensive": true,
+        "note": "Advance and engage any infected met along the way."
+      },
+      {
+        "id": "recon",
+        "name": "Reconnoiter",
+        "destination": true,
+        "note": "Move carefully and report what you see; avoid a fight.",
+        "careful": true
+      },
+      {
+        "id": "escort",
+        "name": "Escort civilians",
+        "destination": true,
+        "note": "Gather the civilians with or near you and bring them to the destination."
+      },
+      {
+        "id": "evacuate",
+        "name": "Evacuate to the beach",
+        "destination": true,
+        "note": "Bring civilians to an embarkation beach."
+      },
+      {
+        "id": "resupply",
+        "name": "Resupply",
+        "destination": true,
+        "note": "Reach a supply source or transport and refill ammunition.",
+        "resupply": true
+      },
+      {
+        "id": "embark",
+        "name": "Embark on a transport",
+        "embark": true,
+        "note": "Move to a transport and board it at the end of the move. Board a dropship from a hex next to it."
+      },
+      {
+        "id": "disembark",
+        "name": "Disembark",
+        "destination": true,
+        "disembark": true,
+        "note": "Get off into a hex next to the transport, or under it on land. The unit can't move further this turn."
+      },
+      {
+        "id": "hold",
+        "name": "Hold position",
+        "note": "Stay put and defend; fire on anything that comes close."
+      },
+      {
+        "id": "dig_in",
+        "name": "Dig in and defend",
+        "note": "Fortify where you stand for better cover next turn."
+      }
+    ],
+    "risks": [
+      {
+        "id": "cautious",
+        "name": "Cautious: stop at the first contact",
+        "stopsShort": true
+      },
+      {
+        "id": "balanced",
+        "name": "Balanced",
+        "default": true
+      },
+      {
+        "id": "aggressive",
+        "name": "Aggressive: push through contact"
+      }
+    ],
+    "fallbacks": [
+      {
+        "id": "hold",
+        "name": "Hold where you are"
+      },
+      {
+        "id": "return",
+        "name": "Return to the start hex"
+      },
+      {
+        "id": "nearest_friendly",
+        "name": "Fall back to the nearest friendly unit"
+      },
+      {
+        "id": "beach",
+        "name": "Fall back to the beachhead"
+      }
+    ]
+  },
+  "stacking": {
+    "default": 6,
+    "note": "Friendly units only. Units may move through a full hex but not end there."
+  },
+  "combat": {
+    "die": 6,
+    "success": 4,
+    "unitDice": "attack",
+    "procedure": [
+      "Each side's pool is one die per point of Attack for every unit in the fight, plus the modifiers below.",
+      "Roll both pools. Every die showing 4 or more is a success.",
+      "Successes cancel one for one. The side with successes left over wins by that margin.",
+      "Read the margin on the outcome table and apply it to the losing side. The referee may change any pool, roll, or result, and records why."
+    ],
+    "groups": {
+      "per": 20,
+      "dice": 1,
+      "max": 6,
+      "label": "Numbers: +1 die per 20 in a group"
+    },
+    "modifiers": [
+      {
+        "when": "holds_cover",
+        "label": "Holding cover",
+        "perCover": 1
+      },
+      {
+        "when": "across_barrier",
+        "label": "Fighting across a river or ridge",
+        "dice": -2
+      },
+      {
+        "when": "unseen",
+        "label": "Ambush from hiding",
+        "dice": 2
+      },
+      {
+        "when": "missed_orders",
+        "label": "No orders: defends with Armor instead of Attack",
+        "stat": "armor"
+      },
+      {
+        "when": "out_of_ammo",
+        "label": "Out of ammunition: half dice",
+        "halve": true
+      }
+    ],
+    "outcomes": [
+      {
+        "min": 0,
+        "max": 0,
+        "result": "No meaningful change. Both sides hold.",
+        "loser": {},
+        "winner": {}
+      },
+      {
+        "min": 1,
+        "max": 2,
+        "result": "The loser is suppressed and pinned in place.",
+        "loser": {
+          "casualties": 5,
+          "suppressed": true
+        },
+        "winner": {}
+      },
+      {
+        "min": 3,
+        "max": 4,
+        "result": "The loser takes casualties and falls back one hex.",
+        "loser": {
+          "casualties": 25,
+          "retreat": 1
+        },
+        "winner": {
+          "casualties": 5
+        }
+      },
+      {
+        "min": 5,
+        "max": 6,
+        "result": "The loser is broken: heavy casualties, falls back two hexes.",
+        "loser": {
+          "casualties": 50,
+          "retreat": 2
+        },
+        "winner": {
+          "casualties": 5
+        }
+      },
+      {
+        "min": 7,
+        "max": 0,
+        "result": "Decisive: the loser is destroyed or overrun.",
+        "loser": {
+          "casualties": 100
+        },
+        "winner": {}
+      }
+    ],
+    "infection": {
+      "side": "infected",
+      "victims": "civilians",
+      "rate": 0.5,
+      "label": "Civilians killed by the infected rise and join the horde."
+    },
+    "ammo": 1
+  },
+  "experience": {
+    "note": "Units that survive an operation carry their experience into the next one in the campaign.",
+    "levels": [
+      {
+        "name": "Green",
+        "min": 0,
+        "dice": 0,
+        "note": "Fresh troops or replacements."
+      },
+      {
+        "name": "Seasoned",
+        "min": 1,
+        "dice": 1,
+        "note": "Survived one operation."
+      },
+      {
+        "name": "Veteran",
+        "min": 2,
+        "dice": 2,
+        "note": "Survived two or three operations."
+      },
+      {
+        "name": "Elite",
+        "min": 4,
+        "dice": 3,
+        "note": "Survived four or more operations."
+      }
+    ]
+  },
+  "sight": {
+    "base": 3,
+    "elevated": 4,
+    "elevatedTerrain": [
+      "hills"
+    ],
+    "water": 4,
+    "cover": [
+      {
+        "cover": 2,
+        "range": 2
+      },
+      {
+        "cover": 3,
+        "range": 1
+      }
+    ],
+    "traits": {
+      "ambush": 1
+    },
+    "note": "Units see this many hexes; cover at the target shortens it."
+  },
+  "evacuation": {
+    "terrain": [
+      "beach"
+    ],
+    "carrierClass": "dropship",
+    "note": "Civilians on a beach next to open water with a dropship board it, up to its capacity each turn."
+  },
+  "supply": {
+    "sources": [
+      "beachhead",
+      "port"
+    ],
+    "carriers": [
+      "transport",
+      "dropship"
+    ],
+    "note": "A unit with a Resupply order refills its ammunition if it ends the turn at or next to a supply point, or with a transport or dropship."
+  },
+  "escort": {
+    "tasks": [
+      "escort",
+      "evacuate"
+    ],
+    "note": "Civilians in the same hex as a unit with an Escort or Evacuate order go with it."
+  },
+  "comms": {
+    "relay": 3,
+    "nodes": [
+      {
+        "feature": "beachhead",
+        "range": 6
+      },
+      {
+        "class": "dropship",
+        "range": 5
+      },
+      {
+        "feature": "relay",
+        "range": 12,
+        "manned": true
+      }
+    ],
+    "note": "Units near the beachhead or a dropship are on the command net, and squad radios pass it along to units within 3 hexes of each other. The ridge relay reaches 12 hexes while a friendly unit holds it."
+  }
+}

@@ -1,0 +1,142 @@
+{{define "content"}}
+{{template "shell-top" .}}
+<main id="main" class="screen rules-screen" data-base="{{.Base}}" data-version="{{.Version}}">
+{{with .Rules}}
+  <article class="card rules">
+    <p class="eyebrow">Rules · {{.Module.Name}} {{.Module.Version}}</p>
+    <h1>How to play</h1>
+    <p>These rules come straight from the version locked to this campaign, so they're always the ones the server applies. The referee has the final word on anything they don't cover.</p>
+    <nav class="toc" aria-label="Contents">
+      <a href="#turn">The turn</a> · <a href="#orders">Orders</a> · <a href="#movement">Movement and terrain</a> ·
+      <a href="#stacking">Stacking</a> · <a href="#sight">Sight and fog</a> · <a href="#units">Units</a> ·
+      <a href="#combat">Combat</a> · <a href="#experience">Experience</a> · <a href="#sectors">Sectors</a>
+      {{if .IsReferee}} · <a href="#referee">Referee notes</a>{{end}}
+    </nav>
+
+    <section id="turn">
+      <h2>The turn</h2>
+      <p>One turn is {{.Scale.Turn}} of game time; one hex is {{.Scale.Hex}}.{{if .Scale.Provisional}} Both are provisional while the game is playtested.{{end}} Everyone plans at once, and nobody waits for the other side.</p>
+      <ol>
+        <li><strong>Plan.</strong> Write orders for your units. Save drafts as you think; commit when you're sure. You can revise or withdraw until the lock.</li>
+        <li><strong>Lock.</strong> {{.Schedule}} A new turn always leaves at least {{.MinPlanning}} to plan. The referee can push a lock back.</li>
+        <li><strong>Resolve.</strong> Committed orders are carried out from where everyone stood at the lock. The infected move at the same time. The referee reviews both and settles any encounters.</li>
+        <li><strong>Report.</strong> Results and sitreps appear on the Reports screen, and the next turn opens.</li>
+      </ol>
+      <p>If the referee hasn't resolved a locked turn, the enemy AI steps in: <em>{{.Takeover}}</em>. It carries out committed orders and moves the infected by doctrine.</p>
+      <p>This is operation {{.Operation}} of the campaign.</p>
+    </section>
+
+    <section id="orders">
+      <h2>Orders</h2>
+      <p>Each unit gets one order a turn: a task, a destination if the task needs one, your intent, how much risk you accept, and what to do if the plan fails. Commanders can write orders for their players' units; the referee for any friendly unit. Committed orders are visible to every friendly player, so coordinate through them.</p>
+      <p><strong>No order, no attack.</strong> A unit without a committed order at the lock holds where it is. It defends itself but takes no offensive action that turn. Drafts that weren't committed lapse.</p>
+      <table>
+        <thead><tr><th scope="col">Task</th><th scope="col">Destination</th><th scope="col">What it means</th></tr></thead>
+        <tbody>{{range .Module.Orders.Tasks}}<tr><th scope="row">{{.Name}}</th><td>{{if .Destination}}yes{{else}}—{{end}}</td><td>{{.Note}}</td></tr>{{end}}</tbody>
+      </table>
+      <p><strong>Acceptable risk:</strong> {{range $i, $r := .Module.Orders.Risks}}{{if $i}}; {{end}}{{$r.Name}}{{end}}. {{range .Module.Orders.Risks}}{{if .StopsShort}}“{{.Name}}” stops before coming into contact. {{end}}{{end}}Otherwise units stop when they run into the enemy.</p>
+      <p><strong>Fallbacks:</strong> {{range $i, $f := .Module.Orders.Fallbacks}}{{if $i}}; {{end}}{{$f.Name}}{{end}}.</p>
+    </section>
+
+    <section id="movement">
+      <h2>Movement and terrain</h2>
+      <p>A unit's Movement is the number of movement points it spends each turn. Entering a hex costs that terrain's move cost, plus anything for the side you cross. When you pick a destination, the map highlights every hex you can reach, with its cost, and draws the cheapest route there. You can't move through a hex where you can see the enemy.</p>
+      <table>
+        <thead><tr><th scope="col">Terrain</th><th scope="col">Move cost</th><th scope="col">Cover</th><th scope="col">Stacking</th><th scope="col">Notes</th></tr></thead>
+        <tbody>{{range .Terrain}}<tr><th scope="row">{{.Name}}</th><td>{{if eq .Move 0}}impassable{{else}}{{.Move}}{{end}}</td><td>{{.Cover}}</td><td>{{.Capacity}}</td><td>{{.Note}}</td></tr>{{end}}</tbody>
+      </table>
+      <h3>Rivers, ridges, and other hex sides</h3>
+      <p>Some features run along the sides between hexes rather than filling them, so a river can wind between two neighborhoods.</p>
+      <table>
+        <thead><tr><th scope="col">Feature</th><th scope="col">Crossing it</th><th scope="col">Notes</th></tr></thead>
+        <tbody>{{range .Module.EdgeTypes}}<tr><th scope="row">{{.Name}}</th><td>{{if .Blocks}}{{if .Crossings}}only at {{range $i, $c := .Crossings}}{{if $i}} or {{end}}a {{$c}}{{end}}{{else}}impassable{{end}}{{else}}+{{.Cost}} movement{{end}}</td><td>{{.Note}}</td></tr>{{end}}</tbody>
+      </table>
+      <p>{{range $i, $c := .Module.Crossings}}{{if $i}} {{end}}<strong>{{$c.Name}}:</strong> +{{$c.Cost}} movement. {{$c.Note}}{{end}}</p>
+      <p>Roads join hex centers. Units that move on water use one movement point a hex and can't go ashore.</p>
+    </section>
+
+    <section id="stacking">
+      <h2>Stacking</h2>
+      <p>Each friendly unit uses stacking points, and each hex holds only so many (see the terrain table). {{.Module.Stacking.Note}} Space is counted from everyone's planned orders, so two squads can't both claim the last room in a hex. If a hex is still full when orders are carried out, the later unit stops at the last hex on its route with room.</p>
+      <p>Several units on one hex show as a stack of counters with a number; a red number means the hex is full. Each unit takes its own order, or tick "give this order to my other units in the same hex" to move a stack together.</p>
+    </section>
+
+    <section id="sight">
+      <h2>Sight and fog of war</h2>
+      <p>Everyone on your side shares one picture: whatever any friendly unit can see right now. Units see {{.SightBase}} hexes, or {{.SightHigh}} from {{range $i, $t := .Module.Sight.ElevatedTerrain}}{{if $i}} or {{end}}{{$t}}{{end}}{{if .Module.Sight.Water}} (units on water see {{.Module.Sight.Water}}){{end}}. Cover hides things: {{range $i, $c := .Module.Sight.Cover}}{{if $i}}; {{end}}a unit in cover {{$c.Cover}} or more is seen only within {{$c.Range}} {{if eq $c.Range 1}}hex{{else}}hexes{{end}}{{end}}{{range $t, $n := .Module.Sight.Traits}}; {{$t}} units only within {{$n}}{{end}}.</p>
+      <p>Hexes nobody can see are fogged. A contact that slips out of sight leaves a faded marker where it was last seen, with the turn. Contacts you see are unidentified: you know roughly how big a group is, or that it's a large single contact, but not what it is.</p>
+    </section>
+
+    {{with .Module.Comms}}
+    <section id="comms">
+      <h2>Communications</h2>
+      <p>{{.Note}}</p>
+      <ul>{{range .Nodes}}<li>{{if .Feature}}A {{.Feature}}{{if .Manned}}, while a friendly unit is within one hex of it{{end}}{{else}}A {{.Class}}{{end}}: {{.Range}} hexes.</li>{{end}}
+        <li>Unit to unit: {{.Relay}} hexes.</li></ul>
+      <p>A green light on a unit means it's on the command net; red means it isn't. Off the net, a unit's orders stay with the player holding it: their commander can't see or change them, and other players can't see them. The referee can also mark a unit lost, and events can jam radios.</p>
+    </section>
+    {{end}}
+
+    <section id="units">
+      <h2>Units</h2>
+      <p>Counters show the unit's type symbol and its factors as attack–armor–movement. Click any unit to open its card.</p>
+      <table>
+        <thead><tr><th scope="col">Unit</th><th scope="col">Side</th><th scope="col">Move</th><th scope="col">Attack</th><th scope="col">Range</th><th scope="col">Armor</th><th scope="col">Stacking</th><th scope="col">Supply</th></tr></thead>
+        <tbody>{{range .Classes}}<tr><th scope="row">{{.Name}} <span class="mono muted small">{{.Abbr}}</span></th><td>{{.SideName}}</td><td>{{.Movement}}</td><td>{{.Attack}}</td><td>{{.Range}}</td><td>{{.Armor}}</td><td>{{.Stack}}</td>
+          <td class="small">{{range $k, $v := .Ammo}}{{$k}} {{$v}} {{end}}{{if .Capacity}}carries {{.Capacity}}{{end}}</td></tr>{{end}}</tbody>
+      </table>
+      {{if not .IsReferee}}<p class="muted small">The infected aren't listed. You learn what's out there by meeting it.</p>{{end}}
+    </section>
+
+    <section id="combat">
+      <h2>Combat</h2>
+      <p>Units fight when they meet during a turn's resolution. The server builds each side's dice pool and suggests a result; the referee reviews every fight and can change anything, recording why. Dice are d{{.Module.Combat.Die}}; a {{.Module.Combat.Success}} or better is a success.</p>
+      <ol>{{range .Module.Combat.Procedure}}<li>{{.}}</li>{{end}}</ol>
+      <h3>Pool modifiers</h3>
+      <ul>
+        {{with .Module.Combat.Groups}}<li><strong>{{.Label}}</strong> (up to {{.Max}}).</li>{{end}}
+        <li><strong>Experience:</strong> each unit adds its experience dice.</li>
+        {{range .Module.Combat.Modifiers}}<li><strong>{{.Label}}</strong>{{if .Dice}}: {{if gt .Dice 0}}+{{end}}{{.Dice}} {{if or (eq .Dice 1) (eq .Dice -1)}}die{{else}}dice{{end}}{{end}}{{if .PerCover}}: +{{.PerCover}} per point of cover{{end}}.</li>{{end}}
+      </ul>
+      <table>
+        <thead><tr><th scope="col">Margin</th><th scope="col">Result</th><th scope="col">Loser</th><th scope="col">Winner</th></tr></thead>
+        <tbody>{{range .Module.Combat.Outcomes}}<tr><th scope="row">{{.MarginText}}</th><td>{{.Result}}</td>
+          <td class="small">{{with .Loser}}{{if .Casualties}}{{.Casualties}}% casualties{{end}}{{if .Retreat}}, falls back {{.Retreat}}{{end}}{{if .Suppressed}}, suppressed{{end}}{{end}}</td>
+          <td class="small">{{with .Winner}}{{if .Casualties}}{{.Casualties}}% casualties{{end}}{{end}}</td></tr>{{end}}</tbody>
+      </table>
+      {{with .Module.Combat.Infection}}<p>{{.Label}}</p>{{end}}
+      {{if .Module.Combat.Ammo}}<p>Every unit in a fight spends {{.Module.Combat.Ammo}} of each kind of ammunition it carries. {{.Module.Supply.Note}}</p>{{end}}
+    </section>
+
+    <section id="experience">
+      <h2>Experience</h2>
+      <p>{{.Module.Experience.Note}} When the referee ends an operation, every friendly unit still in the field gains an operation of experience. Lost units come back as green replacements. Chevrons on a counter show its level.</p>
+      <table>
+        <thead><tr><th scope="col">Level</th><th scope="col">Operations survived</th><th scope="col">Bonus</th><th scope="col"></th></tr></thead>
+        <tbody>{{range .Module.Experience.Levels}}<tr><th scope="row">{{.Name}}</th><td>{{.Min}}+</td><td>+{{.Dice}} {{if eq .Dice 1}}die{{else}}dice{{end}}</td><td>{{.Note}}</td></tr>{{end}}</tbody>
+      </table>
+    </section>
+
+    <section id="sectors">
+      <h2>Sectors</h2>
+      <p>The map is divided into lettered and numbered sectors (A1, B3, …), and the referee may name some ("C3 · Hospital"). Use them in orders and talk: "hold the line in D3", "contacts moving into E5". The hex inspector shows every hex's sector.</p>
+    </section>
+
+    {{if .IsReferee}}
+    <section id="referee" class="referee-only">
+      <h2>Referee notes <span class="tag tag-hidden">referee only</span></h2>
+      <h3>The infected</h3>
+      <table>
+        <thead><tr><th scope="col">Type</th><th scope="col">Kind</th><th scope="col">Move</th><th scope="col">Attack</th><th scope="col">Armor</th><th scope="col">Traits</th><th scope="col">Seen by players as</th></tr></thead>
+        <tbody>{{range .Infected}}<tr><th scope="row">{{.Name}} <span class="mono muted small">{{.Abbr}}</span></th><td>{{.Kind}}</td><td>{{.Movement}}</td><td>{{.Attack}}</td><td>{{.Armor}}</td>
+          <td class="small">{{range $i, $t := .Traits}}{{if $i}}, {{end}}{{$t}}{{end}}</td><td class="small">{{with .Contact}}{{.Label}}{{end}}</td></tr>{{end}}</tbody>
+      </table>
+      <dl class="traits-list">{{range .Traits}}<dt>{{.Name}}</dt><dd>{{.Text}}</dd>{{end}}</dl>
+      <p>The enemy AI moves each type by doctrine from its traits: hordes chase noise and people; runners pursue; stalkers hunt isolated squads; crawlers wait in ambush; screamers call nearby hordes; nests and the Brood Mother hold. Random event tables and their odds are in the <a href="{{$.Base}}/edit#event-tables">scenario editor</a>.</p>
+    </section>
+    {{end}}
+  </article>
+{{end}}
+</main>
+{{template "shell-bottom" $}}
+{{end}}

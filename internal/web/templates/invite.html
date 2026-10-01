@@ -1,0 +1,27 @@
+{{define "content"}}
+<header class="topbar">
+  <a class="brand" href="/">Async Wargame</a>
+</header>
+<main id="main" class="narrow">
+  <section class="card">
+    <p class="eyebrow">Invitation</p>
+    <h1>{{.Room}}</h1>
+    {{if .Open}}
+    <p>You're invited to join {{.Summary}}. The referee has already approved this invite, so you go straight to the briefing.</p>
+    {{if .Error}}<p class="alert" role="alert">{{.Error}}</p>{{end}}
+    {{if .Member}}<p class="muted small">This browser is already a member of this room. <a href="{{.MemberLink}}">Open your seat</a>, or join as someone else in a separate tab seat.</p>{{end}}
+    <form method="post" action="{{.Action}}" class="stack">
+      <label>Display name
+        <input name="name" value="{{.Name}}" required maxlength="32" autocomplete="nickname">
+      </label>
+      <label class="toggle"><input type="checkbox" name="seat" value="tab"{{if .Member}} checked{{end}}>
+        Separate seat for this tab only (for testing several players in one browser)</label>
+      <button type="submit">Accept and join</button>
+    </form>
+    {{else}}
+    <p>This invite has expired, been used up, or been revoked. Ask the referee for a new one.</p>
+    <p><a href="/">Back to start</a></p>
+    {{end}}
+  </section>
+</main>
+{{end}}

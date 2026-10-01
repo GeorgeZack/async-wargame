@@ -1,0 +1,163 @@
+{{define "map"}}
+<div class="map-wrap">
+  <svg id="map" viewBox="{{.Map.ViewBox}}" data-viewbox="{{.Map.ViewBox}}" tabindex="0" role="application"
+       aria-label="Hex map, {{.Map.Cols}} by {{.Map.Rows}}. Arrow keys move the cursor; the hex details are read out in the Selected panel."
+       aria-describedby="inspector" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      {{template "map-defs" .}}
+      {{template "counter-defs"}}
+    </defs>
+    <g id="terrain-layer" class="terrain" data-live>{{range .Map.Cells}}<use href="#hx" x="{{f1 .X}}" y="{{f1 .Y}}" class="t-{{.T}}{{if .Depth}} d{{.Depth}}{{end}}" data-h="{{.Hex}}" data-t="{{.T}}"/>{{end}}</g>
+    <g id="texture-layer" class="texture" data-live aria-hidden="true">{{range .Map.Cells}}<use href="#hx" x="{{f1 .X}}" y="{{f1 .Y}}" class="tx-{{.T}}{{if gt .Depth 1}} deep{{end}}"/>{{end}}</g>
+    <path id="coast-layer" class="coast" d="{{.Map.Coast}}" data-live aria-hidden="true"/>
+    <g id="water-edges" data-live aria-hidden="true">{{range .Map.EdgePaths}}{{if or (eq .Type "river") (eq .Type "stream")}}<path class="e-{{.Type}}-bank" d="{{.D}}"/><path class="e-{{.Type}}" d="{{.D}}"/>{{end}}{{end}}</g>
+    <g id="roads-layer" data-live aria-hidden="true"><path class="road-casing" d="{{.Map.Roads}}"/><path class="road" d="{{.Map.Roads}}"/></g>
+    <g id="land-edges" data-live aria-hidden="true">{{range .Map.EdgePaths}}{{if not (or (eq .Type "river") (eq .Type "stream"))}}<path class="e-{{.Type}}-base" d="{{.D}}"/><path class="e-{{.Type}}" d="{{.D}}"/>{{end}}{{end}}</g>
+    <g id="crossings-layer" data-live>{{range .Map.Crossings}}<g class="x-{{.Type}}"><title>{{.Label}}</title><line class="x-under" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}"/><line class="x-top" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}"/></g>{{end}}</g>
+    <rect class="paper" x="0" y="0" width="{{f1 $.Map.Width}}" height="{{f1 $.Map.Height}}" aria-hidden="true"/>
+    <g id="hexnum-layer" class="hexnums" aria-hidden="true">{{range .Map.Cells}}<text x="{{f1 .X}}" y="{{f1 (add .Y -12.2)}}">{{.Hex}}</text>{{end}}</g>
+    <g id="sector-layer" class="sectors" data-live aria-hidden="true">
+      <path class="sector-line" d="{{.Map.SectorLines}}"/>
+      {{range .Map.SectorLabels}}<text class="sector-id" x="{{f1 .X}}" y="{{f1 .Y}}">{{.ID}}</text>{{if .Name}}<text class="sector-name" x="{{f1 .X}}" y="{{f1 (add .Y 5.2)}}">{{.Name}}</text>{{end}}{{end}}
+    </g>
+    <path id="fog-layer" class="fog{{if .IsReferee}} ref-fog{{end}}" d="{{.Map.Fog}}" data-live aria-hidden="true"/>
+    <rect class="night" x="0" y="0" width="{{f1 $.Map.Width}}" height="{{f1 $.Map.Height}}" aria-hidden="true"/>
+    <g id="features-layer" data-live>
+      {{range .Map.Features}}<g class="feature k-{{.Kind}}{{if .Hidden}} hidden{{end}}" data-h="{{.Hex}}" transform="translate({{f1 .X}} {{f1 .Y}})">
+        <title>{{.Name}}</title>
+        <rect class="fmark" x="-14.6" y="-4.8" width="5.6" height="5.6" rx=".6"/><text class="glyph" x="-11.8" y="-.8">{{.Glyph}}</text>
+        <text class="flabel" y="16.6">{{.Name}}</text>
+      </g>{{end}}
+    </g>
+    <g id="proposed-layer" data-live>{{range .Map.Proposed}}<use href="#hx" class="proposed" x="{{f1 .X}}" y="{{f1 .Y}}" data-h="{{.Hex}}"><title>{{.Label}}</title></use>{{end}}</g>
+    <g id="reach-layer" aria-hidden="true"></g>
+    <g id="orders-layer" data-live>{{range .Map.OrderLines}}<polyline class="order-line s-{{.Status}}{{if .Mine}} mine{{end}}" points="{{.Points}}" marker-end="url(#arrow)"><title>{{.Label}}</title></polyline>{{end}}</g>
+    <polyline id="route-preview" class="route-preview" points="" marker-end="url(#arrow)" aria-hidden="true"/>
+    <g id="resolution-layer" data-live>{{range .Map.ResolutionLines}}<polyline class="res-line r-{{.Role}}" points="{{.Points}}" marker-end="url(#arrow)"><title>{{.Label}}</title></polyline>{{end}}</g>
+    <g id="units-layer" data-live>
+      {{range .Map.Stacks}}<g transform="translate({{f1 .X}} {{f1 (add .Y 1.5)}})" data-h="{{.Hex}}">{{template "counter" .}}      </g>{{end}}
+    </g>
+    <g id="encounter-layer" data-live>{{range .Map.EncounterMarks}}<g class="enc-mark{{if .Settled}} settled{{end}}" transform="translate({{f1 .X}} {{f1 (add .Y -11)}})"><title>{{.Label}}</title>
+      <path d="M0-5 1.4-1.6 5-1.6 2.1.6 3.2 4.2 0 2 -3.2 4.2 -2.1.6 -5-1.6 -1.4-1.6z"/></g>{{end}}</g>
+    <g id="edit-preview" aria-hidden="true"></g>
+    <line id="side-cursor" class="side-cursor" x1="0" y1="0" x2="0" y2="0" visibility="hidden"/>
+    <use id="cursor" href="#hx" class="cursor" x="0" y="0" visibility="hidden"/>
+  </svg>
+</div>
+{{end}}
+
+{{define "legend"}}
+<details class="legend">
+  <summary>Map key</summary>
+  <ul class="plain swatches">
+    {{range .Legend}}<li><svg class="swatch" viewBox="-16 -18 32 36" aria-hidden="true"><use href="#hx" class="t-{{.ID}}"/><use href="#hx" class="tx-{{.ID}}"/></svg>
+      <span><strong>{{.Name}}</strong>
+      {{if eq .Move 0}}impassable to ground units{{else}}move cost {{.Move}}, cover {{.Cover}}{{end}}{{with .Note}}. {{.}}{{end}}</span></li>{{end}}
+    <li><svg class="swatch" viewBox="-16 -8 32 16" aria-hidden="true"><path class="road-casing" d="M-14 0H14"/><path class="road" d="M-14 0H14"/></svg>
+      <span><strong>Road</strong> joins hex centers. Vehicles move at full speed along it.</span></li>
+    <li><svg class="swatch" viewBox="-16 -8 32 16" aria-hidden="true"><path class="e-river-bank" d="M-14 0H14"/><path class="e-river" d="M-14 0H14"/></svg>
+      <span><strong>River</strong> runs along hex sides. Ground units cross only at a <strong>bridge</strong> or <strong>ford</strong>.</span></li>
+    <li><svg class="swatch" viewBox="-16 -8 32 16" aria-hidden="true"><path class="e-ridge-base" d="M-14 0H14"/><path class="e-ridge" d="M-14 0H14"/></svg>
+      <span><strong>Ridge</strong> runs along hex sides. Ground units cross only at a <strong>pass</strong>.</span></li>
+  </ul>
+</details>
+{{end}}
+
+{{define "counter"}}<g class="counter side-{{.Top.Side}} kind-{{.Top.Kind}}{{if .Top.Mine}} mine{{end}}{{if .Top.Hidden}} hidden{{end}}{{if .Top.Contact}} contact{{end}}{{if .Top.Ghost}} ghost{{end}}{{if .Full}} full{{end}}">
+        <title>{{.Label}}</title>
+        {{if gt .Count 2}}<rect class="ctr-edge" x="-7" y="-7" width="18" height="18" rx="1"/>{{end}}
+        {{if gt .Count 1}}<rect class="ctr-back" x="-8" y="-8" width="18" height="18" rx="1"/>{{end}}
+        <rect class="ctr-edge" x="-8.4" y="-8.4" width="18" height="18" rx="1"/>
+        <rect class="ctr" x="-9" y="-9" width="18" height="18" rx="1"/>
+        <rect class="ctr-line" x="-8.2" y="-8.2" width="16.4" height="16.4" rx=".6"/>
+        {{if .Top.Contact}}<text class="ctr-q" y="4.2">{{.Top.Abbr}}</text>{{if .Top.Ghost}}<text class="ctr-seen" y="8">T{{.Top.SeenTurn}}</text>{{end}}
+        {{else}}<text class="ctr-id" y="-5">{{.Top.Abbr}}</text>
+        {{with .Top.Symbol}}<use href="#s-{{.}}" y="-.2"/>{{end}}
+        <text class="ctr-f" y="7.6">{{.Top.Factors}}</text>{{end}}
+        {{with .Top.Chevrons}}<path class="xp-chevrons" d="{{.}}"/>{{end}}
+        {{if gt .Count 1}}<text class="ctr-n" x="7.6" y="-5.4">{{.Count}}</text>{{end}}
+        {{with .Top.Radio}}<circle class="ctr-radio r-{{.}}" cx="-6.6" cy="-6.6" r="1.5"><title>{{$.Top.RadioText}}</title></circle>{{end}}
+      </g>{{end}}
+
+{{define "counter-defs"}}
+      <!-- Counter symbols, drawn in a 10x7 frame centered on 0,0. -->
+      <g id="s-frame"><rect class="sym-frame" x="-5" y="-3.5" width="10" height="7"/></g>
+      <g id="s-infantry"><use href="#s-frame"/><path class="sym" d="M-5-3.5L5 3.5M-5 3.5L5-3.5"/></g>
+      <g id="s-mg"><use href="#s-frame"/><path class="sym" d="M-5-3.5L5 3.5M-5 3.5L5-3.5"/><path class="sym" d="M0-5.6v2.1M-1.2-4.8l1.2-1 1.2 1"/></g>
+      <g id="s-medic"><use href="#s-frame"/><path class="sym-bold" d="M0-2.4v4.8M-2.4 0h4.8"/></g>
+      <g id="s-engineer"><use href="#s-frame"/><path class="sym" d="M-3 2V-1H3V2M0-1V2"/></g>
+      <g id="s-mech"><use href="#s-frame"/><path class="sym" d="M-5-3.5L5 3.5M-5 3.5L5-3.5"/><ellipse class="sym" rx="3.4" ry="1.9"/></g>
+      <g id="s-air"><use href="#s-frame"/><path class="sym" d="M-3.8 1.2L0-1.6 3.8 1.2M0-1.6v3"/></g>
+      <g id="s-civilian"><circle class="sym-fill" cy="-1.9" r="1.2"/><path class="sym-fill" d="M-2.6 3.2q.2-3.4 2.6-3.4t2.6 3.4z"/>
+        <circle class="sym-fill" cx="-3.6" cy="-.6" r=".8"/><circle class="sym-fill" cx="3.6" cy="-.6" r=".8"/></g>
+      <g id="s-horde"><path class="sym-bold" d="M-3.2 3L-1.4-3M-.4 3L1.4-3M2.4 3L4.2-3"/></g>
+      <g id="s-runner"><path class="sym-bold" d="M-4-2.8L-.6 0-4 2.8M.6-2.8L4 0 .6 2.8"/></g>
+      <g id="s-crawler"><path class="sym-bold" d="M-4.6 1q1.15-2.4 2.3 0t2.3 0t2.3 0t2.3 0"/></g>
+      <g id="s-bloater"><circle class="sym" r="3"/><circle class="sym-fill" cx="-1" cy="-.8" r=".55"/><circle class="sym-fill" cx="1.1" cy=".4" r=".7"/><circle class="sym-fill" cx="-.4" cy="1.6" r=".45"/></g>
+      <g id="s-screamer"><circle class="sym-fill" cx="-3" r="1.1"/><path class="sym" d="M-.8-2a3 3 0 0 1 0 4M1.2-3.2a5 5 0 0 1 0 6.4M3.2-4.2a6.6 6.6 0 0 1 0 8.4"/></g>
+      <g id="s-brute"><path class="sym-fill" d="M-3.6 3.4L-3.2-1.4-4.4-4-1.6-2.2H1.6L4.4-4 3.2-1.4 3.6 3.4Z"/><path class="sym-cut" d="M-1.8.4h1M.8.4h1M-1.2 2.2h2.4"/></g>
+      <g id="s-stalker"><path class="sym-fill" d="M-4.6 0Q0-4.2 4.6 0 0 4.2-4.6 0Z"/><ellipse class="sym-cut-fill" rx=".7" ry="2.2"/></g>
+      <g id="s-mother"><path class="sym-fill" d="M-4.4 3.4V-.6L-2.4-4-1-1.2 0-4.4 1-1.2 2.4-4 4.4-.6V3.4Z"/><path class="sym-cut" d="M-2.2 1h1.2M1 1h1.2M-1.6 2.6h3.2"/></g>
+      <g id="s-nest"><circle class="sym" r="3.6"/><circle class="sym" r="2"/><circle class="sym-fill" r=".7"/></g>
+{{end}}
+
+{{define "map-defs"}}
+      <polygon id="hx" points="{{.Map.HexPoints}}"/>
+      <!-- Ink-printed terrain, in the manner of an old boxed wargame map. -->
+      <pattern id="p-sea" width="12" height="6" patternUnits="userSpaceOnUse">
+        <path class="pt-wave" d="M.5 3.2q1.5-1.2 3 0t3 0t3 0"/></pattern>
+      <pattern id="p-river" width="12" height="6" patternUnits="userSpaceOnUse">
+        <path class="pt-wave" d="M.5 3.2q1.5-1.2 3 0t3 0t3 0"/></pattern>
+      <pattern id="p-beach" width="5" height="5" patternUnits="userSpaceOnUse">
+        <circle class="pt-sand" cx="1.2" cy="1.3" r=".32"/><circle class="pt-sand" cx="3.7" cy="3.6" r=".28"/><circle class="pt-sand" cx="3.9" cy="1" r=".2"/></pattern>
+      <pattern id="p-open" width="17" height="15" patternUnits="userSpaceOnUse">
+        <path class="pt-grass" d="M3 11l.5-1.3.5 1.3M12 4l.5-1.3.5 1.3"/></pattern>
+      <pattern id="p-forest" width="8" height="7" patternUnits="userSpaceOnUse">
+        <path class="pt-trunk" d="M2.4 4.6v1.5M6.4 1.6v1.5"/>
+        <circle class="pt-tree" cx="2.4" cy="3.1" r="1.75"/><circle class="pt-tree" cx="6.4" cy="0.1" r="1.75"/><circle class="pt-tree" cx="6.4" cy="7.1" r="1.75"/></pattern>
+      <pattern id="p-hills" width="11" height="9" patternUnits="userSpaceOnUse">
+        <path class="pt-hill" d="M.8 7.5q2.5-4.2 5 0M6 3.4q2.3-3.8 4.6 0"/>
+        <path class="pt-hachure" d="M2.2 5.6l-.4 .8M3.3 4.7v.9M4.4 5.6l.4 .8M7.4 1.6l-.4.8M8.3 .8v.9M9.2 1.6l.4.8"/></pattern>
+      <pattern id="p-urban" width="7" height="7" patternUnits="userSpaceOnUse">
+        <rect class="pt-bldg" x=".8" y=".8" width="2.8" height="2.2"/><rect class="pt-bldg" x="4.2" y="3.9" width="2.1" height="2.5"/></pattern>
+      <pattern id="p-dense" width="5.5" height="5.5" patternUnits="userSpaceOnUse">
+        <rect class="pt-tower" x=".6" y=".6" width="3.8" height="3.8"/><path class="pt-hatch" d="M.8 2.2l1.6-1.6M.8 4l3.4-3.4M2.6 4.2l1.6-1.6"/></pattern>
+      <pattern id="p-industrial" width="11" height="8" patternUnits="userSpaceOnUse">
+        <path class="pt-roof" d="M.8 6.5l1.8-2.6v2.6l1.8-2.6v2.6l1.8-2.6v2.6z"/><rect class="pt-roof" x="8.2" y="1.6" width="1.1" height="4.9"/></pattern>
+      <pattern id="p-marsh" width="9" height="7" patternUnits="userSpaceOnUse">
+        <path class="pt-reed" d="M1.6 5.2l-.5-1.6M2.2 5.2V3.3M2.8 5.2l.5-1.6M1 5.4h2.4"/><path class="pt-pool" d="M5 2.4h2.6M5.6 3.2h1.4"/></pattern>
+      <marker id="arrow" viewBox="0 0 6 6" refX="4.2" refY="3" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
+        <path class="arrowhead" d="M0 0L6 3 0 6z"/></marker>
+      <pattern id="p-fog" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect class="pt-fogwash" width="4" height="4"/><path class="pt-foghatch" d="M0 0V4"/></pattern>
+      <pattern id="p-paper" width="23" height="19" patternUnits="userSpaceOnUse">
+        <circle class="pt-grain" cx="3" cy="4" r=".35"/><circle class="pt-grain" cx="15" cy="2" r=".25"/><circle class="pt-grain" cx="9" cy="12" r=".3"/>
+        <circle class="pt-grain" cx="20" cy="15" r=".35"/><circle class="pt-grain" cx="12" cy="17" r=".2"/><path class="pt-fiber" d="M17 8.5q1.5-.8 3 .2M5 15.5q1-.9 2.4-.4"/></pattern>
+
+{{end}}
+
+{{/* A static copy of the board for replays: terrain, edges, roads, places. No
+   live ids, no fog, no units: the replay draws its own counters. */}}
+{{define "replay-board"}}
+<svg class="replay-board" id="replay-svg" viewBox="{{.Map.ViewBox}}" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="replay-title">
+    <defs>
+      {{template "map-defs" .}}
+      {{template "counter-defs"}}
+    </defs>
+    <g class="terrain">{{range .Map.Cells}}<use href="#hx" x="{{f1 .X}}" y="{{f1 .Y}}" class="t-{{.T}}{{if .Depth}} d{{.Depth}}{{end}}"/>{{end}}</g>
+    <g class="texture" aria-hidden="true">{{range .Map.Cells}}<use href="#hx" x="{{f1 .X}}" y="{{f1 .Y}}" class="tx-{{.T}}{{if gt .Depth 1}} deep{{end}}"/>{{end}}</g>
+    <path class="coast" d="{{.Map.Coast}}" aria-hidden="true"/>
+    <g aria-hidden="true">{{range .Map.EdgePaths}}{{if or (eq .Type "river") (eq .Type "stream")}}<path class="e-{{.Type}}-bank" d="{{.D}}"/><path class="e-{{.Type}}" d="{{.D}}"/>{{end}}{{end}}</g>
+    <g aria-hidden="true"><path class="road-casing" d="{{.Map.Roads}}"/><path class="road" d="{{.Map.Roads}}"/></g>
+    <g aria-hidden="true">{{range .Map.EdgePaths}}{{if not (or (eq .Type "river") (eq .Type "stream"))}}<path class="e-{{.Type}}-base" d="{{.D}}"/><path class="e-{{.Type}}" d="{{.D}}"/>{{end}}{{end}}</g>
+    <g>{{range .Map.Crossings}}<g class="x-{{.Type}}"><line class="x-under" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}"/><line class="x-top" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}"/></g>{{end}}</g>
+    <rect class="paper" x="0" y="0" width="{{f1 $.Map.Width}}" height="{{f1 $.Map.Height}}" aria-hidden="true"/>
+    <g class="hexnums" aria-hidden="true">{{range .Map.Cells}}<text x="{{f1 .X}}" y="{{f1 (add .Y -12.2)}}">{{.Hex}}</text>{{end}}</g>
+    <g>{{range .Map.Features}}{{if not .Hidden}}<g class="feature k-{{.Kind}}" transform="translate({{f1 .X}} {{f1 .Y}})">
+        <rect class="fmark" x="-14.6" y="-4.8" width="5.6" height="5.6" rx=".6"/><text class="glyph" x="-11.8" y="-.8">{{.Glyph}}</text>
+        <text class="flabel" y="16.6">{{.Name}}</text></g>{{end}}{{end}}</g>
+    <g class="replay-trails"></g>
+    <g class="replay-units"></g>
+    <g class="replay-marks"></g>
+</svg>
+{{end}}

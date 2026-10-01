@@ -1,0 +1,27 @@
+{{define "content"}}
+<header class="topbar">
+  <a class="brand" href="/">Async Wargame</a>
+</header>
+<main id="main" class="narrow closed" data-base="{{.Base}}" data-version="{{.Version}}">
+  <section class="card">
+    <p class="eyebrow">Room <span class="mono">{{.CodeDisplay}}</span></p>
+    <h1>{{.Room}} is closed</h1>
+    <p>The referee closed this room on {{.ClosedAt}}. The operation has ended and no one can join.</p>
+    {{if .IsReferee}}
+    <form method="post" action="{{.Base}}/reopen">
+      <button type="submit">Reopen the room</button>
+    </form>
+    <hr>
+    <h2>Delete permanently</h2>
+    <p class="small">This erases the map, units, orders, and the whole record. It can't be undone.</p>
+    <form method="post" action="{{.Base}}/delete" class="stack">
+      <label>Type the room code <span class="mono">{{.CodeDisplay}}</span> to confirm
+        <input name="confirm" required autocomplete="off" class="mono"></label>
+      <button type="submit" class="danger-btn">Delete this room</button>
+    </form>
+    {{else}}
+    <p><a href="/">Back to start</a></p>
+    {{end}}
+  </section>
+</main>
+{{end}}

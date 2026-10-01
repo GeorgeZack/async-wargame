@@ -1,0 +1,61 @@
+{{define "content"}}
+<header class="topbar">
+  <span class="brand">Async Wargame</span>
+</header>
+<main id="main" class="narrow">
+  {{if .Error}}<p class="alert" role="alert">{{.Error}}</p>{{end}}
+
+  {{if .Rooms}}
+  <section class="card">
+    <h2>Your rooms</h2>
+    <ul class="plain rooms">
+      {{range .Rooms}}
+      <li><a href="/r/{{.Code}}"><strong>{{.Name}}</strong></a>
+        <span class="muted mono">{{.CodeDisplay}}</span>
+        <span class="tag tag-{{.Status}}">{{if eq .Role "referee"}}referee{{else}}{{.Status}}{{end}}</span></li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  <section class="card">
+    <h2>Join a room</h2>
+    <p class="muted">Enter the room code your referee shared. The referee approves each player before they can see the operation.</p>
+    <form method="post" action="/join" class="stack">
+      <label>Room code
+        <input name="code" value="{{.Code}}" required autocomplete="off" autocapitalize="characters"
+               spellcheck="false" inputmode="text" maxlength="9" placeholder="ABC-DEF" class="mono code-input">
+      </label>
+      <label>Display name
+        <input name="name" required maxlength="32" autocomplete="nickname">
+      </label>
+      <label class="toggle"><input type="checkbox" name="seat" value="tab">
+        Separate seat for this tab only (for testing several players in one browser)</label>
+      <button type="submit">Request access</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Host a campaign</h2>
+    <p class="muted">You become the referee. You get a room code to share with players.</p>
+    <form method="post" action="/rooms" class="stack">
+      <label>Campaign name
+        <input name="campaign" required maxlength="32" value="Operation Lantern">
+      </label>
+      <label>Scenario
+        <select name="scenario">
+          {{range .Scenarios}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </label>
+      {{range .Scenarios}}<p class="muted small">{{.Name}}: {{.Summary}}</p>{{end}}
+      <label>Your display name
+        <input name="name" required maxlength="32" autocomplete="nickname">
+      </label>
+      {{if .NeedPassword}}<label>Host password <span class="muted small">This server lets only its hosts create rooms. Joining a room doesn't need it.</span>
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>{{end}}
+      <button type="submit">Create room</button>
+    </form>
+  </section>
+</main>
+{{end}}

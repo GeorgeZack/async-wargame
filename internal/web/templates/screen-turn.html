@@ -1,0 +1,14 @@
+{{define "content"}}{{template "shell-top" .}}
+<main id="main" class="screen screen-turn" data-base="{{.Base}}" data-version="{{.Version}}">
+  {{template "sec-next" .}}
+  {{template "sec-steps" .}}
+  <div class="cols cols-turn">
+    <div class="col">{{template "sec-clock" .}}{{template "sec-orders" .}}</div>
+    <div class="col wide">
+      {{template "sec-desk" .}}
+      {{if not .Resolution}}<section class="panel"><h2>Resolution desk</h2>
+        <p class="muted">{{if eq .Phase "resolving"}}No resolution to review for this turn. Publish it from the procedure above.{{else}}When the turn locks, every unit's moves are worked out together and each fight lands here as an encounter card to settle.{{end}}</p></section>{{end}}
+    </div>
+  </div>
+</main>
+{{template "shell-bottom" .}}{{end}}

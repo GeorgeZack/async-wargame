@@ -1,0 +1,183 @@
+{{define "content"}}
+{{template "shell-top" .}}
+
+<main id="main" class="screen editor-screen" data-base="{{.Base}}" data-version="{{.Version}}" data-editor>
+  <div class="next" id="edit-status" data-live role="status">
+    {{if .Live}}
+    <p><strong>The operation is live.</strong> Edits apply immediately. Players see changes to terrain, roads, rivers, and anything they already know about.</p>
+    {{else}}
+    <p><strong>Setup.</strong> Players can't see the map yet. Shape the scenario, check the event tables, then start the operation.</p>
+    <div class="row">
+      <form method="post" action="{{.Base}}/start" data-confirm="Start the operation? Players will see the map and turn 1 opens.">
+        <input type="hidden" name="back" value="edit"><button type="submit">Start the operation</button>
+      </form>
+      <form method="post" action="{{.Base}}/reset" data-enhance data-confirm="Reset the map, places, units, and texts to the scenario template? Your edits will be lost.">
+        <input type="hidden" name="back" value="edit"><button type="submit" class="secondary">Reset to template</button>
+      </form>
+    </div>
+    {{end}}
+    <noscript><p class="alert">Map editing needs JavaScript. You can still edit the texts below.</p></noscript>
+  </div>
+
+  <section class="panel map-panel" aria-labelledby="map-h">
+    <div class="panel-head">
+      <h2 id="map-h">Map</h2>
+      <div class="map-tools js-only" role="toolbar" aria-label="Map controls">
+        <button type="button" class="secondary icon" data-zoom="in" aria-label="Zoom in">+</button>
+        <button type="button" class="secondary icon" data-zoom="out" aria-label="Zoom out">−</button>
+        <button type="button" class="secondary" data-zoom="reset">Fit</button>
+        <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Labels</label>
+        <label class="toggle"><input type="checkbox" id="sectors-toggle" checked> Sectors</label>
+        {{if .IsReferee}}<label class="toggle" title="Show what players can't see"><input type="checkbox" id="fog-toggle"> Player fog</label>{{end}}
+      </div>
+    </div>
+
+    <fieldset class="tools js-only">
+      <legend class="sr-only">Editing tool</legend>
+      {{range $t := (list "inspect:Inspect" "terrain:Terrain" "edges:Rivers & ridges" "crossings:Crossings" "roads:Roads" "units:Add unit" "places:Add place" "sectors:Sectors")}}
+      {{$parts := split $t ":"}}<label class="tool"><input type="radio" name="tool" value="{{index $parts 0}}"{{if eq (index $parts 0) "inspect"}} checked{{end}}><span>{{index $parts 1}}</span></label>
+      {{end}}
+    </fieldset>
+
+    <div class="tool-opts js-only" data-tool-opts="terrain" hidden>
+      <div class="swatch-pick" role="radiogroup" aria-label="Terrain to paint">
+        {{range $i, $t := .TerrainOptions}}<label title="{{$t.Name}}"><input type="radio" name="paint" value="{{$t.ID}}"{{if eq $t.ID "open"}} checked{{end}}>
+          <svg class="swatch" viewBox="-16 -18 32 36" aria-hidden="true"><use href="#hx" class="t-{{$t.ID}}"/><use href="#hx" class="tx-{{$t.ID}}"/></svg><span>{{$t.Name}}</span></label>{{end}}
+      </div>
+      <p class="muted small">Click or drag across hexes to paint.</p>
+    </div>
+    <div class="tool-opts js-only row" data-tool-opts="edges" hidden>
+      <label class="inline">Draw
+        <select id="edge-type">{{range .EdgeTypes}}<option value="{{.ID}}">{{.Name}}</option>{{end}}<option value="">Erase</option></select></label>
+      <span class="muted small">Click a hex side, or drag along sides. A river can wind between hexes without filling them.</span>
+    </div>
+    <div class="tool-opts js-only row" data-tool-opts="crossings" hidden>
+      <label class="inline">Place
+        <select id="crossing-type">{{range .Crossings}}<option value="{{.ID}}">{{.Name}}</option>{{end}}<option value="">Remove crossing</option></select></label>
+      <span class="muted small">Click a river, ridge, or wall side. Bridges and fords cross rivers, passes cross ridges, gates cross walls.</span>
+    </div>
+    <div class="tool-opts js-only row" data-tool-opts="roads" hidden>
+      <span class="muted small">Drag from hex to hex to lay a road. Click a hex side to add or remove the road across it.</span>
+    </div>
+    <div class="tool-opts js-only row" data-tool-opts="units" hidden>
+      <label class="inline">Class
+        <select id="unit-class">{{range .Classes}}<option value="{{.ID}}" data-group="{{.Group}}">{{.SideName}} · {{.Name}}</option>{{end}}</select></label>
+      <label class="inline">Strength <input id="unit-strength" type="number" min="1" max="100000" value="10"></label>
+      <label class="toggle"><input type="checkbox" id="unit-known"> Known to players</label>
+      <span class="muted small">Click a hex to place it.</span>
+    </div>
+    <div class="tool-opts js-only row" data-tool-opts="places" hidden>
+      <label class="inline">Kind
+        <select id="place-kind">{{range .FeatureKinds}}<option>{{.}}</option>{{end}}</select></label>
+      <label class="inline">Name <input id="place-name" maxlength="32" placeholder="New place"></label>
+      <label class="toggle"><input type="checkbox" id="place-hidden"> Hidden from players</label>
+      <span class="muted small">Click a hex to place it.</span>
+    </div>
+    <div class="tool-opts js-only" data-tool-opts="sectors" hidden>
+      <div class="row">
+        <label class="inline">Name <input id="sector-name" maxlength="32" placeholder="e.g. Hospital Front"></label>
+        <span class="muted small">Click a hex to give its sector this name. Leave the name blank to clear it.</span>
+      </div>
+      <div class="row">
+        <label class="inline">Sector size
+          <select id="sector-cols" class="compact">{{range $n := (list "2" "3" "4" "5" "6" "8")}}<option{{if eq $n (printf "%d" $.SectorCols)}} selected{{end}}>{{$n}}</option>{{end}}</select></label>
+        <span class="small">×</span>
+        <select id="sector-rows" class="compact" aria-label="Sector rows">{{range $n := (list "2" "3" "4" "5" "6" "8")}}<option{{if eq $n (printf "%d" $.SectorRows)}} selected{{end}}>{{$n}}</option>{{end}}</select>
+        <span class="muted small">hexes</span>
+        <button type="button" class="secondary small-btn" data-sector-size>Apply size</button>
+      </div>
+      <p class="small" id="sector-named" data-live>{{if .SectorNames}}Named: {{range $i, $s := .SectorNames}}{{if $i}}, {{end}}<a href="#map" data-goto="{{$s.Hex}}"><strong>{{$s.ID}}</strong></a> {{$s.Name}}{{end}}{{end}}</p>
+    </div>
+    <p id="tool-hint" class="tool-hint" role="status" aria-live="polite"></p>
+
+    {{template "map" .}}
+    <div id="inspector" class="inspector" aria-live="polite">
+      <p class="muted js-only">Select a hex to see its terrain, sides, features, and units.</p>
+    </div>
+    {{template "legend" .}}
+  </section>
+
+  <div class="side">
+    <section class="panel" id="edit-units" data-live aria-labelledby="eu-h">
+      <h2 id="eu-h">Units <span class="muted small">{{len .Units}}</span></h2>
+      {{$side := ""}}
+      <ul class="plain list edit-list">
+        {{range .Units}}
+        {{if ne .SideName $side}}{{$side = .SideName}}<li class="side-h side-{{.Side}}">{{.SideName}}</li>{{end}}
+        <li class="edit-row" data-unit="{{.ID}}">
+          <div class="row">
+            <input class="grow" data-field="name" value="{{.Name}}" maxlength="32" aria-label="Name of {{.Name}}">
+            <input class="num" type="number" data-field="strength" value="{{.Strength}}" min="1" max="100000" aria-label="Strength of {{.Name}}">
+          </div>
+          <div class="row small">
+            <span class="muted">{{.ClassName}} · <a href="#map" data-goto="{{.Hex}}" class="mono">{{.Hex}}</a></span>
+            {{if not .Playable}}<label class="toggle"><input type="checkbox" data-field="known"{{if .Known}} checked{{end}}> Known</label>
+            {{else}}<label class="inline small" title="Operations survived">XP <input type="number" class="num-xs" data-field="operations" value="{{.Operations}}" min="0" max="50" aria-label="Operations survived by {{.Name}}"></label> <span class="muted">{{.Level}}</span>{{end}}
+            <button type="button" class="link" data-move-unit="{{.ID}}" data-name="{{.Name}}">Move</button>
+            <button type="button" class="link danger" data-delete-unit="{{.ID}}" data-name="{{.Name}}">Delete</button>
+          </div>
+        </li>
+        {{end}}
+      </ul>
+    </section>
+
+    <section class="panel" id="edit-places" data-live aria-labelledby="ep-h">
+      <h2 id="ep-h">Places <span class="muted small">{{len .Places}}</span></h2>
+      <ul class="plain list edit-list">
+        {{range .Places}}
+        <li class="edit-row" data-feature="{{.ID}}">
+          <div class="row">
+            <input class="grow" data-field="name" value="{{.Name}}" maxlength="32" aria-label="Name of {{.Name}}">
+            <select data-field="kind" aria-label="Kind of {{.Name}}">{{$k := .Kind}}{{range $.FeatureKinds}}<option{{if eq . $k}} selected{{end}}>{{.}}</option>{{end}}</select>
+          </div>
+          <input data-field="note" value="{{.Note}}" maxlength="300" placeholder="Note" aria-label="Note for {{.Name}}" class="small">
+          <div class="row small">
+            <a href="#map" data-goto="{{.Hex}}" class="mono">{{.Hex}}</a>
+            <label class="toggle"><input type="checkbox" data-field="hidden"{{if .Hidden}} checked{{end}}> Hidden</label>
+            <button type="button" class="link" data-move-feature="{{.ID}}" data-name="{{.Name}}">Move</button>
+            <button type="button" class="link danger" data-delete-feature="{{.ID}}" data-name="{{.Name}}">Delete</button>
+          </div>
+        </li>
+        {{end}}
+      </ul>
+    </section>
+
+    <section class="panel" aria-labelledby="txt-h">
+      <h2 id="txt-h">Briefing and notes</h2>
+      <form method="post" action="{{.Base}}/edit/text" class="stack" data-enhance>
+        <input type="hidden" name="back" value="edit">
+        <label>Campaign name <input name="campaign" value="{{.Name}}" maxlength="32" required></label>
+        <label>Player briefing <span class="muted small">Blank lines separate paragraphs.</span>
+          <textarea name="briefing" rows="9">{{.BriefingText}}</textarea></label>
+        <label>Referee notes <span class="muted small">Only you see these.</span>
+          <textarea name="notes" rows="5">{{.RefereeNotes}}</textarea></label>
+        <button type="submit">Save texts</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="panel event-tables" id="event-tables" data-live aria-labelledby="et-h">
+    <h2 id="et-h">Random event tables</h2>
+    <p class="muted small">Chance that a random roll picks each event at each threat level, given what is on the map now (for example, brood events need a nest). Current threat is {{.Threat}}; you can change it and roll events from the <a href="{{.Base}}">dashboard</a>.</p>
+    <div class="table-scroll">
+      <table class="events">
+        <thead><tr>
+          <th scope="col">Event</th><th scope="col">Weight</th>
+          {{range .ThreatLevels}}<th scope="col" class="odds{{if eq . $.Threat}} now{{end}}">T{{.}}</th>{{end}}
+          <th scope="col">What it does</th><th scope="col">Players are told</th>
+        </tr></thead>
+        <tbody>
+          {{range .EventTable}}<tr class="cat-{{.Category}}{{if not .Now}} off{{end}}">
+            <th scope="row"><strong>{{.Title}}</strong><br><span class="tag tag-cat">{{.Category}}</span>{{with .Limits}} <span class="muted small">{{.}}</span>{{end}}</th>
+            <td class="num">{{.Weight}}</td>
+            {{range $i, $o := .Odds}}<td class="odds{{if eq (index $.ThreatLevels $i) $.Threat}} now{{end}}">{{$o}}</td>{{end}}
+            <td class="small">{{.Referee}}{{if .Effects}}<ul class="effects">{{range .Effects}}<li>{{.}}</li>{{end}}</ul>{{end}}</td>
+            <td class="small">{{if .Report}}“{{.Report}}”{{else}}<span class="muted">nothing</span>{{end}}</td>
+          </tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script type="application/json" id="map-data" data-live>{{.Data}}</script>
+{{template "shell-bottom" .}}{{end}}

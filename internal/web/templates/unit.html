@@ -1,0 +1,54 @@
+{{define "content"}}
+{{template "shell-top" .}}
+<main id="main" class="screen card-screen" data-base="{{.Base}}" data-version="{{.Version}}">
+{{with .Card}}
+  <article class="card unit-card" id="unit-card" aria-labelledby="card-h">
+    <div class="card-head">
+      <svg class="card-counter" viewBox="-11 -11 23 23" aria-hidden="true"><defs>{{template "counter-defs"}}</defs>{{template "counter" .Counter}}</svg>
+      <div>
+        <p class="eyebrow">{{.SideName}}{{if .Class}} · {{.Class.Name}}{{end}}</p>
+        <h1 id="card-h">{{.Unit.Name}}</h1>
+        <p class="muted small">Hex {{.Unit.Hex}} · sector {{.Sector}}{{with .Commander}} · commanded by {{.}}{{end}}</p>
+    {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $.Card.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}
+      </div>
+    </div>
+
+    {{if .Contact}}
+    <p>{{.Unit.ClassName}} · {{.Unit.Strength}}.</p>
+    <p class="muted small">Your units haven't identified this contact. Get closer, or get eyes on it, to learn more.</p>
+    {{else}}
+    <dl class="stat-grid">
+      <div><dt>Movement</dt><dd>{{.Class.Movement}}</dd></div>
+      <div><dt>Attack</dt><dd>{{.Class.Attack}}</dd></div>
+      <div><dt>Range</dt><dd>{{.Class.Range}}</dd></div>
+      <div><dt>Armor</dt><dd>{{.Class.Armor}}</dd></div>
+      {{if .StackPts}}<div><dt>Stacking</dt><dd>{{.StackPts}}</dd></div>{{end}}
+      {{if .Class.Capacity}}<div><dt>Carries</dt><dd>{{.Class.Capacity}}</dd></div>{{end}}
+    </dl>
+    <p><strong>Strength:</strong> {{.Unit.Strength}}{{with .Ammo}} · <strong>Supply:</strong> {{range $i, $a := .}}{{if $i}}, {{end}}{{$a}}{{end}}{{end}}</p>
+    <p class="muted small">Counter factors read attack–armor–movement: {{.Unit.Factors}}. Movement is spent on terrain; see the <a href="{{$.Base}}/rules#movement">rules</a>.</p>
+
+    {{if .Level.Name}}
+    <section class="xp">
+      <h2>Experience: {{.Level.Name}}{{if .Level.Dice}} <span class="tag tag-xp">+{{.Level.Dice}} {{if eq .Level.Dice 1}}die{{else}}dice{{end}}</span>{{end}}</h2>
+      <p class="small">{{.Level.Note}} {{.Operations}} {{if eq .Operations 1}}operation{{else}}operations{{end}} survived.{{with .NextLevel}} Becomes <strong>{{.Name}}</strong> after {{.Min}}.{{end}}</p>
+      <ol class="xp-ladder">{{$cur := .Level.Name}}{{range .Levels}}<li class="{{if eq .Name $cur}}now{{end}}"><strong>{{.Name}}</strong> <span class="muted small">{{.Min}}+ ops · +{{.Dice}}</span></li>{{end}}</ol>
+      {{if .Record}}<h3>Service record</h3><ul class="small">{{range .Record}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    </section>
+    {{end}}
+
+    {{with .Traits}}
+    <section><h2>Traits</h2>
+      <dl class="traits-list">{{range .}}<dt>{{.Name}}</dt><dd>{{.Text}}</dd>{{end}}</dl></section>
+    {{end}}
+
+    {{with .Order}}
+    <section><h2>Orders this turn</h2>
+      <p class="small"><span class="tag tag-order-{{.Status}}">{{.Status}}</span> {{.Summary}}{{with .Intent}} · “{{.}}”{{end}}{{with .Author}} <span class="muted">· {{.}}</span>{{end}}</p></section>
+    {{end}}
+    {{end}}
+  </article>
+{{end}}
+</main>
+{{template "shell-bottom" $}}
+{{end}}

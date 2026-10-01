@@ -1,0 +1,24 @@
+{{define "content"}}
+<header class="topbar">
+  <a class="brand" href="/">Async Wargame</a>
+  <span class="campaign">{{.Name}}</span>
+  <a class="button secondary small-btn" href="{{.Base}}/rules">Rules</a>
+  <span class="who">{{.Me.Name}} <span class="tag tag-{{.Me.Role}}">{{.Me.Role}}</span></span>
+</header>
+<main id="main" class="narrow holding" data-base="{{.Base}}" data-version="{{.Version}}">
+  <section class="card">
+    <p class="eyebrow">Room <span class="mono">{{.CodeDisplay}}</span></p>
+    <h1>Standing by</h1>
+    <p>The referee is still preparing <strong>{{.Name}}</strong>. The map opens as soon as the operation starts.</p>
+    <p class="muted small">This page updates by itself. You can also close it and come back to this address later.</p>
+    {{if .MyUnits}}
+    <h2>Your force</h2>
+    <ul>{{range .MyUnits}}<li>{{.Name}} <span class="muted small">{{.ClassName}}</span></li>{{end}}</ul>
+    {{end}}
+    <details>
+      <summary>Read the briefing again</summary>
+      {{range .Briefing}}<p>{{.}}</p>{{end}}
+    </details>
+  </section>
+</main>
+{{end}}

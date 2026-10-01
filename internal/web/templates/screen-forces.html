@@ -1,0 +1,7 @@
+{{define "content"}}{{template "shell-top" .}}
+<main id="main" class="screen screen-forces" data-base="{{.Base}}" data-version="{{.Version}}">
+  {{template "sec-next" .}}
+  {{if .IsCommander}}<div class="cols"><div class="col">{{template "sec-command" .}}</div></div>{{end}}
+  {{template "sec-ledger" .}}
+</main>
+{{template "shell-bottom" .}}{{end}}

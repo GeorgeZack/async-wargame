@@ -1,0 +1,11 @@
+{{define "content"}}{{template "shell-top" .}}
+<main id="main" class="screen screen-people" data-base="{{.Base}}" data-version="{{.Version}}">
+  {{template "sec-next" .}}
+  <div class="cols cols-3">
+    <div class="col">{{if .IsReferee}}{{template "sec-requests" .}}{{end}}{{template "sec-roster" .}}</div>
+    {{if .IsReferee}}<div class="col">{{template "sec-invites" .}}</div>
+    <div class="col">{{template "sec-seats" .}}{{template "sec-access" .}}</div>
+    {{else}}<div class="col">{{template "sec-access" .}}</div>{{end}}
+  </div>
+</main>
+{{template "shell-bottom" .}}{{end}}

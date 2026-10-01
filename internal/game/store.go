@@ -1,0 +1,260 @@
+package game
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+// Store owns every campaign's canonical state. All access goes through its
+// lock; each successful mutation is persisted before subscribers are notified.
+//
+// Persistence is a single JSON file replaced atomically on each write. That is
+// adequate for a few small private campaigns; swap in a database once turn
+// history and analysis records grow.
+type Store struct {
+	mu    sync.Mutex
+	path  string
+	rooms map[string]*Room
+	subs  map[string]map[chan int64]struct{}
+	Cat   *Catalog
+}
+
+func OpenStore(path string, cat *Catalog) (*Store, error) {
+	s := &Store{path: path, rooms: map[string]*Room{}, subs: map[string]map[chan int64]struct{}{}, Cat: cat}
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return s, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var rooms []*Room
+	if err := json.Unmarshal(b, &rooms); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	for _, r := range rooms {
+		if r.Threat == 0 { // saved before threat levels existed
+			r.Threat = MinThreat
+		}
+		if r.Schedule.TimeZone == "" { // saved before the turn clock existed
+			r.Schedule = DefaultSchedule()
+			if r.Phase == PhasePlanning {
+				r.Deadline = r.nextDeadline(time.Now())
+			}
+		}
+		if r.Map == nil { // saved before rooms kept their own map
+			if sc := cat.Scenarios[r.ScenarioID]; sc != nil {
+				r.Map, r.Briefing, r.RefereeNotes = sc.Map.Clone(), sc.Briefing, sc.RefereeNotes
+			}
+		}
+		s.rooms[r.Code] = r
+	}
+	return s, nil
+}
+
+func (s *Store) saveLocked() error {
+	rooms := make([]*Room, 0, len(s.rooms))
+	for _, r := range s.rooms {
+		rooms = append(rooms, r)
+	}
+	b, err := json.MarshalIndent(rooms, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".state-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), s.path)
+}
+
+// Create starts a new campaign and returns its room code.
+func (s *Store) Create(name, scenarioID, refName, tokenHash string) (string, error) {
+	sc := s.Cat.Scenarios[scenarioID]
+	if sc == nil {
+		return "", fmt.Errorf("%w: unknown scenario", ErrBadRequest)
+	}
+	mod := s.Cat.Modules[sc.Module]
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	code := newCode()
+	for s.rooms[code] != nil {
+		code = newCode()
+	}
+	r := newRoom(code, name, sc, mod, refName, tokenHash)
+	r.Version = 1
+	s.rooms[code] = r
+	if err := s.saveLocked(); err != nil {
+		delete(s.rooms, code)
+		return "", err
+	}
+	return code, nil
+}
+
+// Read calls fn with the room under lock. fn must not retain the room.
+func (s *Store) Read(code string, fn func(*Room)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.rooms[code]
+	if r == nil {
+		return ErrNotFound
+	}
+	fn(r)
+	return nil
+}
+
+// Update applies fn to a copy of the room. If fn succeeds the copy becomes
+// canonical, is saved, and subscribers are notified; otherwise nothing changes.
+func (s *Store) Update(code string, fn func(*Room) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	orig := s.rooms[code]
+	if orig == nil {
+		return ErrNotFound
+	}
+	r, err := cloneRoom(orig)
+	if err != nil {
+		return err
+	}
+	if err := fn(r); err != nil {
+		return err
+	}
+	if mod := s.Cat.Modules[r.ModuleID]; mod != nil {
+		r.syncPassengers()
+		r.RefreshComms(mod)
+		r.RefreshFog(mod, time.Now())
+	}
+	r.Version++
+	s.rooms[code] = r
+	if err := s.saveLocked(); err != nil {
+		s.rooms[code] = orig
+		return err
+	}
+	for ch := range s.subs[code] {
+		select {
+		case ch <- r.Version:
+		default: // subscriber is behind; it will catch up on the next send
+		}
+	}
+	return nil
+}
+
+func cloneRoom(r *Room) (*Room, error) {
+	b, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	var c Room
+	return &c, json.Unmarshal(b, &c)
+}
+
+// Subscribe returns a channel that receives the room version after each change.
+func (s *Store) Subscribe(code string) (<-chan int64, func()) {
+	ch := make(chan int64, 1)
+	s.mu.Lock()
+	if s.subs[code] == nil {
+		s.subs[code] = map[chan int64]struct{}{}
+	}
+	s.subs[code][ch] = struct{}{}
+	s.mu.Unlock()
+	return ch, func() {
+		s.mu.Lock()
+		delete(s.subs[code], ch)
+		if len(s.subs[code]) == 0 {
+			delete(s.subs, code)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// Tick runs the turn clock for every room that is due: locking turns whose
+// deadline passed and letting the AI take over turns left unresolved.
+func (s *Store) Tick(now time.Time) {
+	s.mu.Lock()
+	var due []string
+	for code, r := range s.rooms {
+		if r.Due(now) {
+			due = append(due, code)
+		}
+	}
+	s.mu.Unlock()
+	for _, code := range due {
+		err := s.Update(code, func(r *Room) error {
+			if !r.Due(now) {
+				return errNotDue
+			}
+			r.Tick(s.Cat.Modules[r.ModuleID], now)
+			return nil
+		})
+		if err != nil && !errors.Is(err, errNotDue) {
+			log.Printf("turn clock, room %s: %v", code, err)
+		}
+	}
+}
+
+var errNotDue = errors.New("not due")
+
+// RunClock ticks the turn clock until stop is closed.
+func (s *Store) RunClock(every time.Duration, stop <-chan struct{}) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	s.Tick(time.Now())
+	for {
+		select {
+		case <-stop:
+			return
+		case now := <-t.C:
+			s.Tick(now)
+		}
+	}
+}
+
+// Delete removes a closed room permanently. check runs under the lock and
+// must approve the deletion (it verifies the referee).
+func (s *Store) Delete(code string, check func(*Room) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.rooms[code]
+	if r == nil {
+		return ErrNotFound
+	}
+	if err := check(r); err != nil {
+		return err
+	}
+	if !r.Closed {
+		return bad("close the room before deleting it")
+	}
+	delete(s.rooms, code)
+	if err := s.saveLocked(); err != nil {
+		s.rooms[code] = r
+		return err
+	}
+	for ch := range s.subs[code] {
+		select {
+		case ch <- r.Version + 1:
+		default:
+		}
+	}
+	return nil
+}

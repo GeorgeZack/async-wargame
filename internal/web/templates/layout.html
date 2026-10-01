@@ -1,0 +1,15 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{with .}}{{.Title}}{{else}}Async Wargame{{end}}</title>
+<link rel="stylesheet" href="{{asset "app.css"}}">
+<script src="{{asset "app.js"}}" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{{template "content" .}}
+</body>
+</html>{{end}}

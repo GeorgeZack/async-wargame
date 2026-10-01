@@ -1,0 +1,20 @@
+{{define "content"}}
+<header class="topbar">
+  <a class="brand" href="/">Async Wargame</a>
+</header>
+<main id="main" class="narrow pending" data-base="{{.Base}}" data-version="{{.Version}}">
+  <section class="card">
+    <p class="eyebrow">Room <span class="mono">{{.CodeDisplay}}</span></p>
+    <h1>Waiting for the referee</h1>
+    <p>You asked to join <strong>{{.Room}}</strong> as <strong>{{.Me.Name}}</strong>.
+       The referee needs to approve you before you can see the operation.</p>
+    <p class="muted" data-live-status>You can close this page. Your place is kept, and you can come back to this address any time.</p>
+    <div class="row">
+      <a class="button secondary" href="{{.Base}}">Check again</a>
+      <form method="post" action="{{.Base}}/withdraw">
+        <button type="submit" class="link danger">Cancel request</button>
+      </form>
+    </div>
+  </section>
+</main>
+{{end}}

@@ -1,0 +1,9 @@
+{{define "content"}}{{template "shell-top" .}}
+<main id="main" class="screen screen-events" data-base="{{.Base}}" data-version="{{.Version}}">
+  {{template "sec-next" .}}
+  <div class="cols cols-events">
+    <div class="col">{{template "sec-events" .}}</div>
+    <div class="col wide">{{template "sec-odds" .}}</div>
+  </div>
+</main>
+{{template "shell-bottom" .}}{{end}}

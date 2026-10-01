@@ -1,0 +1,8 @@
+{{define "content"}}{{template "shell-top" .}}
+<main id="main" class="screen screen-activity" data-base="{{.Base}}" data-version="{{.Version}}">
+  {{template "sec-next" .}}
+  <div class="cols cols-single">
+    <div class="col">{{template "sec-log" .}}</div>
+  </div>
+</main>
+{{template "shell-bottom" .}}{{end}}

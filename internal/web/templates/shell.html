@@ -1,0 +1,52 @@
+{{define "shell-top"}}
+<header class="appbar">
+  <div class="titlebar">
+    <a class="brand" href="/">Async Wargame</a>
+    <span class="campaign">{{.Name}}</span>
+    <span class="chip" title="Room code">Room <span class="mono" id="room-code">{{.CodeDisplay}}</span>
+      <button type="button" class="link js-only" data-copy="{{.CodeDisplay}}" aria-label="Copy room code">Copy</button></span>
+    <span class="spacer"></span>
+    {{if .IsReferee}}
+    <form method="post" action="{{.Base}}/admin-mode" class="view-mode" id="view-mode" data-live data-enhance
+          {{if not .AdminMode}}data-confirm="Switch to admin view? You'll see player orders, and if a turn is in planning, players are told you switched."{{end}}>
+      <input type="hidden" name="on" value="{{if .AdminMode}}0{{else}}1{{end}}">
+      <button type="submit" class="chip-btn {{if .AdminMode}}admin{{else}}blind{{end}}"
+        title="{{if .AdminMode}}You see everything, including player orders. Click to go back to blind view.{{else}}Player orders are hidden from you until lock. Click for admin view.{{end}}">
+        {{if .AdminMode}}Admin view{{else}}Blind referee{{end}}</button>
+    </form>
+    {{end}}
+    <span class="who">{{.Me.Name}} <span class="tag tag-{{.Me.Role}}">{{.Me.Role}}</span></span>
+  </div>
+  <nav class="screen-tabs" id="screen-tabs" data-live aria-label="Screens">
+    {{range .Tabs}}<a class="screen-tab{{if .Active}} active{{end}}" href="{{.Href}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}{{if .Badge}} <span class="count{{if .Calm}} calm{{end}}">{{.Badge}}</span>{{end}}</a>{{end}}
+    <span class="spacer"></span>
+    <a class="screen-tab tool{{if eq .Screen "rules"}} active{{end}}" href="{{.Base}}/rules"{{if eq .Screen "rules"}} aria-current="page"{{end}}>Rules</a>
+    {{if .IsReferee}}<a class="screen-tab tool{{if eq .Screen "edit"}} active{{end}}" href="{{.Base}}/edit"{{if eq .Screen "edit"}} aria-current="page"{{end}}>Editor</a>{{end}}
+  </nav>
+</header>
+{{end}}
+
+{{define "shell-bottom"}}
+<footer class="statusbar" aria-label="Status">
+  <div class="status-cells" id="status-cells" data-live>
+    <span class="sb-cell sb-phase">{{if gt .Operation 1}}Op {{.Operation}} · {{end}}Turn {{.Turn}} · {{.Phase}}</span>
+    {{if eq .Phase "planning"}}<span class="sb-cell">Locks <time datetime="{{iso .Clock.Deadline}}" data-countdown>{{.Clock.DeadlineText}}</time></span>
+      {{if .IsReferee}}<span class="sb-cell{{if .Clock.AllIn}} good{{end}}">Orders {{.Clock.OrdersIn}}/{{.Clock.OrdersTotal}}</span>
+      {{else if .MyOrders}}<span class="sb-cell">Your orders {{.CommittedCount}}/{{len .MyOrders}}</span>{{end}}
+    {{else if eq .Phase "resolving"}}<span class="sb-cell{{if .Clock.Unsettled}} warn{{end}}">{{if .IsReferee}}{{if .Clock.Unsettled}}{{.Clock.Unsettled}} to settle{{else}}Ready to publish{{end}}{{else}}Being resolved{{end}}</span>{{end}}
+    {{if .Stats.CiviliansStart}}<span class="sb-cell good">Evacuated {{.Stats.Evacuated}}/{{.Stats.CiviliansStart}}</span>{{end}}
+    {{if .IsReferee}}<span class="sb-cell">{{if .AdminMode}}Admin view{{else}}Blind{{end}}</span>{{end}}
+  </div>
+  <span class="sb-live" id="sb-live" aria-live="polite">offline</span>
+</footer>
+{{end}}
+
+{{define "map-window"}}
+<section class="panel map-panel" aria-labelledby="map-h">
+  <div class="panel-head">
+    <h2 id="map-h">Map <span class="muted small">{{.ScenarioName}} · one hex is {{.Scale.Hex}}</span></h2>
+    {{template "sec-map-tools" .}}
+  </div>
+  {{template "map" .}}
+</section>
+{{end}}

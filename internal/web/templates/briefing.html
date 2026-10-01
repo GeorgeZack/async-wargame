@@ -1,0 +1,21 @@
+{{define "content"}}
+<header class="topbar">
+  <a class="brand" href="/">Async Wargame</a>
+</header>
+<main id="main" class="narrow briefing" data-base="{{.Base}}" data-version="{{.Version}}">
+  <article class="card briefing">
+    <p class="eyebrow">Briefing · {{.ScenarioName}}</p>
+    <h1>{{.Name}}</h1>
+    <p class="muted">Welcome, {{.Me.Name}}. The referee approved your access.</p>
+    {{range .Briefing}}<p>{{.}}</p>{{end}}
+    <dl class="facts">
+      <dt>Rules</dt><dd>{{.ModuleName}} {{.ModuleVer}}</dd>
+      <dt>One hex</dt><dd>{{.Scale.Hex}}</dd>
+      <dt>One turn</dt><dd>{{.Scale.Turn}} of game time</dd>
+    </dl>
+    <form method="post" action="{{.Base}}/briefed">
+      <button type="submit">Join the operation</button>
+    </form>
+  </article>
+</main>
+{{end}}

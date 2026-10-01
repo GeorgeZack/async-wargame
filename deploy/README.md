@@ -12,6 +12,10 @@ time.
 | `backup.sh`, `async-wargame-backup.{service,timer}` | nightly compressed copy of the state, 30 days kept |
 | `deploy.sh` | from your machine: test, build for Linux, upload, restart |
 
+Two ways to put HTTPS in front: a domain with Caddy (below), or
+[Tailscale](#tailscale-instead-of-a-domain-and-caddy), private to your
+tailnet or public through Funnel.
+
 ## Quick test without a server
 
 To try it with friends for an evening, run it on your own machine behind a
@@ -83,6 +87,50 @@ ssh root@SERVER 'chmod 755 /usr/local/bin/async-wargame-backup && systemctl daem
 Backups land in `/var/backups/async-wargame` on the same server. Copy them
 off it from time to time (`scp`, or your provider's snapshot feature): a
 backup on the machine that died doesn't help.
+
+## Tailscale instead of a domain and Caddy
+
+With [Tailscale](https://tailscale.com), the server gets HTTPS and a name
+like `wargame.your-tailnet.ts.net` without a domain, DNS records, Caddy, or
+open ports. It can run on a VPS or on a spare machine at home. Do steps 3, 4
+and 6 above (user and password file, service, backups) and skip 1, 2 and 5.
+
+```sh
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up --hostname wargame
+```
+
+Then pick who can reach it:
+
+**Only your tailnet (private).** Players install Tailscale and you share the
+machine with them (admin console → the machine → Share), or invite them to
+your tailnet.
+
+```sh
+tailscale serve --bg --https=443 localhost:8080
+tailscale serve status        # shows the https://wargame.….ts.net address
+```
+
+**Anyone with the link (public), via Funnel.** Players need nothing but a
+browser. Keep `AW_HOST_PASSWORD` set: the site is on the open internet.
+
+```sh
+tailscale funnel --bg 8080
+tailscale funnel status
+```
+
+Notes:
+
+- The first time, the CLI may ask you to turn on HTTPS certificates (and, for
+  Funnel, to allow Funnel in your tailnet policy) and prints a link to do it.
+- With `--bg` both survive reboots. Turn them off with
+  `tailscale serve --https=443 off` or `tailscale funnel --https=443 off`
+  (or clear everything with `tailscale serve reset`).
+- Tailscale sends `X-Forwarded-Proto` and `X-Forwarded-For`, so keep `-proxy`
+  in the service, and keep the server on `127.0.0.1`.
+- Funnel traffic has bandwidth limits Tailscale doesn't publish; a few
+  players' text and small maps are well within them.
+- If you leave `ufw` on, Tailscale doesn't need any ports opened for it.
 
 ## Updating
 

@@ -73,6 +73,9 @@ type Room struct {
 	Sightings     map[string]Sighting `json:"sightings,omitempty"` // unit id -> where players last saw it
 	Log           []LogEntry          `json:"log"`
 	Messages      []*Message          `json:"messages,omitempty"`
+	// Outbox collects notifications raised during an update; the store
+	// hands them to the sender once the update is saved.
+	Outbox []Notice `json:"-"`
 	// ReadMarks is, per member and channel, how many of the channel's
 	// messages they have seen.
 	ReadMarks map[string]map[string]int `json:"readMarks,omitempty"`
@@ -96,6 +99,9 @@ type Member struct {
 	ReportsTo string `json:"reportsTo,omitempty"`
 	// AdminMode lets a referee see player orders during planning.
 	AdminMode bool `json:"adminMode,omitempty"`
+	// Push is where to send this member's notifications: one entry per
+	// browser that subscribed.
+	Push []PushSub `json:"push,omitempty"`
 }
 
 // Unit is a class instance placed on the map. Known controls whether
@@ -347,19 +353,7 @@ func (r *Room) Decide(actor *Member, memberID, action string) error {
 	case action == "demote":
 		return r.setRole(m, RolePlayer)
 	case action == "remove" && m.Status == StatusApproved:
-		if m.Role == RoleCommander {
-			for _, s := range r.Subordinates(m) {
-				s.ReportsTo = ""
-			}
-		}
-		m.Status = StatusRemoved
-		for _, u := range r.Units {
-			if u.AssignedTo == m.ID {
-				u.AssignedTo = ""
-				r.logf(VisAll, "%s is unassigned and awaits a new commander.", u.Name)
-			}
-		}
-		r.logf(VisAll, "%s left the operation.", m.Name)
+		return r.Remove(actor, m.ID, "")
 	default:
 		return fmt.Errorf("%w: cannot %s a member who is %s", ErrBadRequest, action, m.Status)
 	}

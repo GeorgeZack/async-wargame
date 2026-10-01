@@ -115,6 +115,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("GET /edit", s.editor)
 	seat("POST /messages", s.postMessage)
 	seat("POST /withdraw", s.withdraw)
+	seat("POST /leave", s.leave)
 	seat("POST /briefed", s.briefed)
 	seat("POST /members/{id}/{action}", s.decide)
 	seat("POST /units/{id}/assign", s.assign)
@@ -405,6 +406,22 @@ func (s *Server) withdraw(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error { return room.Withdraw(me) })
 }
 
+// leave takes the member out of the operation; they land on the home page.
+func (s *Server) leave(w http.ResponseWriter, r *http.Request) {
+	err := s.store.Update(r.PathValue("code"), func(room *game.Room) error {
+		me := s.member(r, room)
+		if me == nil {
+			return game.ErrForbidden
+		}
+		return room.Remove(me, me.ID, "")
+	})
+	if err != nil {
+		http.Error(w, userMessage(err), statusFor(err))
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
 func (s *Server) briefed(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
 		if me.Status != game.StatusApproved {
@@ -417,8 +434,11 @@ func (s *Server) briefed(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
-		if r.PathValue("action") == "reports-to" {
+		switch r.PathValue("action") {
+		case "reports-to":
 			return room.SetReportsTo(me, r.PathValue("id"), r.FormValue("commander"))
+		case "remove":
+			return room.Remove(me, r.PathValue("id"), r.FormValue("heir"))
 		}
 		return room.Decide(me, r.PathValue("id"), r.PathValue("action"))
 	})

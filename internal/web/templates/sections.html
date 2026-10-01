@@ -374,7 +374,13 @@
             <form method="post" action="{{$.Base}}/members/{{.ID}}/demote" data-enhance data-confirm="Make {{.Name}} a regular player? Their players will report to you again.">
               <button type="submit" class="link small">Demote to player</button></form>
             {{end}}
-            <form method="post" action="{{$.Base}}/members/{{.ID}}/remove" data-enhance data-confirm="Remove {{.Name}} from the operation? Their units return to you.">
+            <form method="post" action="{{$.Base}}/members/{{.ID}}/remove" class="row tight" data-enhance data-confirm="Remove {{.Name}} from the operation? They lose access at once.">
+              <label class="inline small" for="heir-{{.ID}}">Their units go to</label>
+              <select name="heir" id="heir-{{.ID}}" class="compact">
+                <option value="">{{if .ReportsName}}{{.ReportsName}} (their commander){{else}}you{{end}}</option>
+                {{if .ReportsName}}<option value="referee">you</option>{{end}}
+                {{$me := .ID}}{{range $.Roster}}{{if and (ne .ID $me) (ne .Role "referee")}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+              </select>
               <button type="submit" class="link danger small">Remove</button></form>
           </div>{{end}}
         </li>{{end}}
@@ -679,5 +685,15 @@
         <textarea name="text" id="post-text" rows="3" maxlength="2000" required placeholder="Write a message… (Ctrl+Enter sends)"></textarea>
         <div class="row"><button type="submit">Send</button></div>
       </form>{{end}}
+    </section>
+{{end}}
+
+{{define "sec-leave"}}
+<section class="panel" aria-labelledby="leave-h">
+      <h2 id="leave-h">Leave the operation</h2>
+      <p class="small">You lose access at once. Your units, with their orders and drafts, go to {{with .Me.ReportsName}}{{.}}, your commander{{else}}the referee{{end}}. Rejoining needs a new request or invite.</p>
+      <form method="post" action="{{.Base}}/leave" data-confirm="Leave {{.Name}} for good? You'll lose access straight away.">
+        <button type="submit" class="danger">Leave the operation</button>
+      </form>
     </section>
 {{end}}

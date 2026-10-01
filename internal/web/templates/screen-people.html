@@ -5,7 +5,7 @@
     <div class="col">{{if .IsReferee}}{{template "sec-requests" .}}{{end}}{{template "sec-roster" .}}</div>
     {{if .IsReferee}}<div class="col">{{template "sec-invites" .}}</div>
     <div class="col">{{template "sec-seats" .}}{{template "sec-access" .}}</div>
-    {{else}}<div class="col">{{template "sec-access" .}}</div>{{end}}
+    {{else}}<div class="col">{{template "sec-access" .}}{{template "sec-leave" .}}</div>{{end}}
   </div>
 </main>
 {{template "shell-bottom" .}}{{end}}

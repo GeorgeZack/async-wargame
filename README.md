@@ -231,6 +231,10 @@ backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
   net still sees, but only the player holding it gets that picture (marked
   on their map), and everyone else sees the unit where it last reported
   from, faded.
+- **Leaving:** a player can leave from the People screen, and the referee
+  can remove anyone, choosing who gets their units: their commander, another
+  player, or the referee. Units keep their orders and drafts, so the new
+  holder can confirm or change them before the lock. Access ends at once.
 - **Messages:** discussion channels on the Messages screen, with unread
   badges: All hands (everyone), Players only, one per commander's command,
   and a private channel between each member and the referee. A blind referee

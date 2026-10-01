@@ -128,6 +128,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /turn/defer", s.deferLock)
 	seat("POST /turn/lock", s.lockNow)
 	seat("POST /turn/next", s.nextTurn)
+	seat("POST /turn/reopen", s.reopenTurn)
 	seat("GET /units/{id}", s.unitCard)
 	seat("GET /rules", s.rulesPage)
 	seat("POST /operation/end", s.endOperation)
@@ -661,5 +662,12 @@ func gzipText(next http.Handler) http.Handler {
 		if gw.zw != nil {
 			gw.zw.Close()
 		}
+	})
+}
+
+// reopenTurn is the referee rolling back the last publish to correct it.
+func (s *Server) reopenTurn(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		return room.ReopenTurn(me, r.FormValue("reason"), time.Now())
 	})
 }

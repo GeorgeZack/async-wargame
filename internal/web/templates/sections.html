@@ -440,7 +440,8 @@
       {{else}}<p class="muted small js-only">Replay plays a move or a fight back on a close-up of the map.</p>{{end}}
       {{range $i, $rp := .Reports}}
       <details class="report"{{if eq $i 0}} open{{end}}>
-        <summary><strong>{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}</strong> <span class="muted small">{{$rp.Summary}}</span></summary>
+        <summary><strong>{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}</strong>{{if $rp.Corrected}} <span class="tag">corrected</span>{{end}} <span class="muted small">{{$rp.Summary}}</span></summary>
+        {{with $rp.Corrected}}<p class="small correction">The referee corrected this turn after publishing it: {{.}}</p>{{end}}
         <ul class="small report-lines">{{range $rp.Lines}}<li>{{.Text}}{{if .Replay}} <a href="#replay" class="replay-link js-only" data-replay="{{$rp.ReplayKey .Replay}}">Replay</a>{{end}}</li>{{end}}</ul>
       </details>
       {{end}}
@@ -630,6 +631,15 @@
       {{if not .Resolution}}<span class="small muted">This turn was locked by an earlier version of the game, so there's nothing to review here; publishing moves you on.</span>{{end}}
     {{end}}
   </div>
+  {{if .Correctable}}<details class="correct-turn">
+    <summary class="small">Made a mistake in turn {{.Correctable}}? Reopen it</summary>
+    <form method="post" action="{{.Base}}/turn/reopen" class="stack" data-enhance
+      data-confirm="Reopen turn {{.Correctable}}? The game goes back to just before you published it.{{if .SetAside}} {{.SetAside}} order(s) already written for turn {{.Turn}} will be set aside.{{end}}">
+      <p class="small">The game goes back to just before you published turn {{.Correctable}}, with its fights settled as they were: re-settle a fight or adjust a unit, then publish again. Messages and members aren't affected.{{if .SetAside}} <strong>{{.SetAside}} {{if eq .SetAside 1}}order{{else}}orders{{end}} already written for turn {{.Turn}} will be set aside.</strong>{{end}} Players see your reason. You can do this until turn {{.Turn}} locks.</p>
+      <label>What needs correcting <input name="reason" maxlength="300" required placeholder="e.g. the Mule's fight should have counted cover"></label>
+      <div class="row"><button type="submit" class="secondary">Reopen turn {{.Correctable}}</button></div>
+    </form>
+  </details>{{end}}
 </section>
 {{end}}
 

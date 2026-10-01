@@ -23,6 +23,7 @@ type TurnReport struct {
 	Players   []string  `json:"players"`
 	Referee   []string  `json:"referee"`
 
+	Corrected    string      `json:"corrected,omitempty"` // why the referee reopened and republished this turn
 	Replays      []*Replay   `json:"replays,omitempty"`
 	PlayerLinks  map[int]int `json:"playerLinks,omitempty"` // line index → replay ID
 	RefereeLinks map[int]int `json:"refereeLinks,omitempty"`
@@ -140,8 +141,9 @@ func (r *Room) settleRemaining(mod *Module) {
 
 // publish applies the resolution and opens the next turn.
 func (r *Room) publish(mod *Module, now time.Time) {
+	r.snapshot(now)
 	res := r.Resolution
-	rep := &TurnReport{Operation: max(r.Operation, 1), Turn: r.Turn, At: now.UTC()}
+	rep := &TurnReport{Operation: max(r.Operation, 1), Turn: r.Turn, At: now.UTC(), Corrected: r.pendingCorrection()}
 	if res == nil || res.Turn != r.Turn {
 		res = &Resolution{Turn: r.Turn}
 	}

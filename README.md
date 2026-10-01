@@ -231,6 +231,11 @@ backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
   net still sees, but only the player holding it gets that picture (marked
   on their map), and everyone else sees the unit where it last reported
   from, faded.
+- **Corrections:** until the next turn locks, the referee can reopen the
+  last published turn with a reason players see. The game goes back to just
+  before publishing (fights settled as they were, ready to re-settle);
+  members and messages are untouched, and orders already written for the new
+  turn are set aside. The republished report is marked corrected.
 - **Leaving:** a player can leave from the People screen, and the referee
   can remove anyone, choosing who gets their units: their commander, another
   player, or the referee. Units keep their orders and drafts, so the new

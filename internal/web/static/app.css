@@ -857,3 +857,7 @@ html.js #order-box > summary { list-style: none; }
 .counter.stale .ctr { stroke-dasharray: 1.5 1; stroke-width: 0.8; }
 /* Seen only by the viewer's own unit off the net. */
 .counter.local .ctr { stroke: #c4513d; stroke-dasharray: 0.8 0.8; stroke-width: 0.9; }
+
+.correct-turn { margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .5rem; }
+.correct-turn summary { cursor: pointer; color: var(--muted); }
+.correction { border-left: 3px solid var(--civilians); padding-left: .5rem; }

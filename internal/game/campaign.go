@@ -34,6 +34,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	if r.Phase == PhaseSetup {
 		return bad("the operation hasn't started yet")
 	}
+	r.Undo = nil
 	op := max(r.Operation, 1)
 	rec := OperationRecord{Number: op, Scenario: sc.Name, Turns: r.Turn, EndedAt: now.UTC(), Stats: r.Stats}
 

@@ -73,6 +73,8 @@ type Room struct {
 	Sightings     map[string]Sighting `json:"sightings,omitempty"` // unit id -> where players last saw it
 	Log           []LogEntry          `json:"log"`
 	Messages      []*Message          `json:"messages,omitempty"`
+	Undo          *Undo               `json:"undo,omitempty"`        // the game just before the last publish
+	Corrections   []Correction        `json:"corrections,omitempty"` // turns reopened, and why
 	// Outbox collects notifications raised during an update; the store
 	// hands them to the sender once the update is saved.
 	Outbox []Notice `json:"-"`

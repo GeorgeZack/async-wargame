@@ -52,6 +52,7 @@ type DieFace struct {
 type ReportView struct {
 	Operation, Turn int
 	Summary         string
+	Corrected       string // why the referee reopened and republished it
 	Lines           []ReportLine
 }
 
@@ -115,13 +116,16 @@ func effectsText(o *rules.Outcome, winner string) string {
 func addResolution(v *View, r *Room, mod *Module, me *Member) {
 	ref := me.Role == RoleReferee
 	v.Stats = r.Stats
+	if ref && r.CanCorrect() {
+		v.Correctable, v.SetAside = r.Undo.Turn, r.NewTurnOrders()
+	}
 	for i := len(r.Reports) - 1; i >= 0 && len(v.Reports) < 8; i-- {
 		rep := r.Reports[i]
 		lines, links := rep.Players, rep.PlayerLinks
 		if ref {
 			lines, links = rep.Referee, rep.RefereeLinks
 		}
-		rv := ReportView{Operation: rep.Operation, Turn: rep.Turn, Summary: rep.Summary}
+		rv := ReportView{Operation: rep.Operation, Turn: rep.Turn, Summary: rep.Summary, Corrected: rep.Corrected}
 		for j, text := range lines {
 			line := ReportLine{Text: text}
 			if id := links[j]; id > 0 && id <= len(rep.Replays) && (ref || !rep.Replays[id-1].Referee) {

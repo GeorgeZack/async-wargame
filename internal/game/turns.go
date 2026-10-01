@@ -231,6 +231,7 @@ func (r *Room) LockNow(actor *Member, mod *Module, now time.Time) error {
 // (see resolution.go) for the referee to review.
 func (r *Room) lock(mod *Module, now time.Time) {
 	r.Phase, r.LockedAt = PhaseResolving, now.UTC()
+	r.Undo = nil // the previous turn can't be reopened once this one locks
 	r.logf(VisAll, "Turn %d is locked. The referee is resolving it.", r.Turn)
 	r.lockOrders(mod, now)
 	rng, seed := newResolutionRNG()

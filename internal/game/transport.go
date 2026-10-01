@@ -40,8 +40,9 @@ func (r *Room) passengers(t *Unit) []*Unit {
 }
 
 // roomAboard is how many more people transport t can take, counting units
-// already aboard and this turn's embark orders for it, except unit except.
-func (r *Room) roomAboard(mod *Module, t *Unit, except string) int {
+// already aboard and this turn's embark orders for it that me can see (nil:
+// all of them), except unit except.
+func (r *Room) roomAboard(mod *Module, t *Unit, except string, me *Member) int {
 	used := 0
 	for _, u := range r.Units {
 		if u.ID == except {
@@ -49,6 +50,9 @@ func (r *Room) roomAboard(mod *Module, t *Unit, except string) int {
 		}
 		if u.Aboard == t.ID {
 			used += u.Strength
+			continue
+		}
+		if me != nil && !r.seesOrder(me, u) {
 			continue
 		}
 		if o := r.CurrentOrder(u.ID); o != nil && o.Transport == t.ID && (o.Status == OrderDraft || o.Status == OrderCommitted) {
@@ -73,7 +77,7 @@ func (r *Room) boardingHexes(mod *Module, t *Unit) [][2]int {
 }
 
 // TransportsFor lists the transports unit u can reach and board this turn.
-func (r *Room) TransportsFor(mod *Module, u *Unit, reach map[[2]int]Reach) []TransportOption {
+func (r *Room) TransportsFor(mod *Module, u *Unit, reach map[[2]int]Reach, me *Member) []TransportOption {
 	if u.Aboard != "" || !mod.Class(u.Class).Embarks {
 		return nil
 	}
@@ -82,7 +86,7 @@ func (r *Room) TransportsFor(mod *Module, u *Unit, reach map[[2]int]Reach) []Tra
 		if t == u || !isTransport(mod, t) {
 			continue
 		}
-		room := r.roomAboard(mod, t, u.ID)
+		room := r.roomAboard(mod, t, u.ID, me)
 		best, bestCost := [2]int{-1, -1}, 1<<30
 		for _, h := range r.boardingHexes(mod, t) {
 			if st, ok := reach[h]; ok && st.Cost < bestCost {

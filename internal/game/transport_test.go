@@ -80,7 +80,7 @@ func TestTransportCapacityAndDropships(t *testing.T) {
 		t.Errorf("a full Mule took a third squad: %v", err)
 	}
 	// The dropship sits offshore; the beach next to it is a boarding hex.
-	opts := r.TransportsFor(mod, r.Unit("m3"), r.Reach(mod, r.Unit("m3")))
+	opts := r.TransportsFor(mod, r.Unit("m3"), r.Reach(mod, r.Unit("m3")), nil)
 	var ds *TransportOption
 	for i := range opts {
 		if opts[i].ID == "d1" {

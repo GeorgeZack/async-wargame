@@ -78,3 +78,39 @@ func TestScenarioStartsWithinStackingLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestStackingFollowsWhatEachMemberKnows(t *testing.T) {
+	r, mod, ref, _, hicks := orderRoom(t)
+	vasq := r.Member("v")
+	now := central(t, "2026-09-30 13:00")
+	u := r.Unit("m1")
+	r.RefreshComms(mod)
+	home := [2]int{u.Col, u.Row}
+	pts := stackPoints(mod, u)
+
+	// Hicks plans a move; the blind referee's picture leaves it where it is.
+	var dest [2]int
+	for h, st := range r.Reach(mod, u) {
+		if st.Cost > 0 && r.fits(mod, u, h, r.ProjectedLoad(mod, u.ID, nil)) {
+			dest = h
+			break
+		}
+	}
+	if _, err := r.SaveOrder(hicks, mod, OrderInput{Unit: "m1", Task: "move", Dest: HexID(dest[0], dest[1]), Risk: "balanced", Fallback: "hold"}, now); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.ProjectedLoad(mod, "", ref)[home] - r.ProjectedLoad(mod, "", hicks)[home]; got != pts {
+		t.Errorf("blind referee's projected load at the start hex differs by %d, want %d", got, pts)
+	}
+
+	// The squad goes off the net and moves: others still count it at home.
+	u.Radio = RadioDown
+	r.RefreshComms(mod)
+	u.Col, u.Row = dest[0], dest[1]
+	if r.LoadFor(mod, vasq)[home] < pts || r.LoadFor(mod, vasq)[dest] >= r.LoadFor(mod, hicks)[dest] {
+		t.Errorf("Vasquez's load: home %d, dest %d (Hicks's dest %d)", r.LoadFor(mod, vasq)[home], r.LoadFor(mod, vasq)[dest], r.LoadFor(mod, hicks)[dest])
+	}
+	if r.LoadFor(mod, ref)[dest] != r.Load(mod)[dest] {
+		t.Error("the referee's load isn't the real one")
+	}
+}

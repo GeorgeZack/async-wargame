@@ -167,13 +167,13 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 		v.Data.Orders.Units = append(v.Data.Orders.Units, OrderUnit{ID: u.ID, Label: label})
 		if r.Phase == PhasePlanning {
 			reach := map[string]any{}
-			load := r.ProjectedLoad(mod, u.ID)
+			load := r.ProjectedLoad(mod, u.ID, me)
 			fullReach := r.Reach(mod, u)
 			for h, st := range fullReach {
 				free := r.StackLimit(mod, h[0], h[1]) - load[h]
 				reach[HexID(h[0], h[1])] = []any{st.Cost, HexID(st.Prev[0], st.Prev[1]), free}
 			}
-			v.Data.Orders.Transports[u.ID] = r.TransportsFor(mod, u, fullReach)
+			v.Data.Orders.Transports[u.ID] = r.TransportsFor(mod, u, fullReach, me)
 			if t := r.Unit(u.Aboard); t != nil {
 				v.Data.Orders.Aboard[u.ID] = t.Name
 			}

@@ -8,6 +8,12 @@ package game
 // While orders are being written, a hex's load is "projected": every
 // friendly unit counts where its current order (draft or committed) will
 // leave it, so two squads can't both claim the last space.
+//
+// What a member is shown, and checked against, is their own picture: a unit
+// off the net counts where it last reported from, and an order they aren't
+// allowed to see doesn't count at all (the unit counts where it stands).
+// Resolution uses the real positions and stops a move short of a full hex,
+// so a picture that's out of date costs time, not the rules.
 
 // StackLimit is how many stacking points the hex holds.
 func (r *Room) StackLimit(mod *Module, col, row int) int {
@@ -42,14 +48,20 @@ func (r *Room) plannedHex(u *Unit) [2]int {
 	return [2]int{u.Col, u.Row}
 }
 
-// ProjectedLoad sums stacking points planned to end in each hex, leaving out one unit.
-func (r *Room) ProjectedLoad(mod *Module, except string) map[[2]int]int {
+// ProjectedLoad sums stacking points planned to end in each hex, as me
+// knows it (nil: as it really is), leaving out one unit.
+func (r *Room) ProjectedLoad(mod *Module, except string, me *Member) map[[2]int]int {
 	load := map[[2]int]int{}
 	for _, u := range r.Units {
 		if u.ID == except {
 			continue
 		}
 		pts := stackPoints(mod, u)
+		if me != nil && !r.seesOrder(me, u) {
+			at, _ := r.reportedAt(u, me)
+			load[at] += pts
+			continue
+		}
 		if o := r.CurrentOrder(u.ID); o != nil && o.Status != OrderLapsed {
 			switch {
 			case o.Transport != "": // will be aboard: doesn't count where it boards
@@ -68,6 +80,16 @@ func (r *Room) Load(mod *Module) map[[2]int]int {
 	load := map[[2]int]int{}
 	for _, u := range r.Units {
 		load[[2]int{u.Col, u.Row}] += stackPoints(mod, u)
+	}
+	return load
+}
+
+// LoadFor sums the stacking points in each hex as me knows them.
+func (r *Room) LoadFor(mod *Module, me *Member) map[[2]int]int {
+	load := map[[2]int]int{}
+	for _, u := range r.Units {
+		at, _ := r.reportedAt(u, me)
+		load[at] += stackPoints(mod, u)
 	}
 	return load
 }

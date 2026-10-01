@@ -266,7 +266,7 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, in OrderInput, now time.Tim
 		if step.Cost == 0 && !task.Disembark {
 			return nil, bad("%s is already at %s; pick another hex or order it to hold", u.Name, HexID(col, row))
 		}
-		if load := r.ProjectedLoad(mod, u.ID); !r.fits(mod, u, [2]int{col, row}, load) {
+		if load := r.ProjectedLoad(mod, u.ID, actor); !r.fits(mod, u, [2]int{col, row}, load) {
 			return nil, r.stackFullError(mod, u, [2]int{col, row}, load)
 		}
 		hasDest, dest, cost = true, [2]int{col, row}, step.Cost
@@ -289,7 +289,7 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, in OrderInput, now time.Tim
 		}
 		reach := r.Reach(mod, u)
 		var opt *TransportOption
-		for _, t := range r.TransportsFor(mod, u, reach) {
+		for _, t := range r.TransportsFor(mod, u, reach, actor) {
 			if t.ID == in.Transport {
 				opt = &t
 			}

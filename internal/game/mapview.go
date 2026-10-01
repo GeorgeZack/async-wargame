@@ -145,7 +145,8 @@ var featureGlyphs = map[string]string{
 // FeatureKinds lists the place kinds the editor offers.
 var FeatureKinds = []string{"beachhead", "hospital", "port", "utility", "police", "shelter", "relay", "hive"}
 
-func buildMap(r *Room, mod *Module, ref bool, units []UnitView, local []observer) (MapView, []Terrain, InspectorData) {
+func buildMap(r *Room, mod *Module, me *Member, units []UnitView, local []observer) (MapView, []Terrain, InspectorData) {
+	ref := me.Role == RoleReferee
 	m := r.Map
 	rows := m.NumRows()
 	w := hexW * (float64(m.Cols) + 0.5)
@@ -313,7 +314,7 @@ func buildMap(r *Room, mod *Module, ref bool, units []UnitView, local []observer
 		byHex[u.Hex] = append(byHex[u.Hex], u)
 	}
 	data.Stack = map[string][2]int{}
-	load := r.Load(mod)
+	load := r.LoadFor(mod, me)
 	for h, used := range load {
 		if used > 0 {
 			data.Stack[HexID(h[0], h[1])] = [2]int{used, r.StackLimit(mod, h[0], h[1])}

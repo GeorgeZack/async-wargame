@@ -347,7 +347,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	}
 
 	v.Clock = buildClock(r)
-	v.Map, v.Legend, v.Data = buildMap(r, mod, ref, visible, local)
+	v.Map, v.Legend, v.Data = buildMap(r, mod, me, visible, local)
 	addOrders(v, r, mod, me)
 	addResolution(v, r, mod, me)
 	v.Channels = r.Channels(me)

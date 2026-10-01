@@ -703,7 +703,23 @@
       <h2 id="leave-h">Leave the operation</h2>
       <p class="small">You lose access at once. Your units, with their orders and drafts, go to {{with .Me.ReportsName}}{{.}}, your commander{{else}}the referee{{end}}. Rejoining needs a new request or invite.</p>
       <form method="post" action="{{.Base}}/leave" data-confirm="Leave {{.Name}} for good? You'll lose access straight away.">
-        <button type="submit" class="danger">Leave the operation</button>
+        <button type="submit" class="danger-btn">Leave the operation</button>
       </form>
+    </section>
+{{end}}
+
+{{define "sec-notify"}}
+<section class="panel notify-panel" id="notify" aria-labelledby="notify-h" data-key="{{.PushKey}}" data-base="{{.Base}}" data-room="{{.Code}}">
+      <h2 id="notify-h">Notifications on this device</h2>
+      {{if .PushKey}}
+      <p class="small">Get a notification when a turn opens or its results are in, two hours before orders lock if yours aren't in, when a commander returns an order, and when someone writes to you.</p>
+      <p class="small" id="notify-state" role="status">Checking this browser…</p>
+      <div class="row js-only">
+        <button type="button" id="notify-on" hidden>Turn on notifications</button>
+        <button type="button" class="secondary" id="notify-test" hidden>Send a test</button>
+        <button type="button" class="secondary" id="notify-off" hidden>Turn off on this device</button>
+      </div>
+      <p class="muted small">On iPhone or iPad, add this site to your Home Screen first (Share → Add to Home Screen) and open it from there.</p>
+      {{else}}<p class="muted small">This server isn't set up to send notifications.</p>{{end}}
     </section>
 {{end}}

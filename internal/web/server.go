@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"asyncwargame/internal/game"
+	"asyncwargame/internal/push"
 )
 
 //go:embed templates/*.html
@@ -38,11 +39,14 @@ type Options struct {
 	TrustProxy bool
 	// HostPassword, if set, is needed to create a room. Joining doesn't need it.
 	HostPassword string
+	// Push sends web push notifications; nil turns them off.
+	Push *push.Sender
 }
 
 type Server struct {
 	opts    Options
 	guard   *failGuard
+	pushSem chan struct{} // limits concurrent push sends
 	store   *game.Store
 	pages   map[string]*template.Template
 	assets  map[string]string // file name -> versioned URL
@@ -50,7 +54,9 @@ type Server struct {
 }
 
 func New(store *game.Store, opts Options) (*Server, error) {
-	s := &Server{opts: opts, guard: newFailGuard(10, time.Hour), store: store, pages: map[string]*template.Template{}, assets: map[string]string{}}
+	s := &Server{opts: opts, guard: newFailGuard(10, time.Hour), pushSem: make(chan struct{}, 8), store: store, pages: map[string]*template.Template{}, assets: map[string]string{}}
+
+	store.Deliver = func(n []game.Notice) { go s.deliver(n) }
 
 	static, _ := fs.Sub(staticFS, "static")
 	entries, _ := fs.ReadDir(static, ".")
@@ -97,6 +103,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("POST /rooms", s.createRoom)
+	mux.HandleFunc("GET /sw.js", s.serviceWorker)
 	mux.HandleFunc("POST /join", s.join)
 	// Every room route also exists under /r/{code}/k/{key}/, where the key
 	// identifies the seat instead of the cookie. That lets several tabs of
@@ -116,6 +123,9 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /messages", s.postMessage)
 	seat("POST /withdraw", s.withdraw)
 	seat("POST /leave", s.leave)
+	seat("POST /push/subscribe", s.pushSubscribe)
+	seat("POST /push/unsubscribe", s.pushUnsubscribe)
+	seat("POST /push/test", s.pushTest)
 	seat("POST /briefed", s.briefed)
 	seat("POST /members/{id}/{action}", s.decide)
 	seat("POST /units/{id}/assign", s.assign)
@@ -320,6 +330,9 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 			sc := s.store.Cat.Scenarios[room.ScenarioID]
 			v := game.BuildView(room, sc, s.store.Cat.Modules[room.ModuleID], me)
 			s.seatLinks(r, v, me)
+			if s.opts.Push != nil {
+				v.PushKey = s.opts.Push.PublicKey()
+			}
 			switch {
 			case !me.Briefed:
 				page = "briefing"

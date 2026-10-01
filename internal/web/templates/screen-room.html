@@ -16,6 +16,7 @@
           <input type="hidden" name="on" value="{{if .CommsActive}}0{{else}}1{{end}}">
           <button type="submit" class="secondary">{{if .CommsActive}}Switch communications rules off{{else}}Switch communications rules on{{end}}</button></form>
         <p class="muted small">Set a single unit lost or forced in contact from the Radio column on the Forces screen.</p></section>{{end}}
+      {{template "sec-notify" .}}
       {{template "sec-access" .}}
     </div>
     <div class="col">{{template "sec-danger" .}}</div>

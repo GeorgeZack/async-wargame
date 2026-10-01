@@ -328,6 +328,7 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, in OrderInput, now time.Tim
 		Summary: r.orderSummary(mod, o)})
 	if in.Commit {
 		r.logKind(VisPlayers, "", "%s committed an order for %s: %s.", actor.Name, u.Name, r.orderSummary(mod, o))
+		r.checkAllIn()
 	}
 	return o, nil
 }

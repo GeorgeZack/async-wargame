@@ -48,7 +48,7 @@ ufw allow OpenSSH && ufw allow 80,443/tcp && ufw enable
 ```sh
 useradd --system --home /var/lib/async-wargame --shell /usr/sbin/nologin async-wargame
 mkdir -p /etc/async-wargame
-printf 'AW_HOST_PASSWORD=%s\n' "$(openssl rand -base64 18)" > /etc/async-wargame/env
+printf 'AW_HOST_PASSWORD=%s\nAW_PUSH_CONTACT=mailto:you@example.com\n' "$(openssl rand -base64 18)" > /etc/async-wargame/env
 chmod 600 /etc/async-wargame/env
 cat /etc/async-wargame/env    # note the password: you need it to create rooms
 ```
@@ -152,6 +152,12 @@ systemctl start async-wargame
 ```
 
 ## Notes
+
+- Notifications (web push) need HTTPS, which both Caddy and Tailscale give
+  you. Put a real address in `AW_PUSH_CONTACT` (`mailto:` or `https:`): push
+  services use it if something's wrong with your pushes. The server's push
+  key is `/var/lib/async-wargame/vapid.pem`; if it's lost, everyone has to
+  turn notifications on again.
 
 - `-proxy` makes the server trust `X-Forwarded-Proto` and `X-Forwarded-For`
   from Caddy. Keep the server listening on `127.0.0.1` so nothing else can

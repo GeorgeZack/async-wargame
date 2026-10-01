@@ -23,6 +23,9 @@ type Store struct {
 	rooms map[string]*Room
 	subs  map[string]map[chan int64]struct{}
 	Cat   *Catalog
+	// Deliver, if set, receives the notifications an update raised, after
+	// the update is saved and the store is unlocked.
+	Deliver func([]Notice)
 }
 
 func OpenStore(path string, cat *Catalog) (*Store, error) {
@@ -143,6 +146,12 @@ func (s *Store) Touch(code string, fn func(*Room) bool) error {
 // Update applies fn to a copy of the room. If fn succeeds the copy becomes
 // canonical, is saved, and subscribers are notified; otherwise nothing changes.
 func (s *Store) Update(code string, fn func(*Room) error) error {
+	var notices []Notice
+	defer func() { // runs after the unlock below
+		if len(notices) > 0 && s.Deliver != nil {
+			s.Deliver(notices)
+		}
+	}()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	orig := s.rooms[code]
@@ -167,6 +176,7 @@ func (s *Store) Update(code string, fn func(*Room) error) error {
 		s.rooms[code] = orig
 		return err
 	}
+	notices, r.Outbox = r.Outbox, nil
 	for ch := range s.subs[code] {
 		select {
 		case ch <- r.Version:

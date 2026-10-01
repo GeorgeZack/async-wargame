@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -63,6 +64,7 @@ func (r *Room) ReviewOrder(actor *Member, id, action, note string, now time.Time
 		o.Review, o.ReviewNote = ReviewReturned, note
 		o.Status, o.CommittedAt = OrderDraft, nil
 		r.logKind(VisPlayers, "", "%s returned %s's order for %s: “%s”", actor.Name, holder.Name, u.Name, note)
+		r.notify(holder.ID, fmt.Sprintf("%s returned an order", actor.Name), fmt.Sprintf("%s: “%s” Revise and commit before the lock.", u.Name, note), "orders")
 	default:
 		return bad("approve or return")
 	}

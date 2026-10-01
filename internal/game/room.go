@@ -74,6 +74,8 @@ type Room struct {
 	Log           []LogEntry          `json:"log"`
 	Messages      []*Message          `json:"messages,omitempty"`
 	Undo          *Undo               `json:"undo,omitempty"`        // the game just before the last publish
+	RemindAt      time.Time           `json:"remindAt,omitzero"`     // when to remind players their orders are due
+	AllInTurn     int                 `json:"allInTurn,omitempty"`   // last turn the referee was told every order was in
 	Corrections   []Correction        `json:"corrections,omitempty"` // turns reopened, and why
 	// Outbox collects notifications raised during an update; the store
 	// hands them to the sender once the update is saved.

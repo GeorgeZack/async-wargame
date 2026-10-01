@@ -61,8 +61,13 @@ func TestTurnOpensWithMinimumPlanningTime(t *testing.T) {
 func TestLockAndTakeover(t *testing.T) {
 	start := central(t, "2026-09-30 12:00")
 	r, mod, ref := startedRoom(t, start) // locks 6 PM, AI takes over 6 hours later
-	if r.Due(central(t, "2026-09-30 17:59")) {
-		t.Fatal("due before the deadline")
+	if r.Due(central(t, "2026-09-30 15:59")) {
+		t.Fatal("due before the reminder")
+	}
+	// Two hours out, the clock reminds players; it doesn't lock.
+	r.Tick(mod, central(t, "2026-09-30 17:59"))
+	if r.Phase != PhasePlanning || !r.RemindAt.IsZero() || r.Due(central(t, "2026-09-30 17:59")) {
+		t.Fatalf("before the deadline: phase %s, remind at %v", r.Phase, r.RemindAt)
 	}
 	r.Tick(mod, central(t, "2026-09-30 18:00"))
 	if r.Phase != PhaseResolving || r.Turn != 1 || r.Resolution == nil || r.Resolution.Turn != 1 {

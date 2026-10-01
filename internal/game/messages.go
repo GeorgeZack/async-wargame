@@ -123,6 +123,7 @@ func (r *Room) Post(me *Member, channel, text string, now time.Time) error {
 		return bad("messages are limited to %d characters", maxMessage)
 	}
 	r.Messages = append(r.Messages, &Message{ID: newID(), Channel: channel, Author: me.ID, At: now.UTC(), Turn: r.Turn, Text: text})
+	r.announceMessage(me, channel, text)
 	r.markRead(me, channel)
 	return nil
 }

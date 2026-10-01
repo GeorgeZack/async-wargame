@@ -240,6 +240,16 @@ backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
   can remove anyone, choosing who gets their units: their commander, another
   player, or the referee. Units keep their orders and drafts, so the new
   holder can confirm or change them before the lock. Access ends at once.
+- **Notifications:** web push, turned on per device from the People screen
+  (the Room screen for the referee). Players hear when a turn opens or its
+  results are in, two hours before the lock if their orders aren't in, when
+  a commander returns an order, when units are handed to them, and when
+  someone writes to them. The referee hears when every order is in, when a
+  turn locks, and if the rules published a turn while they were away. Needs
+  HTTPS (or localhost); on iPhone, add the site to the Home Screen first.
+  The server keeps its push key in `vapid.pem` next to the `-data` file
+  (`-push-key` to move it, `-no-push` to turn notifications off), and
+  `AW_PUSH_CONTACT` is the address push services can reach you at.
 - **Messages:** discussion channels on the Messages screen, with unread
   badges: All hands (everyone), Players only, one per commander's command,
   and a private channel between each member and the referee. A blind referee

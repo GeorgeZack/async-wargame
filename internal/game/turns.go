@@ -193,7 +193,9 @@ func sortedInts(in []int) []int {
 func (r *Room) openTurn(n int, now time.Time) {
 	r.Turn, r.Phase, r.Deferred, r.LockedAt = n, PhasePlanning, false, time.Time{}
 	r.Deadline = r.nextDeadline(now)
+	r.setReminder(now)
 	r.logf(VisAll, "Turn %d planning is open. Orders lock %s.", n, r.FormatInZone(r.Deadline))
+	r.announceTurn(n)
 }
 
 // Defer moves the lock to a later time chosen by the referee.
@@ -211,6 +213,7 @@ func (r *Room) Defer(actor *Member, until, now time.Time) error {
 		return bad("a lock can be deferred by at most 30 days")
 	}
 	r.Deadline, r.Deferred = until.UTC(), true
+	r.setReminder(now)
 	r.logf(VisAll, "The referee deferred the turn %d lock to %s.", r.Turn, r.FormatInZone(r.Deadline))
 	return nil
 }
@@ -232,12 +235,21 @@ func (r *Room) LockNow(actor *Member, mod *Module, now time.Time) error {
 func (r *Room) lock(mod *Module, now time.Time) {
 	r.Phase, r.LockedAt = PhaseResolving, now.UTC()
 	r.Undo = nil // the previous turn can't be reopened once this one locks
+	r.RemindAt = time.Time{}
 	r.logf(VisAll, "Turn %d is locked. The referee is resolving it.", r.Turn)
 	r.lockOrders(mod, now)
 	rng, seed := newResolutionRNG()
 	r.Resolution = r.resolve(mod, now, rng, seed)
 	if t := r.TakeoverAt(); !t.IsZero() && !now.Before(t) {
 		r.takeover(mod, now)
+		return
+	}
+	if ref := r.Referee(); ref != nil {
+		body := "Every move is worked out and ready to publish."
+		if n := len(r.Resolution.Encounters); n > 0 {
+			body = fmt.Sprintf("%s to settle, then publish.", capitalize(plural(n, "fight", "fights")))
+		}
+		r.notify(ref.ID, fmt.Sprintf("Turn %d locked", r.Turn), body, "turn")
 	}
 }
 
@@ -251,6 +263,9 @@ func (r *Room) NextTurn(actor *Member, mod *Module, now time.Time) error {
 func (r *Room) takeover(mod *Module, now time.Time) {
 	r.settleRemaining(mod)
 	r.logf(VisAll, "The referee was away, so the rules settled turn %d's fights and published it.", r.Turn)
+	if ref := r.Referee(); ref != nil {
+		r.notify(ref.ID, fmt.Sprintf("Turn %d published without you", r.Turn), "You were away, so the rules settled its fights and published it.", "reports")
+	}
 	r.publish(mod, now)
 }
 
@@ -261,7 +276,7 @@ func (r *Room) Due(now time.Time) bool {
 	}
 	switch r.Phase {
 	case PhasePlanning:
-		return !r.Deadline.IsZero() && !now.Before(r.Deadline)
+		return !r.Deadline.IsZero() && !now.Before(r.Deadline) || r.reminderDue(now)
 	case PhaseResolving:
 		t := r.TakeoverAt()
 		return !t.IsZero() && !now.Before(t)
@@ -274,6 +289,8 @@ func (r *Room) Due(now time.Time) bool {
 func (r *Room) Tick(mod *Module, now time.Time) {
 	switch {
 	case !r.Due(now):
+	case r.Phase == PhasePlanning && r.reminderDue(now) && now.Before(r.Deadline):
+		r.remind()
 	case r.Phase == PhasePlanning:
 		r.lock(mod, now)
 	case r.Phase == PhaseResolving:

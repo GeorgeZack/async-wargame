@@ -1293,6 +1293,86 @@
     replay.open(a.dataset.replay);
   });
 
+  // Web push: the Notifications panel turns this device on or off for the
+  // room. The service worker shows them; the page tells it which seat
+  // address to open for this room.
+  const notify = {
+    box: null,
+    key() { return localStorage.getItem("aw-push-" + this.box.dataset.room) === "on"; },
+    setKey(on) { try { on ? localStorage.setItem("aw-push-" + this.box.dataset.room, "on") : localStorage.removeItem("aw-push-" + this.box.dataset.room); } catch {} },
+    state(text) { document.getElementById("notify-state").textContent = text; },
+    show(on) {
+      document.getElementById("notify-on").hidden = on;
+      document.getElementById("notify-test").hidden = !on;
+      document.getElementById("notify-off").hidden = !on;
+    },
+    async post(path, sub) {
+      const res = await fetch(this.box.dataset.base + path, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+        body: sub ? JSON.stringify(sub) : "{}",
+      });
+      if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    },
+    async registration() {
+      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
+      (reg.active || navigator.serviceWorker.controller)?.postMessage({ room: this.box.dataset.room, base: this.box.dataset.base });
+      return reg;
+    },
+    async init() {
+      this.box = document.getElementById("notify");
+      if (!this.box || !this.box.dataset.key) return;
+      if (!window.isSecureContext || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        this.state(window.isSecureContext ? "This browser can't receive notifications." : "Notifications need the site to be opened over HTTPS.");
+        return;
+      }
+      document.getElementById("notify-on").addEventListener("click", () => this.on());
+      document.getElementById("notify-off").addEventListener("click", () => this.off());
+      document.getElementById("notify-test").addEventListener("click", async () => {
+        try { await this.post("/push/test"); this.state("Test sent. It should arrive in a few seconds."); } catch (e) { this.state(e.message); }
+      });
+      try {
+        const reg = await this.registration();
+        const sub = await reg.pushManager.getSubscription();
+        const on = !!sub && this.key() && Notification.permission === "granted";
+        if (on) await this.post("/push/subscribe", sub.toJSON()); // keep the server in step
+        this.show(on);
+        this.state(on ? "On for this device." : Notification.permission === "denied"
+          ? "This browser is blocking notifications from this site. Allow them in the site settings, then reload."
+          : "Off for this device.");
+      } catch (e) {
+        this.state("Couldn't check notifications: " + e.message);
+      }
+    },
+    async on() {
+      try {
+        if (await Notification.requestPermission() !== "granted") { this.state("Notifications weren't allowed."); return; }
+        const reg = await this.registration();
+        const raw = atob(this.box.dataset.key.replace(/-/g, "+").replace(/_/g, "/"));
+        const key = Uint8Array.from(raw, (c) => c.charCodeAt(0));
+        const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        await this.post("/push/subscribe", sub.toJSON());
+        this.setKey(true);
+        this.show(true);
+        this.state("On for this device.");
+      } catch (e) {
+        this.state("Couldn't turn notifications on: " + e.message);
+      }
+    },
+    async off() {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration("/");
+        const sub = await reg?.pushManager.getSubscription();
+        if (sub) await this.post("/push/unsubscribe", sub.toJSON());
+        this.setKey(false);
+        this.show(false);
+        this.state("Off for this device.");
+      } catch (e) {
+        this.state("Couldn't turn notifications off: " + e.message);
+      }
+    },
+  };
+
   // The open discussion thread scrolls to its latest message. Ctrl+Enter sends.
   function threadToEnd() {
     const t = document.getElementById("thread");
@@ -1307,6 +1387,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     threadToEnd();
+    notify.init();
     map.init();
     editor.init();
     orders.init();

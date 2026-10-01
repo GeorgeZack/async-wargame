@@ -861,3 +861,4 @@ html.js #order-box > summary { list-style: none; }
 .correct-turn { margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .5rem; }
 .correct-turn summary { cursor: pointer; color: var(--muted); }
 .correction { border-left: 3px solid var(--civilians); padding-left: .5rem; }
+.notify-panel .row { margin: .25rem 0 .5rem; }

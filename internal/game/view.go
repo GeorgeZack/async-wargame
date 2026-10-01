@@ -57,8 +57,11 @@ type View struct {
 	Clock ClockView
 
 	Tabs        []Tab
-	CommsActive bool // comms rules apply in this room
-	CommsRules  bool // the module has comms rules (the referee may switch them off)
+	Channels    []Channel     // discussion channels the viewer can read
+	Channel     Channel       // the one open on the Messages screen
+	Thread      []MessageView // its messages
+	CommsActive bool          // comms rules apply in this room
+	CommsRules  bool          // the module has comms rules (the referee may switch them off)
 	Screen      string
 
 	EventTable     []EventRow // referee
@@ -172,9 +175,11 @@ type UnitView struct {
 	Role         string `json:"-"` // the side's role: player, enemy, or neutral
 	Hex          string `json:"hex"`
 	Strength     string `json:"strength"`
-	Hidden       bool   `json:"hidden,omitempty"`  // referee view: players don't know about it
-	Contact      bool   `json:"contact,omitempty"` // player view: detected but unidentified
-	Ghost        bool   `json:"ghost,omitempty"`   // player view: out of sight, shown where last seen
+	Hidden       bool   `json:"hidden,omitempty"`     // referee view: players don't know about it
+	Contact      bool   `json:"contact,omitempty"`    // player view: detected but unidentified
+	Ghost        bool   `json:"ghost,omitempty"`      // player view: out of sight, shown where last seen
+	Stale        bool   `json:"stale,omitempty"`      // off the net: shown where it last reported from
+	LocalSight   bool   `json:"localSight,omitempty"` // seen only by the viewer's units off the net
 	SeenTurn     int    `json:"seenTurn,omitempty"`
 	AssignedTo   string `json:"-"`
 	AssignedName string `json:"commander,omitempty"`
@@ -266,6 +271,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	// when known, and enemies only as unidentified contacts.
 	groups := map[string]*ForceGroup{}
 	var visible []UnitView
+	local := r.localObservers(mod, me)
 	for _, u := range r.Units {
 		side := mod.Side(u.Side)
 		var uv UnitView
@@ -273,6 +279,13 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 		case ref || r.VisibleToPlayers(mod, u):
 			uv = unitView(u, mod, ref)
 			if !ref && side.Enemy {
+				uv.ID = contactID(r, u)
+			}
+		case !side.Playable && len(local) > 0 && r.inSight(mod, u, local):
+			// Seen only by the viewer's own units off the net.
+			uv = unitView(u, mod, false)
+			uv.LocalSight = true
+			if side.Enemy {
 				uv.ID = contactID(r, u)
 			}
 		case side.Enemy && r.Sightings[u.ID] != (Sighting{}):
@@ -285,11 +298,15 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 			uv.Aboard = t.Name
 		}
 		uv.Mine = u.AssignedTo != "" && u.AssignedTo == me.ID
+		at, stale := r.reportedAt(u, me)
+		if stale {
+			uv.Hex, uv.Stale, uv.SeenTurn = HexID(at[0], at[1]), true, u.LastContact
+		}
 		visible = append(visible, uv)
 		if uv.Mine {
 			v.MyUnits = append(v.MyUnits, uv)
 		}
-		uv.Sector = r.Map.SectorAt(u.Col, u.Row)
+		uv.Sector = r.Map.SectorAt(at[0], at[1])
 		if uv.Ghost {
 			sg := r.Sightings[u.ID]
 			uv.Sector = r.Map.SectorAt(sg.Col, sg.Row)
@@ -330,9 +347,10 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	}
 
 	v.Clock = buildClock(r)
-	v.Map, v.Legend, v.Data = buildMap(r, mod, ref, visible)
+	v.Map, v.Legend, v.Data = buildMap(r, mod, ref, visible, local)
 	addOrders(v, r, mod, me)
 	addResolution(v, r, mod, me)
+	v.Channels = r.Channels(me)
 	if ref {
 		addRefereeEvents(v, r, mod)
 	}
@@ -673,12 +691,12 @@ type Tab struct {
 
 // screenOrder lists the screens each kind of member gets, in tab order.
 var screenOrder = map[bool][]string{
-	true:  {"map", "turn", "events", "forces", "people", "reports", "activity", "room"},
-	false: {"map", "orders", "forces", "reports", "activity", "people"},
+	true:  {"map", "turn", "events", "forces", "people", "messages", "reports", "activity", "room"},
+	false: {"map", "orders", "forces", "messages", "reports", "activity", "people"},
 }
 
 var screenLabels = map[string]string{"map": "Map", "turn": "Turn", "events": "Random events", "forces": "Forces",
-	"people": "People", "reports": "Reports", "activity": "Activity", "room": "Room", "orders": "Orders"}
+	"people": "People", "reports": "Reports", "activity": "Activity", "messages": "Messages", "room": "Room", "orders": "Orders"}
 
 // HasScreen reports whether the viewer has a screen by this name.
 func (v *View) HasScreen(screen string) bool {
@@ -713,6 +731,14 @@ func (v *View) SetScreen(screen string) {
 			t.Badge = n(len(v.Proposals))
 		case "people":
 			t.Badge = n(len(v.Pending))
+		case "messages":
+			unread := 0
+			for _, c := range v.Channels {
+				if !(screen == "messages" && c.ID == v.Channel.ID) {
+					unread += c.Unread
+				}
+			}
+			t.Badge = n(unread)
 		case "orders":
 			if v.Phase == PhasePlanning {
 				reachable := 0

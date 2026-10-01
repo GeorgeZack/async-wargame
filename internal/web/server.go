@@ -86,7 +86,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		},
 	}
 	for _, page := range []string{"home", "pending", "briefing", "holding", "editor", "message", "invite", "closed", "unit", "rules",
-		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-room", "screen-orders"} {
+		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-messages", "screen-room", "screen-orders"} {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/map.html", "templates/shell.html", "templates/sections.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, err
@@ -109,10 +109,11 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	}
 	seat("GET ", s.room)
 	seat("GET /live", s.events)
-	for _, name := range []string{"turn", "events", "forces", "people", "reports", "activity", "room", "orders"} {
+	for _, name := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders"} {
 		seat("GET /"+name, s.screen(name))
 	}
 	seat("GET /edit", s.editor)
+	seat("POST /messages", s.postMessage)
 	seat("POST /withdraw", s.withdraw)
 	seat("POST /briefed", s.briefed)
 	seat("POST /members/{id}/{action}", s.decide)
@@ -294,6 +295,7 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 		data   any
 		status = http.StatusOK
 	)
+	opened := "" // the channel shown on the Messages screen, to mark read
 	err := s.store.Read(code, func(room *game.Room) {
 		me := s.member(r, room)
 		switch {
@@ -324,6 +326,9 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 			case !v.HasScreen(screen):
 				page = "redirect"
 			default:
+				if screen == "messages" {
+					opened = v.OpenChannel(room, me, r.URL.Query().Get("c"))
+				}
 				v.SetScreen(screen)
 				page = "screen-" + screen
 			}
@@ -345,6 +350,12 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 		}
 		s.renderHome(w, r, status, homeData{Code: game.DisplayCode(code)})
 		return
+	}
+	if opened != "" {
+		s.store.Touch(code, func(room *game.Room) bool {
+			me := s.member(r, room)
+			return me != nil && room.MarkRead(me, opened)
+		})
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	s.render(w, status, page, data)

@@ -124,3 +124,75 @@ func TestBlackoutJamsRadios(t *testing.T) {
 		t.Error("the jam never wore off")
 	}
 }
+
+func TestOffTheNetSightAndLastReportedPosition(t *testing.T) {
+	r, mod, _, cmd, hicks := orderRoom(t)
+	vasq := r.Member("v")
+	u := r.Unit("m1") // Hicks's squad
+	sc := testScenario(t)
+	r.RefreshComms(mod)
+	r.RefreshFog(mod, central(t, "2026-09-30 13:00"))
+	if u.OutOfContact || u.Reported == nil {
+		t.Fatalf("squad should start on the net: %+v", u)
+	}
+	home := *u.Reported
+
+	// The squad is lost on patrol and moves off where nobody else can see.
+	u.Radio = RadioDown
+	r.RefreshComms(mod)
+	far := [2]int{-1, -1}
+	for row := range r.Map.NumRows() {
+		for col := 0; col < r.Map.Cols; col++ {
+			if mod.TerrainAt(r.Map.TerrainCode(col, row)).Water() || r.observedBy(r.observers(mod))[[2]int{col, row}] {
+				continue
+			}
+			far = [2]int{col, row}
+		}
+	}
+	if far[0] < 0 {
+		t.Skip("no hex outside everyone's sight")
+	}
+	u.Col, u.Row = far[0], far[1]
+	r.Units = append(r.Units, &Unit{ID: "zz", Name: "Lurkers", Class: "horde", Side: "infected", Col: far[0], Row: far[1], Strength: 12})
+	r.RefreshComms(mod)
+	r.RefreshFog(mod, central(t, "2026-09-30 13:05"))
+
+	if r.VisibleToPlayers(mod, r.Unit("zz")) {
+		t.Error("an off-net squad's sighting reached the shared picture")
+	}
+	find := func(v *View, name string) *UnitView {
+		for _, g := range v.Forces {
+			for i := range g.Units {
+				if g.Units[i].Name == name || name == "contact" && g.Units[i].Contact && !g.Units[i].Ghost && g.Units[i].Hex == HexID(far[0], far[1]) {
+					return &g.Units[i]
+				}
+			}
+		}
+		return nil
+	}
+	// Hicks sees what his squad sees, where it really is.
+	hv := BuildView(r, sc, mod, hicks)
+	if s := find(hv, u.Name); s == nil || s.Hex != HexID(far[0], far[1]) || s.Stale {
+		t.Errorf("Hicks's view of his squad: %+v", s)
+	}
+	if c := find(hv, "contact"); c == nil || !c.LocalSight {
+		t.Errorf("Hicks should see the lurkers through his squad: %+v", c)
+	}
+	// Others see the squad where it last reported, and no lurkers.
+	for _, m := range []*Member{vasq, cmd} {
+		v := BuildView(r, sc, mod, m)
+		if s := find(v, u.Name); s == nil || s.Hex != HexID(home[0], home[1]) || !s.Stale {
+			t.Errorf("%s's view of the lost squad: %+v", m.Name, s)
+		}
+		if c := find(v, "contact"); c != nil {
+			t.Errorf("%s sees the lurkers", m.Name)
+		}
+	}
+	// Back on the net: the picture is shared again.
+	u.Radio = RadioAuto
+	u.Col, u.Row = home[0], home[1]
+	r.RefreshComms(mod)
+	if v := BuildView(r, sc, mod, vasq); find(v, u.Name).Stale {
+		t.Error("still stale after regaining contact")
+	}
+}

@@ -835,3 +835,25 @@ html.js #order-box > summary { list-style: none; }
 .die.rolling { color: var(--muted); }
 .die.hit { background: var(--ok); color: var(--surface); border-color: var(--ok); }
 @media (prefers-reduced-motion: reduce) { .replay-burst { animation: none; } .replay-units .counter { transition: none; } }
+
+/* ---- Messages ---- */
+@media (min-width: 960px) { .cols-messages { grid-template-columns: 18rem minmax(0, 1fr); max-width: 72rem; } }
+.channel-list { display: grid; gap: 2px; margin: 0 0 .75rem; }
+.channel { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .4rem .6rem; border-radius: 4px;
+  color: var(--text); text-decoration: none; border: 1px solid transparent; }
+.channel:hover { background: var(--surface-2); }
+.channel.active { background: var(--surface-2); border-color: var(--border); font-weight: 600; }
+.thread { display: grid; gap: .6rem; max-height: min(60vh, 40rem); overflow-y: auto; margin: 0 0 .75rem; padding: .25rem .25rem .25rem 0; }
+.msg { border-left: 3px solid var(--border); padding: .3rem .6rem; background: var(--surface); }
+.msg.mine { border-left-color: var(--accent); }
+.msg.role-referee { border-left-color: var(--civilians); }
+.msg-head { display: flex; flex-wrap: wrap; gap: .4rem; align-items: baseline; }
+.msg-text { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: .15rem; }
+.new-line { display: flex; align-items: center; gap: .5rem; color: var(--danger); font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+.new-line::after { content: ""; flex: 1; border-top: 1px solid var(--danger); }
+
+/* Off the net: other players see the unit where it last reported from. */
+.counter.stale { opacity: 0.6; }
+.counter.stale .ctr { stroke-dasharray: 1.5 1; stroke-width: 0.8; }
+/* Seen only by the viewer's own unit off the net. */
+.counter.local .ctr { stroke: #c4513d; stroke-dasharray: 0.8 0.8; stroke-width: 0.9; }

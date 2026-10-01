@@ -145,7 +145,7 @@ var featureGlyphs = map[string]string{
 // FeatureKinds lists the place kinds the editor offers.
 var FeatureKinds = []string{"beachhead", "hospital", "port", "utility", "police", "shelter", "relay", "hive"}
 
-func buildMap(r *Room, mod *Module, ref bool, units []UnitView) (MapView, []Terrain, InspectorData) {
+func buildMap(r *Room, mod *Module, ref bool, units []UnitView, local []observer) (MapView, []Terrain, InspectorData) {
 	m := r.Map
 	rows := m.NumRows()
 	w := hexW * (float64(m.Cols) + 0.5)
@@ -179,7 +179,7 @@ func buildMap(r *Room, mod *Module, ref bool, units []UnitView) (MapView, []Terr
 	}
 	mv.Coast = coast.String()
 
-	observed := r.Observed(mod)
+	observed := r.observedBy(append(r.observers(mod), local...))
 	var fog strings.Builder
 	for row := range rows {
 		for col := 0; col < m.Cols; col++ {
@@ -328,6 +328,12 @@ func buildMap(r *Room, mod *Module, ref bool, units []UnitView) (MapView, []Terr
 		names := make([]string, len(us))
 		for i, u := range us {
 			names[i] = u.Name
+			switch {
+			case u.Stale:
+				names[i] += fmt.Sprintf(" (off the net: last reported here, turn %d)", u.SeenTurn)
+			case u.LocalSight:
+				names[i] += " (seen by your unit off the net)"
+			}
 		}
 		st := data.Stack[hx]
 		mv.Stacks = append(mv.Stacks, Stack{X: x, Y: y, Hex: hx, Top: us[0], Count: len(us), Full: st[1] > 0 && st[0] >= st[1],

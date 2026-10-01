@@ -127,7 +127,11 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 			}
 		}
 		if !r.seesOrder(me, u) {
-			// A commander's unit that's off the net: shown, but out of reach.
+			// A commander's unit that's off the net: shown where it last
+			// reported from, but out of reach.
+			if at, stale := r.reportedAt(u, me); stale {
+				uv.Hex, uv.Stale, uv.SeenTurn = HexID(at[0], at[1]), true, u.LastContact
+			}
 			slot := OrderSlot{Unit: uv, Movement: mod.Class(u.Class).Movement, NoContact: true}
 			if m := r.memberOrNil(u.AssignedTo); m != nil {
 				slot.Holder = m.Name

@@ -227,7 +227,8 @@ func TestAFightIsResolvedAndReported(t *testing.T) {
 		t.Fatalf("encounters: %+v", res.Encounters)
 	}
 	e := res.Encounters[0]
-	if e.Suggested[FriendSide].Dice == 0 || e.Suggested[EnemySide].Dice == 0 || !e.Sit[EnemySide].Unseen {
+	// The squad could see them coming across open ground: no ambush.
+	if e.Suggested[FriendSide].Dice == 0 || e.Suggested[EnemySide].Dice == 0 || e.Sit[EnemySide].Unseen {
 		t.Errorf("pools %+v, unseen %v", e.Suggested, e.Sit[EnemySide].Unseen)
 	}
 	publishTurn(t, r, mod, ref, central(t, "2026-09-30 19:00"))

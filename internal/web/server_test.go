@@ -68,7 +68,7 @@ func (b *browser) post(path string, form url.Values) (*http.Response, string) {
 func (b *browser) room(base string) (*http.Response, string) {
 	b.t.Helper()
 	res, body := b.get(base)
-	for _, screen := range []string{"turn", "events", "forces", "people", "reports", "activity", "room", "orders"} {
+	for _, screen := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders"} {
 		_, more := b.get(base + "/" + screen)
 		body += more
 	}

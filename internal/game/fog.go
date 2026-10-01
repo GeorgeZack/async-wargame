@@ -7,10 +7,15 @@ import (
 	"time"
 )
 
-// Fog of war. Players share one picture: whatever any friendly unit can see
-// right now, plus what they've been told about (Known units, such as a
-// contact a drone is tracking). Contacts that slip out of sight leave a
-// "last seen" marker where they were. The referee sees everything.
+// Fog of war. Players share one picture: whatever any friendly unit on the
+// command net can see right now, plus what they've been told about (Known
+// units, such as a contact a drone is tracking). Contacts that slip out of
+// sight leave a "last seen" marker where they were. The referee sees
+// everything.
+//
+// A unit off the net still sees, but only the player holding it gets that
+// picture: it doesn't reach the shared one until the unit is back in
+// contact. Everyone else sees the unit where it last reported from.
 //
 // There's no line-of-sight tracing yet: sight is a range, shortened by cover
 // at the target. That's enough for buildings and woods to hide the dead.
@@ -36,7 +41,19 @@ func (r *Room) concealment(mod *Module, u *Unit, col, row int) int {
 
 type observer struct{ col, row, rng int }
 
+// observers are the friendly units on the net: they feed the shared picture.
 func (r *Room) observers(mod *Module) []observer {
+	var out []observer
+	for _, u := range r.Units {
+		if s := mod.Side(u.Side); s != nil && s.Playable && !u.OutOfContact {
+			out = append(out, observer{u.Col, u.Row, r.sightRange(mod, u)})
+		}
+	}
+	return out
+}
+
+// everyObserver is every friendly unit, on the net or not.
+func (r *Room) everyObserver(mod *Module) []observer {
 	var out []observer
 	for _, u := range r.Units {
 		if s := mod.Side(u.Side); s != nil && s.Playable {
@@ -46,10 +63,28 @@ func (r *Room) observers(mod *Module) []observer {
 	return out
 }
 
-// Observed is the set of hexes some friendly unit can see into.
+// localObservers are the viewer's own units off the net: what they see,
+// only the viewer sees.
+func (r *Room) localObservers(mod *Module, me *Member) []observer {
+	var out []observer
+	if me == nil || me.Role == RoleReferee {
+		return nil
+	}
+	for _, u := range r.Units {
+		if s := mod.Side(u.Side); s != nil && s.Playable && u.OutOfContact && u.AssignedTo == me.ID {
+			out = append(out, observer{u.Col, u.Row, r.sightRange(mod, u)})
+		}
+	}
+	return out
+}
+
+// Observed is the set of hexes the shared picture covers.
 func (r *Room) Observed(mod *Module) map[[2]int]bool {
+	return r.observedBy(r.observers(mod))
+}
+
+func (r *Room) observedBy(obs []observer) map[[2]int]bool {
 	seen := map[[2]int]bool{}
-	obs := r.observers(mod)
 	for row := range r.Map.NumRows() {
 		for col := 0; col < r.Map.Cols; col++ {
 			for _, o := range obs {
@@ -72,6 +107,15 @@ func (r *Room) inSight(mod *Module, u *Unit, obs []observer) bool {
 		}
 	}
 	return false
+}
+
+// reportedAt is where players other than its holder think u is: where it
+// last reported from, if it's off the net.
+func (r *Room) reportedAt(u *Unit, me *Member) ([2]int, bool) {
+	if !u.OutOfContact || u.Reported == nil || me.Role == RoleReferee || u.AssignedTo == me.ID {
+		return [2]int{u.Col, u.Row}, false
+	}
+	return *u.Reported, *u.Reported != [2]int{u.Col, u.Row}
 }
 
 // VisibleToPlayers reports whether players currently see u.

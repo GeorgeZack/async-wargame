@@ -72,8 +72,12 @@ type Room struct {
 	Stats         OpStats             `json:"stats"`               // this operation so far
 	Sightings     map[string]Sighting `json:"sightings,omitempty"` // unit id -> where players last saw it
 	Log           []LogEntry          `json:"log"`
-	Seq           int                 `json:"seq"` // numbering for units created during play
-	Version       int64               `json:"version"`
+	Messages      []*Message          `json:"messages,omitempty"`
+	// ReadMarks is, per member and channel, how many of the channel's
+	// messages they have seen.
+	ReadMarks map[string]map[string]int `json:"readMarks,omitempty"`
+	Seq       int                       `json:"seq"` // numbering for units created during play
+	Version   int64                     `json:"version"`
 }
 
 type Member struct {
@@ -114,6 +118,7 @@ type Unit struct {
 	OutOfContact bool           `json:"outOfContact,omitempty"` // off the command net (worked out by RefreshComms)
 	LastContact  int            `json:"lastContact,omitempty"`  // last turn it was on the net
 	JammedUntil  int            `json:"jammedUntil,omitempty"`  // radio jammed through this turn
+	Reported     *[2]int        `json:"reported,omitempty"`     // where it was when last on the net
 	Aboard       string         `json:"aboard,omitempty"`       // transport unit id while riding one
 }
 

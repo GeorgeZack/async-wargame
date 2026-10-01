@@ -207,8 +207,8 @@ AW_HOST_PASSWORD='something long' ./async-wargame -addr 127.0.0.1:8080 -proxy -d
   next action, the clock, and the resolution desk), Random events
   (threat, proposals, and the event odds table), Forces (a ledger with
   supply, experience, commander, and order status, assignable in place),
-  People, Reports, Activity, and Room. Players: Map, Orders, Forces, Reports,
-  Activity, People.
+  People, Messages, Reports, Activity, and Room. Players: Map, Orders, Forces,
+  Messages, Reports, Activity, People.
   The Editor and Rules sit at the end of the tab strip. Panels are windows
   with title strips, and a status bar along the bottom always shows the turn,
   a countdown to lock, orders in, the evacuation score, and whether live
@@ -222,7 +222,14 @@ AW_HOST_PASSWORD='something long' ./async-wargame -addr 127.0.0.1:8080 -proxy -d
   referee can mark a unit lost or force contact (Forces screen), switch the
   rules off for the room (Room screen), and a "Comms blackout" event jams
   radios. Lights show on counters, the orders list, the forces ledger, and
-  unit cards.
+  unit cards. Only units on the net feed the shared picture: a unit off the
+  net still sees, but only the player holding it gets that picture (marked
+  on their map), and everyone else sees the unit where it last reported
+  from, faded.
+- **Messages:** discussion channels on the Messages screen, with unread
+  badges: All hands (everyone), Players only, one per commander's command,
+  and a private channel between each member and the referee. A blind referee
+  can't read the players' channels; admin view opens them read-only.
 - **Rules are data:** `internal/rules` holds the module schema and the combat
   engine, and the server depends on it, never the reverse. Sight, AI
   doctrine, combat, stacking, evacuation, supply, escort, and order behavior

@@ -99,6 +99,7 @@ func (r *Room) RefreshComms(mod *Module) {
 		switch {
 		case in:
 			u.LastContact = r.Turn
+			u.Reported = &[2]int{u.Col, u.Row}
 			if u.OutOfContact {
 				u.OutOfContact = false
 				if r.Phase != PhaseSetup {

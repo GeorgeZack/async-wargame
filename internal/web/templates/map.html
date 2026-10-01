@@ -63,7 +63,7 @@
 </details>
 {{end}}
 
-{{define "counter"}}<g class="counter side-{{.Top.Side}} kind-{{.Top.Kind}}{{if .Top.Mine}} mine{{end}}{{if .Top.Hidden}} hidden{{end}}{{if .Top.Contact}} contact{{end}}{{if .Top.Ghost}} ghost{{end}}{{if .Full}} full{{end}}">
+{{define "counter"}}<g class="counter side-{{.Top.Side}} kind-{{.Top.Kind}}{{if .Top.Mine}} mine{{end}}{{if .Top.Hidden}} hidden{{end}}{{if .Top.Contact}} contact{{end}}{{if .Top.Ghost}} ghost{{end}}{{if .Top.Stale}} stale{{end}}{{if .Top.LocalSight}} local{{end}}{{if .Full}} full{{end}}">
         <title>{{.Label}}</title>
         {{if gt .Count 2}}<rect class="ctr-edge" x="-7" y="-7" width="18" height="18" rx="1"/>{{end}}
         {{if gt .Count 1}}<rect class="ctr-back" x="-8" y="-8" width="18" height="18" rx="1"/>{{end}}

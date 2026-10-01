@@ -204,9 +204,12 @@ func (r *Room) resolve(mod *Module, now time.Time, rng *rand.Rand, seed uint64) 
 	}
 	engagedAt := map[string]int{}
 	pairs := map[[2]string]bool{}
+	// Seen by anyone at lock, including units off the net: a lost patrol
+	// that can see the enemy isn't ambushed by it.
 	visibleAtLock := map[string]bool{}
+	every := r.everyObserver(mod)
 	for _, u := range r.Units {
-		visibleAtLock[u.ID] = r.VisibleToPlayers(mod, u)
+		visibleAtLock[u.ID] = r.VisibleToPlayers(mod, u) || r.inSight(mod, u, every)
 	}
 
 	detect := func(slice int) {

@@ -124,6 +124,22 @@ func (s *Store) Read(code string, fn func(*Room)) error {
 	return nil
 }
 
+// Touch makes a bookkeeping change that nobody else needs to see, such as a
+// read mark: no new version and no notifications. fn reports whether it
+// changed anything; only then is the state saved.
+func (s *Store) Touch(code string, fn func(*Room) bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.rooms[code]
+	if r == nil {
+		return ErrNotFound
+	}
+	if !fn(r) {
+		return nil
+	}
+	return s.saveLocked()
+}
+
 // Update applies fn to a copy of the room. If fn succeeds the copy becomes
 // canonical, is saved, and subscribers are notified; otherwise nothing changes.
 func (s *Store) Update(code string, fn func(*Room) error) error {

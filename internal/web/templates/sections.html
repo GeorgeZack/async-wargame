@@ -648,3 +648,36 @@
 </dialog>
 <script type="application/json" id="replay-data" data-live>{{.Replays}}</script>
 {{end}}
+
+{{define "sec-channels"}}
+<section class="panel" id="channels" data-live aria-labelledby="channels-h">
+      <h2 id="channels-h">Channels</h2>
+      <ul class="plain channel-list">
+        {{range .Channels}}<li><a href="{{$.Base}}/messages?c={{.ID}}" class="channel{{if eq .ID $.Channel.ID}} active{{end}}"{{if eq .ID $.Channel.ID}} aria-current="page"{{end}}>
+          <span class="channel-name">{{.Name}}</span>
+          {{if and .Unread (ne .ID $.Channel.ID)}}<span class="count">{{.Unread}}</span>{{else if .Count}}<span class="muted small">{{.Count}}</span>{{end}}</a></li>{{end}}
+      </ul>
+      {{if .IsReferee}}<p class="muted small">{{if .AdminMode}}Admin view: you can read the players' channels, but not post in them.{{else}}Refereeing blind: the players' own channels are closed to you. Admin view (Room screen) opens them read-only, and players are told.{{end}}</p>{{end}}
+    </section>
+{{end}}
+
+{{define "sec-thread"}}
+<section class="panel thread-panel" aria-labelledby="thread-h">
+      <h2 id="thread-h">{{.Channel.Name}}</h2>
+      <p class="muted small">{{.Channel.Note}}</p>
+      <ol class="plain thread" id="thread" data-live aria-live="polite">
+        {{range .Thread}}{{if .NewLine}}<li class="new-line" aria-label="New messages"><span>New</span></li>{{end}}
+        <li class="msg{{if .Mine}} mine{{end}} role-{{.Role}}">
+          <div class="msg-head"><strong>{{.Author}}</strong>{{if eq .Role "referee"}} <span class="tag">referee</span>{{else if eq .Role "commander"}} <span class="tag">commander</span>{{end}}
+            <span class="muted small">turn {{.Turn}} · <time datetime="{{iso .At}}" title="{{stamp .At}}">{{ago .At}}</time></span></div>
+          <div class="msg-text">{{.Text}}</div>
+        </li>{{else}}<li class="muted small">No messages yet.</li>{{end}}
+      </ol>
+      {{if .Channel.CanPost}}<form method="post" action="{{.Base}}/messages" class="stack post-form" id="post-form" data-enhance data-reset>
+        <input type="hidden" name="channel" value="{{.Channel.ID}}">
+        <label class="sr-only" for="post-text">Message</label>
+        <textarea name="text" id="post-text" rows="3" maxlength="2000" required placeholder="Write a message… (Ctrl+Enter sends)"></textarea>
+        <div class="row"><button type="submit">Send</button></div>
+      </form>{{end}}
+    </section>
+{{end}}

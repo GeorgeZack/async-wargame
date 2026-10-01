@@ -962,7 +962,7 @@
     if (refreshing) { refreshing.again = true; return; }
     refreshing = { again: false };
     try {
-      const res = await fetch(location.pathname, { headers: { Accept: "text/html" }, cache: "no-store" });
+      const res = await fetch(location.pathname + location.search, { headers: { Accept: "text/html" }, cache: "no-store" });
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
       const next = doc.getElementById("main");
       const cur = main();
@@ -983,6 +983,7 @@
       localizeTimes();
       countdown();
       orders.afterRefresh();
+      threadToEnd();
       if (map.selected) inspect(map.selected);
     } catch {
       // Offline or server restarting; the event stream will retry.
@@ -1058,6 +1059,7 @@
         headers: { "X-Requested-With": "fetch" },
       });
       if (!res.ok) alert((await res.text()) || "That didn't work.");
+      if (res.ok && form.hasAttribute("data-reset")) form.reset();
       await refresh();
       if (res.ok && form.id === "order-form") {
         orders.load();
@@ -1291,7 +1293,20 @@
     replay.open(a.dataset.replay);
   });
 
+  // The open discussion thread scrolls to its latest message. Ctrl+Enter sends.
+  function threadToEnd() {
+    const t = document.getElementById("thread");
+    if (t) t.scrollTop = t.scrollHeight;
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.target.id === "post-text" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      e.target.form.requestSubmit();
+    }
+  });
+
   document.addEventListener("DOMContentLoaded", () => {
+    threadToEnd();
     map.init();
     editor.init();
     orders.init();

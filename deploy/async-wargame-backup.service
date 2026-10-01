@@ -1,0 +1,7 @@
+# Runs deploy/backup.sh (installed as /usr/local/bin/async-wargame-backup).
+[Unit]
+Description=Back up Async Wargame campaign state
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/async-wargame-backup

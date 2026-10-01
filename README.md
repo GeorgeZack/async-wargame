@@ -31,6 +31,9 @@ AW_HOST_PASSWORD='something long' ./async-wargame -addr 127.0.0.1:8080 -proxy -d
   anyone who can reach the server can create rooms.
 - Back up the `-data` file.
 
+[deploy/](deploy/README.md) has a systemd unit, a Caddyfile, nightly
+backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
+
 ## What works so far
 
 - **Rooms:** a referee hosts a campaign and gets a six-character room code

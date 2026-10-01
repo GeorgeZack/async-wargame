@@ -1,0 +1,38 @@
+# systemd unit for the campaign server.
+# Install: /etc/systemd/system/async-wargame.service, then
+#   systemctl daemon-reload && systemctl enable --now async-wargame
+[Unit]
+Description=Async Wargame campaign server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=async-wargame
+Group=async-wargame
+# AW_HOST_PASSWORD=... lives here, readable by root only.
+EnvironmentFile=/etc/async-wargame/env
+ExecStart=/usr/local/bin/async-wargame -addr 127.0.0.1:8080 -proxy -data /var/lib/async-wargame/campaigns.json
+Restart=on-failure
+RestartSec=5
+
+# State goes in /var/lib/async-wargame; everything else is read-only.
+StateDirectory=async-wargame
+StateDirectoryMode=0750
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

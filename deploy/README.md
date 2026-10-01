@@ -1,0 +1,112 @@
+# Deploying
+
+The server is one binary that keeps every campaign in one JSON file and
+runs a clock that locks turns on schedule. So it needs **one always-on
+machine**: no serverless or scale-to-zero hosting, and only one copy at a
+time.
+
+| File | What it is |
+|---|---|
+| `async-wargame.service` | systemd unit: runs the server as its own user, sandboxed, state in `/var/lib/async-wargame` |
+| `Caddyfile` | Caddy in front: HTTPS with automatic certificates, live updates passed straight through |
+| `backup.sh`, `async-wargame-backup.{service,timer}` | nightly compressed copy of the state, 30 days kept |
+| `deploy.sh` | from your machine: test, build for Linux, upload, restart |
+
+## Quick test without a server
+
+To try it with friends for an evening, run it on your own machine behind a
+tunnel. It only runs while your computer is on, so turns won't lock on
+schedule while it's off.
+
+```sh
+AW_HOST_PASSWORD='pick-one' go run . -proxy -data ./playtest.json
+cloudflared tunnel --url http://localhost:8080   # prints an https://….trycloudflare.com link
+```
+
+## A small VPS
+
+Any small Linux VPS works (1 CPU, 1 GB is plenty): Hetzner, DigitalOcean,
+Linode, Vultr. These steps are for Debian or Ubuntu; run them as root on the
+server.
+
+**1. A domain name.** Point an A record (and AAAA, if the server has IPv6)
+for, say, `game.yourdomain.com` at the server's address.
+
+**2. Firewall.** Allow SSH, HTTP, and HTTPS only:
+
+```sh
+apt install -y ufw
+ufw allow OpenSSH && ufw allow 80,443/tcp && ufw enable
+```
+
+**3. A user and the password file.**
+
+```sh
+useradd --system --home /var/lib/async-wargame --shell /usr/sbin/nologin async-wargame
+mkdir -p /etc/async-wargame
+printf 'AW_HOST_PASSWORD=%s\n' "$(openssl rand -base64 18)" > /etc/async-wargame/env
+chmod 600 /etc/async-wargame/env
+cat /etc/async-wargame/env    # note the password: you need it to create rooms
+```
+
+**4. The service.** From your machine, in the repository:
+
+```sh
+scp deploy/async-wargame.service root@SERVER:/etc/systemd/system/
+mise exec -- deploy/deploy.sh root@SERVER   # builds, uploads, starts
+```
+
+That starts the server. Make it start on boot too:
+
+```sh
+ssh root@SERVER systemctl enable async-wargame
+```
+
+**5. Caddy for HTTPS.**
+
+```sh
+apt install -y caddy     # Debian 12+/Ubuntu 22.04+; older: see caddyserver.com/docs/install
+```
+
+Copy `deploy/Caddyfile` to `/etc/caddy/Caddyfile`, replace
+`game.example.com` with your domain, and `systemctl reload caddy`. Caddy
+gets a certificate on the first request. Open `https://game.yourdomain.com`.
+
+**6. Backups.**
+
+```sh
+scp deploy/backup.sh root@SERVER:/usr/local/bin/async-wargame-backup
+scp deploy/async-wargame-backup.service deploy/async-wargame-backup.timer root@SERVER:/etc/systemd/system/
+ssh root@SERVER 'chmod 755 /usr/local/bin/async-wargame-backup && systemctl daemon-reload && systemctl enable --now async-wargame-backup.timer'
+```
+
+Backups land in `/var/backups/async-wargame` on the same server. Copy them
+off it from time to time (`scp`, or your provider's snapshot feature): a
+backup on the machine that died doesn't help.
+
+## Updating
+
+```sh
+mise exec -- deploy/deploy.sh root@SERVER
+```
+
+It runs the tests, builds, uploads, and restarts. Restarting is safe at any
+time: state is written atomically after every change, and browsers
+reconnect to live updates by themselves.
+
+## Restoring
+
+```sh
+systemctl stop async-wargame
+gunzip -c /var/backups/async-wargame/campaigns-YYYYMMDDTHHMMSSZ.json.gz > /var/lib/async-wargame/campaigns.json
+chown async-wargame: /var/lib/async-wargame/campaigns.json
+systemctl start async-wargame
+```
+
+## Notes
+
+- `-proxy` makes the server trust `X-Forwarded-Proto` and `X-Forwarded-For`
+  from Caddy. Keep the server listening on `127.0.0.1` so nothing else can
+  reach it and forge them.
+- Without `AW_HOST_PASSWORD`, anyone who finds the site can create rooms.
+- Logs: `journalctl -u async-wargame -f`.

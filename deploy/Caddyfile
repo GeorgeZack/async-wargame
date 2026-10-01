@@ -1,0 +1,11 @@
+# Caddy in front of the campaign server: HTTPS with automatic certificates.
+# Install: /etc/caddy/Caddyfile, replace the domain, then `systemctl reload caddy`.
+# Point the domain's DNS A/AAAA records at the server first, and open ports 80 and 443.
+game.example.com {
+	# Live updates are a long-lived event stream: pass bytes through at once.
+	# Don't add `encode` here: the server compresses pages itself and must
+	# not have its event stream buffered.
+	reverse_proxy 127.0.0.1:8080 {
+		flush_interval -1
+	}
+}

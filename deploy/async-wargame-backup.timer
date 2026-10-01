@@ -1,0 +1,11 @@
+# Nightly backup at 04:30 server time; catches up after downtime.
+#   systemctl enable --now async-wargame-backup.timer
+[Unit]
+Description=Nightly Async Wargame backup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

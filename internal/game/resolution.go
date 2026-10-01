@@ -135,7 +135,7 @@ func (r *Room) resolve(mod *Module, now time.Time, rng *rand.Rand, seed uint64) 
 	}
 
 	// Players' units, by committed order.
-	var missed []string
+	var missed, unconfirmed []string
 	for _, u := range r.Units {
 		if !mod.Side(u.Side).Playable {
 			continue
@@ -146,6 +146,9 @@ func (r *Room) resolve(mod *Module, now time.Time, rng *rand.Rand, seed uint64) 
 				missed = append(missed, u.Name)
 			}
 			continue
+		}
+		if o.Unconfirmed {
+			unconfirmed = append(unconfirmed, u.Name)
 		}
 		if !o.HasDest || u.Col != o.FromCol || u.Row != o.FromRow || len(o.Route) == 0 {
 			continue
@@ -174,6 +177,9 @@ func (r *Room) resolve(mod *Module, now time.Time, rng *rand.Rand, seed uint64) 
 	}
 	if len(missed) > 0 {
 		res.Notes = append(res.Notes, fmt.Sprintf("No orders: %s hold and take no offensive action.", joinList(missed)))
+	}
+	if len(unconfirmed) > 0 {
+		res.Notes = append(res.Notes, fmt.Sprintf("Unconfirmed standing orders: %s keep to them, but only to survive or maintain them.", joinList(unconfirmed)))
 	}
 	// The infected, by doctrine.
 	for _, pm := range r.EnemyMoves(mod, rng) {
@@ -400,7 +406,7 @@ func (r *Room) sideState(mod *Module, ids, foes []string, pos, start map[string]
 		if friendly && roleOf(mod, u) == "player" {
 			f.XPDice = ExperienceOf(mod, u).Dice
 			o := r.CurrentOrder(u.ID)
-			f.Missed = o == nil || o.Status != OrderLocked
+			f.Missed = o == nil || o.Status != OrderLocked || o.Unconfirmed
 			f.OutOfAmmo = outOfAmmo(cl, u)
 		}
 		s.Fighters = append(s.Fighters, f)

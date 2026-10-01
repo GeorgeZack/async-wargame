@@ -9,9 +9,11 @@ import (
 // take up on arrival ("move to the bridge, then dig in"). When a turn opens,
 // each such order from the last turn comes back as a draft for the new turn:
 // a move that hasn't arrived continues toward its destination from where the
-// unit now stands; one that has becomes its follow-on task. Drafts lapse at
-// lock, so a standing order still has to be confirmed every round, by the
-// player or, for units they hold, the referee.
+// unit now stands; one that has becomes its follow-on task. The player (or,
+// for units they hold, the referee) confirms it every round. One nobody
+// confirms still runs at lock, but defensively only: the unit acts only to
+// survive or maintain the order, as a unit without orders would fight. It
+// keeps carrying over until someone confirms, changes, or withdraws it.
 
 // carryOver brings last turn's standing orders forward as drafts.
 func (r *Room) carryOver(mod *Module, now time.Time) {
@@ -66,7 +68,7 @@ func (r *Room) carryOver(mod *Module, now time.Time) {
 		n++
 	}
 	if n > 0 {
-		r.logKind(VisPlayers, "", "%s carried over as drafts. Confirm them before the lock, or they lapse.", plural(n, "standing order", "standing orders"))
+		r.logKind(VisPlayers, "", "%s carried over as drafts. Confirm them before the lock; unconfirmed, they run defensively only.", plural(n, "standing order", "standing orders"))
 	}
 }
 

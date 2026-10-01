@@ -63,7 +63,7 @@
         <label id="of-then-row">Then, on arrival <span class="muted small">A second step once the move is done.</span>
           <select name="then" id="of-then"><option value="">Nothing more</option>{{range .OrderSpec.Tasks}}{{if not (or .Destination .Embark .Disembark)}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}</select></label>
         <label class="toggle"><input type="checkbox" name="standing" id="of-standing">
-          Standing order <span class="muted small">Comes back each turn as a draft. You confirm it every round, or it lapses at the lock.</span></label>
+          Standing order <span class="muted small">Comes back each turn as a draft to confirm. If you miss a turn, the unit keeps to it, but defensively only.</span></label>
         <label class="toggle" id="of-stack-row"><input type="checkbox" name="stack" id="of-stack">
           Give this order to my other units in the same hex too <span class="muted small" id="of-stack-names"></span></label>
         <p class="small" id="of-status" role="status"></p>
@@ -219,7 +219,7 @@
       {{if eq .Phase "planning"}}<p class="muted small">Orders lock {{.Clock.DeadlineText}}. Commit before then: a unit without a committed order holds where it is and won't attack.</p>
       {{else}}<p class="muted small">Orders are locked while the referee resolves the turn.</p>{{end}}
       {{if and (eq .Phase "planning") .StandingDrafts}}<form method="post" action="{{.Base}}/orders/confirm-standing" class="row standing-bar" data-enhance>
-        <span class="small">{{.StandingDrafts}} standing {{if eq .StandingDrafts 1}}order carried over{{else}}orders carried over{{end}} from last turn. Check them against the new situation.</span>
+        <span class="small">{{.StandingDrafts}} standing {{if eq .StandingDrafts 1}}order carried over{{else}}orders carried over{{end}} from last turn. Check them against the new situation: unconfirmed, they run defensively only.</span>
         <button type="submit" class="small-btn">Confirm all</button>
       </form>{{end}}
       <ul class="plain list">
@@ -230,7 +230,7 @@
             <span class="tag tag-order-{{if .Order}}{{.Order.Status}}{{else}}none{{end}}">{{if .Order}}{{.Order.Status}}{{else}}no order{{end}}</span></div>
           {{if .NoContact}}<div class="small no-contact">{{.Unit.RadioText}}. Its orders stay with {{if .Holder}}{{.Holder}}{{else}}the unit{{end}} until it's back on the net.</div>{{end}}
           {{with .Order}}<div class="small">{{.Summary}}{{with .Intent}} · “{{.}}”{{end}}{{if .Author}} <span class="muted">· {{.Author}}</span>{{end}}</div>
-          {{if and .Carried (eq .Status "draft") .Editable}}<div class="small standing-note">Carried over from last turn. Confirm it, edit it, or let it lapse.</div>{{end}}
+          {{if and .Carried (eq .Status "draft") .Editable}}<div class="small standing-note">Carried over from last turn. Confirm it or edit it. Unconfirmed, it still runs at the lock, but defensively only.</div>{{end}}
           {{if eq .Review "approved"}}<div class="small review ok">Approved by {{.ReviewedBy}}{{with .ReviewNote}}: “{{.}}”{{end}}</div>{{end}}
           {{if eq .Review "returned"}}<div class="small review back">Returned by {{.ReviewedBy}}: “{{.ReviewNote}}” Revise and commit again before the lock.</div>{{end}}
           {{if .CanReview}}<form method="post" action="{{$.Base}}/orders/{{.ID}}/review" class="review-form" data-enhance>

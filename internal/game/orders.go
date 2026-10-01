@@ -50,10 +50,11 @@ type Order struct {
 	Review      string          `json:"review,omitempty"`    // approved or returned, by the holder's commander
 	ReviewNote  string          `json:"reviewNote,omitempty"`
 	ReviewedBy  string          `json:"reviewedBy,omitempty"`
-	Standing    bool            `json:"standing,omitempty"` // carry over next turn as a draft to confirm
-	Then        string          `json:"then,omitempty"`     // task to take up on arrival
-	Carried     bool            `json:"carried,omitempty"`  // brought forward from a standing order
-	Goal        *[2]int         `json:"goal,omitempty"`     // where a carried-over move is ultimately headed
+	Standing    bool            `json:"standing,omitempty"`    // carry over next turn as a draft to confirm
+	Then        string          `json:"then,omitempty"`        // task to take up on arrival
+	Carried     bool            `json:"carried,omitempty"`     // brought forward from a standing order
+	Goal        *[2]int         `json:"goal,omitempty"`        // where a carried-over move is ultimately headed
+	Unconfirmed bool            `json:"unconfirmed,omitempty"` // a standing order nobody confirmed: runs, but defensively only
 	Cost        int             `json:"cost,omitempty"`
 	Intent      string          `json:"intent,omitempty"`
 	Risk        string          `json:"risk"`
@@ -375,7 +376,10 @@ func (r *Room) orderSummary(mod *Module, o *Order) string {
 	if t := mod.Orders.Task(o.Then); t != nil {
 		s += ", then " + strings.ToLower(t.Name)
 	}
-	if o.Standing {
+	switch {
+	case o.Unconfirmed:
+		s += " (standing, unconfirmed: defensively only)"
+	case o.Standing:
 		s += " (standing)"
 	}
 	return s
@@ -391,6 +395,12 @@ func (r *Room) lockOrders(mod *Module, now time.Time) {
 		case OrderCommitted:
 			o.Status = OrderLocked
 		case OrderDraft:
+			if o.Carried {
+				// Missed the deadline: the unit keeps to its standing order,
+				// but only to survive or maintain it.
+				o.Status, o.Unconfirmed = OrderLocked, true
+				continue
+			}
 			o.Status = OrderLapsed
 		}
 	}

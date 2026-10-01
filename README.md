@@ -203,8 +203,10 @@ backups, a one-command `deploy.sh`, and step-by-step setup for a small VPS.
   arrival ("move to the bridge, then dig in") and can be marked standing.
   Each new turn brings these back as drafts: an unfinished move continues
   from where the unit stands, an arrived one becomes its follow-on task.
-  Drafts lapse at the lock, so the player (or the referee, for units they
-  hold) confirms them every round, one at a time or with "Confirm all".
+  The player (or the referee, for units they hold) confirms them every
+  round, one at a time or with "Confirm all". One nobody confirms still runs
+  at the lock, but defensively only: the unit fights as a unit without
+  orders would, and the order keeps coming back until someone deals with it.
 - **Screens:** the room is an application with screens, each with its own
   URL. Referee: Map, Turn (a plan → lock → settle → publish procedure with the
   next action, the clock, and the resolution desk), Random events

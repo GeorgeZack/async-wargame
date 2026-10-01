@@ -1,6 +1,7 @@
 package game
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -59,13 +60,23 @@ func TestStandingOrdersCarryOverAsDrafts(t *testing.T) {
 	if next.Status != OrderCommitted || hold.Status != OrderDraft {
 		t.Fatalf("after confirm-all: m1 %s, m2 %s", next.Status, hold.Status)
 	}
-	// Unconfirmed, the hold lapses at the lock and nothing comes back.
+	// Unconfirmed, the hold still runs at the lock, defensively only.
 	r.Tick(mod, r.Deadline)
-	if hold.Status != OrderLapsed {
-		t.Fatalf("unconfirmed standing order %s", hold.Status)
+	if hold.Status != OrderLocked || !hold.Unconfirmed {
+		t.Fatalf("unconfirmed standing order: %s, unconfirmed %v", hold.Status, hold.Unconfirmed)
 	}
+	if !strings.Contains(r.orderSummary(mod, hold), "defensively") {
+		t.Errorf("summary %q", r.orderSummary(mod, hold))
+	}
+	if !slices.ContainsFunc(r.Resolution.Notes, func(n string) bool { return strings.Contains(n, "Unconfirmed standing orders") }) {
+		t.Errorf("notes %v", r.Resolution.Notes)
+	}
+	if f := r.sideState(mod, []string{"m2"}, nil, map[string][2]int{"m2": {r.Unit("m2").Col, r.Unit("m2").Row}}, map[string][2]int{"m2": {r.Unit("m2").Col, r.Unit("m2").Row}}, true); !f.Fighters[0].Missed {
+		t.Error("an unconfirmed standing order fights at full strength")
+	}
+	// It keeps coming back until someone deals with it.
 	publishTurn(t, r, mod, ref, now)
-	if o := r.CurrentOrder("m2"); o != nil {
-		t.Errorf("a lapsed standing order came back: %+v", o)
+	if o := r.CurrentOrder("m2"); o == nil || o.Task != "hold" || !o.Carried {
+		t.Errorf("the standing hold didn't carry over again: %+v", o)
 	}
 }

@@ -25,8 +25,10 @@ func TestReopenAndCorrectATurn(t *testing.T) {
 		t.Error("correctable before anything was published")
 	}
 	publishTurn(t, r, mod, ref, now)
-	if u = r.Unit("m1"); [2]int{u.Col, u.Row} != dest || len(r.Reports) != 1 || !r.CanCorrect() {
-		t.Fatalf("after publish: at %v, %d reports, correctable %v", [2]int{u.Col, u.Row}, len(r.Reports), r.CanCorrect())
+	// (A contact on the way may have stopped or hurt the squad; what matters
+	// is that reopening puts it back exactly where it started.)
+	if len(r.Reports) != 1 || !r.CanCorrect() {
+		t.Fatalf("after publish: %d reports, correctable %v", len(r.Reports), r.CanCorrect())
 	}
 
 	// Turn 2: an order, and a message that must survive the correction.

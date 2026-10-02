@@ -967,12 +967,15 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
   stroke-width: 1.4px; paint-order: stroke; pointer-events: none; }
 #map.no-labels .ctr-name { display: none; }
 #map.picking { cursor: crosshair; }
-.ruler { stroke: #1d4f91; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
-.ruler-text { font-family: var(--counter-font); font-weight: 800; text-anchor: middle; fill: #1d4f91;
-  stroke: #fff; stroke-width: 2.5px; paint-order: stroke; pointer-events: none; }
+.ruler { stroke: #0b3d91; stroke-width: 2.5; stroke-dasharray: 7 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.ruler-end { fill: #fff; stroke: #0b3d91; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.ruler-label { fill: #0b3d91; pointer-events: none; }
+.ruler-text { font-family: var(--counter-font); font-weight: 800; text-anchor: middle; fill: #fff; pointer-events: none; }
+#map.measuring, #map.measuring .marker, #map.measuring .feature { cursor: crosshair; }
+.ruler-btn[aria-pressed="true"] { background: #0b3d91; border-color: #0b3d91; color: #fff !important; }
 .proposed { vector-effect: non-scaling-stroke; }
 .map-wrap { position: relative; }
-.map-hint { position: absolute; left: .5rem; bottom: .5rem; margin: 0; padding: .2rem .5rem; border-radius: 4px;
+.map-hint { position: absolute; left: .5rem; top: .5rem; margin: 0; padding: .2rem .5rem; border-radius: 4px;
   background: rgb(0 0 0 / .7); color: #fff; font-size: .85rem; pointer-events: none; }
 .map-hint[hidden] { display: none; }
 .scale-line { margin: 0; font-weight: 700; font-size: .9rem; }

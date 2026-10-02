@@ -133,7 +133,16 @@
   function distance(a, b, d) {
     const cells = Math.hypot(a.x - b.x, a.y - b.y) / d.cell;
     if (d.distance && d.distance.amount) return `about ${fmtNum(cells * d.distance.amount)} ${d.distance.unit}`;
-    return `about ${fmtNum(cells)} ${d.cellName}${cells >= 1.05 || cells < 0.95 ? "s" : ""}`;
+    const n = fmtNum(cells);
+    return `about ${n} ${n === "1" ? d.cellName : d.cellName === "hex" ? "hexes" : d.cellName + "s"}`;
+  }
+
+  // measureText is a distance in the world and in grid cells: "about 105 m · 7 hexes".
+  function measureText(a, b, d) {
+    const cells = Math.hypot(a.x - b.x, a.y - b.y) / d.cell;
+    const n = fmtNum(cells), unit = n === "1" ? d.cellName : d.cellName === "hex" ? "hexes" : d.cellName + "s";
+    if (!d.distance || !d.distance.amount) return `about ${n} ${unit}`;
+    return `${distance(a, b, d)} · ${n} ${unit}`;
   }
 
   function whereText(p, d) {
@@ -261,6 +270,7 @@
 
     // The referee can drag counters (and, in the editor, places).
     draggable(target) {
+      if (ruler.on) return null;
       if (main()?.dataset.referee !== "1" && !editor.active) return null;
       if (editor.active && editor.tool !== "inspect") return null;
       const m = target.closest?.("[data-unit], [data-place]");
@@ -291,7 +301,7 @@
       if (this.pointers.size === 0) {
         const p = this.toSvg(e.clientX, e.clientY);
         editor.hover(p);
-        ruler.hover(p);
+        ruler.move(p);
         return;
       }
       if (!this.pointers.has(e.pointerId)) return;
@@ -336,6 +346,7 @@
 
     cancelDrag() {
       if (!this.dragging) return;
+      ruler.hint("");
       this.dragging.piece.setAttribute("transform", this.dragging.from);
       this.dragging.piece.classList.remove("lifted");
       this.dragging = null;
@@ -344,6 +355,7 @@
     async dropPiece() {
       const g = this.dragging;
       this.dragging = null;
+      ruler.hint("");
       g.piece.classList.remove("lifted");
       if (!g.to) return;
       const x = g.to.x.toFixed(1), y = g.to.y.toFixed(1);
@@ -369,6 +381,7 @@
       if (this.dragging) { this.dropPiece(); return; }
       if (s && !this.moved) {
         const p = this.toSvg(e.clientX, e.clientY);
+        if (ruler.click(p, s.target)) return;
         if (editor.click(p)) return;
         if (orders.click(p)) return;
         const hit = s.target.closest && s.target.closest("[data-unit], [data-place]");
@@ -388,7 +401,8 @@
       } else if (e.key === "+" || e.key === "=") { this.zoom("in"); }
       else if (e.key === "-") { this.zoom("out"); }
       else if (e.key === "0") { this.zoom("reset"); }
-      else if (e.key === "Escape") { this.cancelDrag(); this.clear(); }
+      else if (e.key === "m" || e.key === "M") { ruler.toggle(); }
+      else if (e.key === "Escape") { this.cancelDrag(); ruler.stop(); this.clear(); }
     },
 
     cursorAt(p) {
@@ -403,7 +417,6 @@
     clear() {
       this.selected = null;
       this.cursorAt(null);
-      ruler.clear();
       this.save();
     },
 
@@ -423,48 +436,119 @@
       const d = mapData(), f = d?.places?.[i];
       const box = document.getElementById("inspector");
       if (!f || !box) return;
-      const from = this.selectedUnit(d);
       box.replaceChildren(...[el("h3", {}, f.name), el("p", { class: "muted small" }, [f.where, f.kind].filter(Boolean).join(" · ")),
         f.note ? el("p", { class: "small" }, f.note) : null, f.hidden ? el("p", { class: "small" }, "Hidden from players.") : null,
-        from ? el("p", { class: "small" }, `${distance(from, f, d)} from ${from.name}.`) : null].filter(Boolean));
+        el("div", { class: "row tight" }, el("button", { type: "button", class: "link small", "data-measure-place": String(i) }, "Measure from here"))].filter(Boolean));
     },
 
-    selectedUnit(d) {
-      const u = d?.units?.find((x) => x.id === this.selected);
-      const m = this.marker(this.selected);
-      return u && m ? { ...u, ...this.markerPos(m) } : null;
-    },
 
-    // A click on open ground: where it is, and how far from the selected counter.
+    // A click on open ground: where it is.
     point(p) {
       const d = mapData();
       const box = document.getElementById("inspector");
       if (!d || !box) return;
       const t = terrainAt(p, d);
-      const from = this.selectedUnit(d);
+      this.clear();
       box.replaceChildren(...[el("h3", {}, whereText(p, d) || "This spot", t ? ` · ${t.name}` : ""),
         t && t.note ? el("p", { class: "muted small" }, t.note) : null,
-        from ? el("p", {}, el("strong", {}, distance(from, p, d)), ` from ${from.name}.`) : el("p", { class: "muted small" }, "Select a counter first to measure from it.")].filter(Boolean));
-      if (from) ruler.draw(from, p, d); else ruler.clear();
+        el("p", { class: "muted small" }, "To find a distance, use Measure (or press M): click where to measure from, then where to.")].filter(Boolean));
     },
   };
 
-  // The ruler: a line from the selected counter to the pointer, with the distance.
+  // The ruler. Measure (or M) turns it on: click where to measure from,
+  // then where to. Clicking a counter or a place snaps to it. The line
+  // follows the pointer only between the two clicks; a third click starts
+  // over. Escape, or Measure again, puts it away.
   const ruler = {
+    on: false, a: null, b: null,
     layer() { return document.getElementById("ruler-layer"); },
-    clear() { this.layer()?.replaceChildren(); this.hint(""); },
-    draw(a, b, d) {
+    buttons() { return document.querySelectorAll("[data-ruler]"); },
+
+    toggle() { this.on ? this.stop() : this.start(); },
+
+    start(from) {
+      if (!map.svg) return;
+      if (orders.mode === "picking") orders.stopPicking();
+      this.on = true;
+      this.a = from || null;
+      this.b = null;
+      map.svg.classList.add("measuring");
+      this.buttons().forEach((b) => b.setAttribute("aria-pressed", "true"));
+      this.layer()?.replaceChildren();
+      if (from) this.mark(from);
+      this.hint(from ? `Measuring from ${from.name}: click where to.` : "Click where to measure from: a counter, a place, or anywhere.");
+    },
+
+    stop() {
+      if (!this.on) return;
+      this.on = false;
+      this.a = this.b = null;
+      map.svg?.classList.remove("measuring");
+      this.buttons().forEach((b) => b.setAttribute("aria-pressed", "false"));
+      this.layer()?.replaceChildren();
+      this.hint("");
+    },
+
+    // snap turns a click into a named point: a counter, a place, or the spot.
+    snap(p, target) {
+      const d = mapData();
+      const m = target?.closest?.("[data-unit]");
+      if (m) {
+        const u = d?.units?.find((x) => x.id === m.dataset.unit);
+        return { ...map.markerPos(m), name: u?.name || "the counter" };
+      }
+      const f = target?.closest?.("[data-place]");
+      const place = f && d?.places?.[+f.dataset.place];
+      if (place) return { x: place.x, y: place.y, name: place.name };
+      return { x: p.x, y: p.y, name: (d && whereText(p, d)) || "there" };
+    },
+
+    click(p, target) {
+      if (!this.on) return false;
+      const pt = this.snap(p, target);
+      if (!this.a || this.b) {
+        this.a = pt;
+        this.b = null;
+        this.layer()?.replaceChildren();
+        this.mark(pt);
+        this.hint(`Measuring from ${pt.name}: click where to.`);
+        return true;
+      }
+      this.b = pt;
+      const d = mapData();
+      this.draw(this.a, this.b);
+      const text = `${this.a.name} to ${this.b.name}: ${measureText(this.a, this.b, d)}.`;
+      this.hint(`${text} Click to measure again; Esc to stop.`);
+      const box = document.getElementById("inspector");
+      if (box) box.replaceChildren(el("h3", {}, "Measured"), el("p", {}, text));
+      return true;
+    },
+
+    move(p) {
+      if (this.on && this.a && !this.b) this.draw(this.a, p);
+    },
+
+    mark(p) {
+      const k = mapData()?.k || 1;
+      this.layer()?.append(svgEl("circle", { class: "ruler-end", cx: p.x, cy: p.y, r: 3.2 * k }));
+    },
+
+    draw(a, b) {
+      const d = mapData(), layer = this.layer();
+      if (!d || !layer) return;
       const k = d.k || 1;
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      const text = svgEl("text", { class: "ruler-text", x: mid.x, y: mid.y - 3 * k, "font-size": 7 * k });
-      text.textContent = distance(a, b, d);
-      this.layer()?.replaceChildren(svgEl("line", { class: "ruler", x1: a.x, y1: a.y, x2: b.x, y2: b.y }), text);
+      const text = svgEl("text", { class: "ruler-text", x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 6 * k, "font-size": 7.5 * k });
+      text.textContent = measureText(a, b, d);
+      const back = svgEl("rect", { class: "ruler-label", rx: 2 * k });
+      layer.replaceChildren(svgEl("line", { class: "ruler", x1: a.x, y1: a.y, x2: b.x, y2: b.y }), back, text);
+      this.mark(a);
+      this.mark(b);
+      const box = text.getBBox();
+      const pad = 2 * k;
+      [["x", box.x - pad], ["y", box.y - pad], ["width", box.width + 2 * pad], ["height", box.height + 2 * pad]]
+        .forEach(([n, v]) => back.setAttribute(n, v.toFixed(1)));
     },
-    hover(p) {
-      if (!map.selected || orders.mode === "picking" || editor.active) return;
-      const d = mapData(), from = d && map.selectedUnit(d);
-      if (from && window.matchMedia("(hover: hover)").matches) this.draw(from, p, d);
-    },
+
     hint(text) {
       let h = document.getElementById("map-hint");
       if (!h) {
@@ -477,6 +561,19 @@
       h.hidden = !text;
     },
   };
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-ruler]")) { ruler.toggle(); return; }
+    const u = e.target.closest("[data-measure-unit]");
+    if (u) {
+      const m = map.marker(u.dataset.measureUnit);
+      if (m) ruler.start({ ...map.markerPos(m), name: u.dataset.name });
+      return;
+    }
+    const pl = e.target.closest("[data-measure-place]");
+    const place = pl && mapData()?.places?.[+pl.dataset.measurePlace];
+    if (place) ruler.start({ x: place.x, y: place.y, name: place.name });
+  });
 
   function inspect(id) {
     const box = document.getElementById("inspector");
@@ -492,8 +589,9 @@
         u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.stale ? " (where they last called in)" : ""),
       el("div", { class: "muted small" }, [u.class, u.strength, u.where, u.commander].filter(Boolean).join(" · ")),
       u.status ? el("div", { class: "small unit-status" }, u.status) : null,
-      el("p", { class: "muted small" }, ref ? "Drag it to move it. Click anywhere to measure from it." : "Click anywhere on the map to measure from here."),
+      ref ? el("p", { class: "muted small" }, "Drag it to move it.") : null,
       el("div", { class: "row tight" },
+        el("button", { type: "button", class: "link small", "data-measure-unit": u.id, "data-name": u.name }, "Measure from here"),
         canOrder ? el("button", { type: "button", class: "link small", "data-order-unit": u.id }, data.orders.orders?.[u.id] ? "Edit order" : "Write order") : null,
         el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "small", "data-card": "" }, "Open card"))].filter(Boolean));
   }
@@ -778,6 +876,7 @@
     },
 
     pick() {
+      ruler.stop();
       this.mode = "picking";
       this.pickbar.hidden = false;
       map.svg?.classList.add("picking");

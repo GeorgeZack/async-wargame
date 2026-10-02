@@ -1,25 +1,27 @@
 package game
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+)
 
 // DeskView is the referee's adjudication desk.
 type DeskView struct {
-	Items      []DeskItem    // one per locked order
-	Loose      []ContestView // rolls not tied to an order
-	Extra      []*Outcome    // outcomes not tied to an order
-	Unwritten  int
-	Rolled     int
-	Unrolled   int
-	Units      []UnitOption // who can roll
-	Skills     []Skill
-	Advantages []Advantage
-	Missing    []string // player units with no order this turn
+	Items     []DeskItem    // one per locked order
+	Loose     []ContestView // rolls not tied to an order
+	Extra     []*Outcome    // outcomes not tied to an order
+	Unwritten int
+	Rolled    int
+	Unrolled  int
+	Units     []UnitOption // who can roll
+	Factors   []Factor
+	Missing   []string // player units with no order this turn
 }
 
 type DeskItem struct {
 	Order    OrderView
 	Unit     UnitView
-	Skills   []SkillLine
+	Bonus    string // what this unit's rolls start from
 	Kit      string
 	Contests []ContestView
 	Outcome  *Outcome
@@ -50,7 +52,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 		return nil
 	}
 	d := r.Desk
-	dv := &DeskView{Skills: mod.Skills, Advantages: mod.Advantages}
+	dv := &DeskView{Factors: mod.Factors}
 	for _, s := range mod.Sides {
 		for _, u := range r.Units {
 			if u.Side == s.ID {
@@ -65,7 +67,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 			continue
 		}
 		ordered[u.ID] = true
-		it := DeskItem{Order: r.orderView(o, false), Unit: unitView(r, u, mod, me), Skills: SkillLines(mod, u), Kit: KitOf(mod, u),
+		it := DeskItem{Order: r.orderView(o, false), Unit: unitView(r, u, mod, me), Bonus: bonusText(mod, u), Kit: KitOf(mod, u),
 			Outcome: d.outcomeFor(o.ID), Busy: ai.Busy[RunOutcome+"/"+o.ID]}
 		for _, c := range d.Contests {
 			if c.Order == o.ID {
@@ -141,4 +143,13 @@ func addReports(v *View, r *Room, me *Member) {
 	}
 	v.AARs = slices.Clone(r.Operations)
 	slices.Reverse(v.AARs)
+}
+
+// bonusText is a unit's usual bonus, with what it's made of.
+func bonusText(mod *Module, u *Unit) string {
+	b, why := baseBonus(mod, u)
+	if why == "" {
+		return fmt.Sprintf("%+d", b)
+	}
+	return fmt.Sprintf("%+d (%s)", b, why)
 }

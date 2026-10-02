@@ -14,9 +14,17 @@ func formInt(r *http.Request, name string) int {
 	return n
 }
 
+// formParty reads one side of a roll. For a unit, the number is the
+// situation, added to its usual bonus; for anyone else, it's the whole bonus.
 func formParty(r *http.Request, p string) game.PartyInput {
-	return game.PartyInput{Unit: r.FormValue(p + "unit"), Name: r.FormValue(p + "name"), Skill: r.FormValue(p + "skill"),
-		Value: formInt(r, p+"value"), Advantage: formInt(r, p+"adv"), Why: r.FormValue(p + "why")}
+	in := game.PartyInput{Unit: r.FormValue(p + "unit"), Name: r.FormValue(p + "name"), Why: r.FormValue(p + "why")}
+	n := formInt(r, p+"mod")
+	if in.Unit != "" {
+		in.Situation = n
+	} else {
+		in.Bonus = &n
+	}
+	return in
 }
 
 // addContest sets up a roll from the desk form: side A, and side B unless
@@ -82,13 +90,9 @@ func (s *Server) editUnit(w http.ResponseWriter, r *http.Request) {
 		n := formInt(r, "strength")
 		e.Strength = &n
 	}
-	for k := range r.Form {
-		if id, ok := strings.CutPrefix(k, "skill_"); ok && r.FormValue(k) != "" {
-			if e.Skills == nil {
-				e.Skills = map[string]int{}
-			}
-			e.Skills[id] = formInt(r, k)
-		}
+	if v := r.FormValue("quality"); v != "" {
+		n := formInt(r, "quality")
+		e.Quality = &n
 	}
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
 		return room.EditUnit(me, s.store.Cat.Modules[room.ModuleID], r.PathValue("id"), e)

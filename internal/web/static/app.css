@@ -938,11 +938,6 @@ html.js #order-box > summary { list-style: none; }
 .tag-fact-accepted { background: var(--ok); color: #fff; }
 .tag-fact-proposed { background: var(--civilians); color: #fff; }
 
-.skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: .3rem; margin: .3rem 0; }
-.skill-grid div { display: flex; justify-content: space-between; border: 1px solid var(--border); padding: .2rem .45rem; background: var(--surface-2); }
-.skill-grid dt { font-weight: 600; }
-.skill-grid dd { margin: 0; font-family: ui-monospace, monospace; }
-.skill-grid .changed { border-color: var(--accent); }
 .pre { white-space: pre-wrap; }
 .card-edit { border-top: 2px solid var(--border); margin-top: 1rem; padding-top: .5rem; }
 .template-card { border: 1px solid var(--border); padding: .4rem .7rem; margin: .5rem 0; }
@@ -952,3 +947,9 @@ html.js #order-box > summary { list-style: none; }
 .rules-list dd { margin: 0 0 0 1rem; }
 .fact-list, .fact { min-width: 0; }
 .fact div { white-space: normal; overflow-wrap: anywhere; }
+.roll-totals { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .8rem; margin: .3rem 0; }
+.roll-side { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .35rem; }
+.roll-name { font-weight: 600; }
+.roll-total { font: 800 1.5rem/1 ui-monospace, monospace; padding: .1rem .45rem; border: 2px solid var(--text); border-radius: .3rem; background: var(--surface); }
+.roll-vs { color: var(--muted); font-style: italic; }
+.bonus-line { margin: .4rem 0; }

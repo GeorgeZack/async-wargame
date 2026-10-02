@@ -76,12 +76,11 @@ type View struct {
 	AdminMode bool // referee sees everything
 	Blind     bool // referee can't see player orders right now
 	Frozen    bool // players: the board as it stood at the lock
+	Watched   bool // players: the referee can see this turn's orders (admin view)
 
-	Facts       []FactView // the viewer can read, newest first
-	OpenFacts   int        // referee: proposals waiting
-	FactUnits   []UnitView // units the viewer may propose facts about
-	Skills      []Skill
-	Advantages  []Advantage
+	Facts       []FactView  // the viewer can read, newest first
+	OpenFacts   int         // referee: proposals waiting
+	FactUnits   []UnitView  // units the viewer may propose facts about
 	MyOrders    []OrderSlot // units the viewer can give orders to
 	OtherOrders []OrderView // other friendly orders the viewer may see
 
@@ -174,7 +173,7 @@ type UnitView struct {
 	Hex          string `json:"hex"`
 	Strength     string `json:"strength"`
 	Status       string `json:"status,omitempty"`
-	Skills       string `json:"skills,omitempty"`
+	Bonus        string `json:"bonus,omitempty"` // what its rolls start from
 	Kit          string `json:"kit,omitempty"`
 	Description  string `json:"description,omitempty"`
 	Hidden       bool   `json:"hidden,omitempty"`  // referee view: players don't know about it
@@ -323,7 +322,6 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	addReports(v, r, me)
 	v.Channels = r.Channels(me)
 	v.Facts = r.FactsFor(me, "")
-	v.Skills, v.Advantages = mod.Skills, mod.Advantages
 	if ref {
 		addRefereeEvents(v, r, mod)
 		v.AI = assistantView(r)
@@ -338,6 +336,9 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 		}
 	}
 	v.AdminMode, v.Blind = me.AdminMode, r.Blind(me)
+	if ref := r.Referee(); !v.IsReferee && ref != nil && ref.AdminMode && r.Phase == PhasePlanning {
+		v.Watched = true
+	}
 	v.NextAction = nextAction(v)
 	if ref {
 		v.EventTable = eventTable(r, mod)
@@ -396,7 +397,7 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 	}
 	switch {
 	case side.Playable || ref || u.Identified:
-		uv.Skills, uv.Kit = skillsText(mod, u), KitOf(mod, u)
+		uv.Bonus, uv.Kit = bonusText(mod, u), KitOf(mod, u)
 		switch {
 		case side.Playable && kind == "soldier":
 			uv.Strength = headcount("marine")
@@ -485,7 +486,7 @@ func nextAction(v *View) string {
 		case len(v.Pending) > 0:
 			return fmt.Sprintf("%s waiting for your decision.", plural(len(v.Pending), "access request", "access requests"))
 		case v.OpenFacts > 0:
-			return fmt.Sprintf("%s on the Facts screen.", capitalize(plural(v.OpenFacts, "fact is waiting", "facts are waiting")))
+			return fmt.Sprintf("%s on the Notes screen.", capitalize(plural(v.OpenFacts, "proposed fact is waiting", "proposed facts are waiting")))
 		case v.Phase == PhasePlanning && v.Clock.AllIn:
 			return fmt.Sprintf("Every order is in (%d of %d). Lock turn %d now, or wait for %s.",
 				v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Turn, v.Clock.DeadlineText)
@@ -506,7 +507,7 @@ func nextAction(v *View) string {
 		return "Waiting for the referee to give you a marine. Read the briefing and the map while you wait."
 	}
 	if v.Phase == PhaseSetup {
-		return "Orders open when the operation starts. Read your unit card, and propose any facts you'd like to be true."
+		return "Orders open when the operation starts. Read your marine's card, and propose anything you'd like to be true."
 	}
 	return fmt.Sprintf("Orders lock %s.", v.Clock.DeadlineText)
 }
@@ -610,12 +611,12 @@ type Tab struct {
 
 // screenOrder lists the screens each kind of member gets, in tab order.
 var screenOrder = map[bool][]string{
-	true:  {"map", "turn", "facts", "events", "forces", "people", "messages", "reports", "activity", "room"},
-	false: {"map", "orders", "forces", "facts", "messages", "reports", "activity", "people"},
+	true:  {"map", "turn", "notes", "events", "forces", "people", "messages", "reports", "activity", "room"},
+	false: {"map", "orders", "forces", "messages", "reports", "people"},
 }
 
 var screenLabels = map[string]string{"map": "Map", "turn": "Turn", "events": "Random events", "forces": "Forces",
-	"people": "People", "reports": "Reports", "activity": "Activity", "messages": "Messages", "facts": "Facts", "room": "Room", "orders": "Orders"}
+	"people": "People", "reports": "Reports", "activity": "Activity", "messages": "Messages", "notes": "Notes", "room": "Room", "orders": "Orders"}
 
 // HasScreen reports whether the viewer has a screen by this name.
 func (v *View) HasScreen(screen string) bool {
@@ -650,7 +651,7 @@ func (v *View) SetScreen(screen string) {
 			t.Badge = n(len(v.Proposals))
 		case "people":
 			t.Badge = n(len(v.Pending))
-		case "facts":
+		case "notes":
 			t.Badge = n(v.OpenFacts)
 		case "messages":
 			unread := 0

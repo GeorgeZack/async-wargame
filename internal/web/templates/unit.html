@@ -19,9 +19,7 @@
     {{else}}
     {{with .Unit.Description}}<p>{{.}}</p>{{end}}
     {{if or .Unit.Strength .Unit.Status}}<p>{{with .Unit.Strength}}<strong>{{.}}</strong>{{end}}{{if and .Unit.Strength .Unit.Status}} · {{end}}{{with .Unit.Status}}<span class="unit-status">{{.}}</span>{{end}}</p>{{end}}
-    <section><h2>Skills</h2>
-      <dl class="skill-grid">{{range .Skills}}<div{{if .Changed}} class="changed"{{end}}><dt title="{{.Note}}">{{.Name}}</dt><dd>{{.Value}}%</dd></div>{{end}}</dl>
-      <p class="muted small">Roll at or under your skill, plus or minus any advantage, on d100. See the <a href="{{$.Base}}/rules">rules</a>.</p></section>
+    <p class="bonus-line"><strong>Usual bonus {{.Bonus}}</strong> <span class="muted small">When it's in doubt, each side rolls a d10 and adds what counts: this, plus the situation. The referee reads the totals.</span></p>
     {{with .Kit}}<section><h2>Kit</h2><p>{{.}}</p>
       <p class="muted small">Not everything is listed. Need something that isn't here? Propose it as a fact below.</p></section>{{end}}
     {{with .Notes}}<section><h2>Notes</h2><p class="pre">{{.}}</p></section>{{end}}
@@ -30,10 +28,11 @@
       {{if .Facts}}<ul class="plain list small">{{range .Facts}}<li><span class="tag tag-fact-{{.Status}}">{{.Status}}</span> {{.Text}}{{with .Reply}} <span class="muted">— {{.}}</span>{{end}}</li>{{end}}</ul>
       {{else}}<p class="muted small">Nothing established yet.</p>{{end}}
       {{if .CanPropose}}<form method="post" action="{{$.Base}}/facts" class="stack" data-enhance data-reset>
-        <input type="hidden" name="unit" value="{{.Unit.ID}}">
-        <label class="small">Propose a fact about {{.Unit.Name}}
+        <label class="small">{{if $.IsReferee}}Add a fact{{else}}Propose a fact{{end}} <span class="muted">{{if not $.IsReferee}}The referee accepts it, changes it, or turns it down. A fact with a cost attached is more likely to stick.{{end}}</span>
           <input name="text" maxlength="400" required class="compact-input" placeholder="Carries a flare gun with two flares"></label>
-        <div class="row"><button type="submit" class="secondary small-btn">{{if $.IsReferee}}Add fact{{else}}Propose{{end}}</button></div>
+        <div class="row tight">
+          <label class="inline small">About <select name="unit" class="compact"><option value="{{.Unit.ID}}">{{.Unit.Name}}</option><option value="">the world</option></select></label>
+          <button type="submit" class="secondary small-btn">{{if $.IsReferee}}Add{{else}}Propose{{end}}</button></div>
       </form>{{end}}
     </section>
 
@@ -54,9 +53,7 @@
           <label class="inline">Strength <input type="number" name="strength" value="{{.Strength}}" min="0" max="100000" class="num-s"></label>
         </div>
         <label>Status <input name="status" value="{{.Status}}" maxlength="200" placeholder="pinned, wounded: left arm, carrying a child"></label>
-        <fieldset class="plain-fieldset"><legend>Skills</legend>
-          <div class="row tight">{{range .Skills}}<label class="inline small">{{.Name}} <input type="number" name="skill_{{.ID}}" value="{{.Value}}" min="0" max="100" class="num-s"></label>{{end}}</div>
-        </fieldset>
+        <label class="inline">Quality <input type="number" name="quality" value="{{.Quality}}" min="-5" max="10" class="num-s"> <span class="muted small">0 ordinary, +2 trained; veterancy ({{signed .Veteran}}) is added on top</span></label>
         <label>Kit <textarea name="kit" rows="2" maxlength="500">{{.Kit}}</textarea></label>
         <label>Notes <span class="muted small">everyone who can see this card reads them</span><textarea name="notes" rows="3" maxlength="2000">{{.Notes}}</textarea></label>
         {{if not .Playable}}<div class="row tight">

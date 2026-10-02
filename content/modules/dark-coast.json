@@ -1,157 +1,68 @@
 {
   "id": "dark-coast",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "name": "Dark Coast",
   "intro": "Colonial marines in a dead city. Say what your marines do; the referee says what happens.",
   "scale": {
     "hex": "about 50 metres: a city block",
     "turn": "about ten minutes"
   },
-  "rules": [
+  "factors": [
     {
-      "title": "How a turn works",
-      "text": [
-        "Each turn, every player writes an order for their marine: what they do, how, and why. Write it the way you'd say it over the radio: \"I go up the stairwell slow, check the landing, then cover the corridor while Doyle comes up.\" You can mark a spot on the map, but you don't have to.",
-        "The squad leader can read the squad's orders while they're being written, and can send one back with a note before the lock. A marine whose radio is out keeps their orders to themselves.",
-        "At the lock, the referee reads every order and decides what happens. Where the outcome is in doubt, the dice decide how well it went; the referee decides what that means. Then the turn is published: everyone gets a report of what their marine saw and did."
-      ]
+      "name": "Veteran",
+      "value": 1
     },
     {
-      "title": "Say what you do, not which rule you use",
-      "text": [
-        "There's no list of actions. If your marine could plausibly do it, write it. Throw a grenade, kick a door, carry a kid, lie to a frightened man, hot-wire the ambulance. The referee rules on whether it's possible and what it takes.",
-        "Your unit card lists your marine's skills and kit, but it doesn't list every bolt and bandage. If something isn't on the card, you can propose it as a fact (see below) or just try it and let the referee decide."
-      ]
+      "name": "Ambush or surprise",
+      "value": 3
     },
     {
-      "title": "Facts: building the world together",
-      "text": [
-        "Anyone can propose a fact: \"Okafor carries a breaching charge\", \"the hospital has a loading dock on the river side\", \"Lin worked an ER on Tarsis and knows triage\". The referee accepts it, changes it, or turns it down, with a reason.",
-        "Accepted facts are true from then on, for everyone. Propose what makes the story better, not just what saves your skin; the referee is more likely to say yes to a fact with a cost or a complication attached."
-      ]
-    },
-    {
-      "title": "The dice",
-      "text": [
-        "When the outcome is in doubt, the referee calls for a roll. Your chance is your skill plus any advantage (cover, surprise, numbers, a good plan) or minus a handicap (dark, wounded, rushed), never below 5% or above 95%. Roll d100: at or under your chance succeeds, and the margin is how far under. A tenth of your chance or less is a critical; 96 or more is a fumble.",
-        "Against an opponent, both sides roll. If only one succeeds, it wins. If both do, the bigger margin wins. If both fail, nobody gets what they wanted, and something complicates things. The server rolls, so nobody has to trust anyone's dice.",
-        "The dice say who did better and by how much. The referee (sometimes with help from an AI assistant, which the referee always checks) says what that looks like."
-      ]
-    },
-    {
-      "title": "Harm",
-      "text": [
-        "There are no hit points. A marine who loses a fight is hurt, pinned, disarmed, separated, or bitten, depending on what was at stake and how badly it went; the referee writes it on the unit's status. A marine with a bad wound fights at a handicap until someone treats it. Death is possible and is never just bad luck on one roll: the referee warns you when you're taking a risk that could end your marine."
-      ]
-    }
-  ],
-  "skills": [
-    {
-      "id": "shoot",
-      "name": "Shoot",
-      "note": "Aimed fire, suppressing fire, throwing grenades."
-    },
-    {
-      "id": "fight",
-      "name": "Fight",
-      "note": "Hand to hand, bayonet, wrestling something off a friend."
-    },
-    {
-      "id": "move",
-      "name": "Move",
-      "note": "Running, climbing, carrying, getting somewhere fast."
-    },
-    {
-      "id": "sneak",
-      "name": "Sneak",
-      "note": "Moving unseen and unheard; hiding."
-    },
-    {
-      "id": "spot",
-      "name": "Spot",
-      "note": "Noticing, searching, reading a room before you walk into it."
-    },
-    {
-      "id": "medic",
-      "name": "Medic",
-      "note": "First aid, triage, keeping someone alive until the dropship."
-    },
-    {
-      "id": "tech",
-      "name": "Tech",
-      "note": "Doors, radios, vehicles, generators, demolition."
-    },
-    {
-      "id": "lead",
-      "name": "Lead",
-      "note": "Giving orders under fire; calming or convincing civilians."
-    },
-    {
-      "id": "nerve",
-      "name": "Nerve",
-      "note": "Holding steady when it all goes wrong."
-    }
-  ],
-  "advantages": [
-    {
-      "name": "Cover",
-      "value": 20,
-      "note": "Behind something that stops bullets or teeth."
-    },
-    {
-      "name": "Heavy cover or a barricade",
-      "value": 30
-    },
-    {
-      "name": "Surprise",
-      "value": 30,
-      "note": "The other side didn't see it coming."
+      "name": "Good cover",
+      "value": 2
     },
     {
       "name": "Flanking",
-      "value": 20
+      "value": 2
     },
     {
-      "name": "A good plan, set up beforehand",
-      "value": 20
+      "name": "A good plan",
+      "value": 1
     },
     {
       "name": "Superior numbers",
-      "value": 10,
-      "note": "Up to +30 for overwhelming numbers."
+      "value": 2
     },
     {
       "name": "Height",
-      "value": 10
+      "value": 1
     },
     {
       "name": "The right tool",
-      "value": 10,
-      "note": "A breaching charge for a door, a stretcher for a casualty."
+      "value": 1
     },
     {
       "name": "Rushed",
-      "value": -10
+      "value": -1
     },
     {
-      "name": "Dark or smoke",
-      "value": -20
+      "name": "Night or smoke",
+      "value": -1
+    },
+    {
+      "name": "Rain",
+      "value": -1
     },
     {
       "name": "Wounded",
-      "value": -20
+      "value": -2
     },
     {
-      "name": "Wrong tool, or none",
-      "value": -20
-    },
-    {
-      "name": "Low on ammunition",
-      "value": -20
+      "name": "Out of ammunition",
+      "value": -3
     },
     {
       "name": "Alone and surrounded",
-      "value": -30
+      "value": -2
     }
   ],
   "sides": [
@@ -179,17 +90,7 @@
       "kind": "soldier",
       "symbol": "infantry",
       "strength": 1,
-      "skills": {
-        "shoot": 55,
-        "fight": 45,
-        "move": 45,
-        "sneak": 35,
-        "spot": 50,
-        "medic": 25,
-        "tech": 30,
-        "lead": 65,
-        "nerve": 60
-      },
+      "quality": 2,
       "description": "Runs the squad, carries the radio, and answers for everyone who doesn't come back.",
       "kit": "Carbine, sidearm, squad radio, flares, two frag grenades, map tablet."
     },
@@ -201,17 +102,7 @@
       "kind": "soldier",
       "symbol": "infantry",
       "strength": 1,
-      "skills": {
-        "shoot": 60,
-        "fight": 50,
-        "move": 55,
-        "sneak": 40,
-        "spot": 45,
-        "medic": 20,
-        "tech": 25,
-        "lead": 30,
-        "nerve": 50
-      },
+      "quality": 2,
       "description": "Point man: first through the door, last out of it.",
       "kit": "Rifle with underslung light, combat knife, three frag grenades, one smoke grenade."
     },
@@ -223,17 +114,7 @@
       "kind": "soldier",
       "symbol": "mg",
       "strength": 1,
-      "skills": {
-        "shoot": 60,
-        "fight": 45,
-        "move": 40,
-        "sneak": 25,
-        "spot": 40,
-        "medic": 20,
-        "tech": 30,
-        "lead": 30,
-        "nerve": 55
-      },
+      "quality": 2,
       "description": "Carries the squad's firepower and most of its ammunition.",
       "kit": "Light machine gun, extra belts, sidearm, one frag grenade."
     },
@@ -245,17 +126,7 @@
       "kind": "soldier",
       "symbol": "medic",
       "strength": 1,
-      "skills": {
-        "shoot": 40,
-        "fight": 35,
-        "move": 45,
-        "sneak": 35,
-        "spot": 50,
-        "medic": 70,
-        "tech": 35,
-        "lead": 45,
-        "nerve": 55
-      },
+      "quality": 1,
       "description": "Keeps marines and civilians breathing.",
       "kit": "Carbine, aid bag, folding stretcher, sedatives, flashlight."
     },
@@ -266,12 +137,7 @@
       "side": "civilians",
       "symbol": "civilian",
       "strength": 6,
-      "skills": {
-        "move": 35,
-        "sneak": 30,
-        "spot": 30,
-        "nerve": 25
-      },
+      "quality": -1,
       "description": "Frightened people. Some are hurt; some will panic; some might help."
     },
     {
@@ -281,13 +147,7 @@
       "side": "infected",
       "symbol": "horde",
       "strength": 10,
-      "skills": {
-        "fight": 45,
-        "move": 20,
-        "sneak": 10,
-        "spot": 35,
-        "nerve": 95
-      },
+      "quality": 0,
       "description": "Slow, relentless, drawn to noise and light. Dangerous in numbers and in tight spaces.",
       "contact": {
         "abbr": "?",
@@ -301,13 +161,7 @@
       "side": "infected",
       "symbol": "runner",
       "strength": 4,
-      "skills": {
-        "fight": 50,
-        "move": 65,
-        "sneak": 30,
-        "spot": 45,
-        "nerve": 95
-      },
+      "quality": 1,
       "description": "The recently turned. Fast, and they come straight at you.",
       "contact": {
         "abbr": "?",
@@ -322,13 +176,7 @@
       "kind": "special",
       "symbol": "crawler",
       "strength": 1,
-      "skills": {
-        "fight": 55,
-        "move": 40,
-        "sneak": 70,
-        "spot": 50,
-        "nerve": 95
-      },
+      "quality": 2,
       "description": "Waits under beds and in vents. Grabs and doesn't let go.",
       "contact": {
         "abbr": "!",
@@ -343,13 +191,7 @@
       "kind": "special",
       "symbol": "screamer",
       "strength": 1,
-      "skills": {
-        "fight": 20,
-        "move": 40,
-        "sneak": 40,
-        "spot": 60,
-        "nerve": 95
-      },
+      "quality": 0,
       "description": "Its shriek carries for blocks and draws every infected that hears it.",
       "contact": {
         "abbr": "!",
@@ -364,13 +206,7 @@
       "kind": "monster",
       "symbol": "brute",
       "strength": 1,
-      "skills": {
-        "fight": 75,
-        "move": 35,
-        "sneak": 10,
-        "spot": 35,
-        "nerve": 95
-      },
+      "quality": 4,
       "description": "Huge, armoured in its own swollen flesh. Small arms barely slow it.",
       "contact": {
         "abbr": "!",

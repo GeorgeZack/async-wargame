@@ -117,22 +117,22 @@ type Member struct {
 // Its class is the template it started from; everything on it can be
 // changed by the referee as the story goes.
 type Unit struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Class      string         `json:"class"`
-	Side       string         `json:"side"`
-	Col        int            `json:"col"`
-	Row        int            `json:"row"`
-	Strength   int            `json:"strength"`             // headcount
-	Skills     map[string]int `json:"skills,omitempty"`     // overrides of the class's skills
-	Kit        *string        `json:"kit,omitempty"`        // overrides the class's kit
-	Notes      string         `json:"notes,omitempty"`      // the referee's notes, shown on the card
-	Status     string         `json:"status,omitempty"`     // "pinned", "wounded: left arm"
-	Known      bool           `json:"known"`                // players know it's there
-	Identified bool           `json:"identified,omitempty"` // players know what it is
-	AssignedTo string         `json:"assignedTo,omitempty"`
-	Operations int            `json:"operations,omitempty"` // operations survived in this campaign
-	Record     []string       `json:"record,omitempty"`     // service record
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Class      string   `json:"class"`
+	Side       string   `json:"side"`
+	Col        int      `json:"col"`
+	Row        int      `json:"row"`
+	Strength   int      `json:"strength"`             // headcount
+	Quality    *int     `json:"quality,omitempty"`    // overrides the class's quality
+	Kit        *string  `json:"kit,omitempty"`        // overrides the class's kit
+	Notes      string   `json:"notes,omitempty"`      // the referee's notes, shown on the card
+	Status     string   `json:"status,omitempty"`     // "pinned", "wounded: left arm"
+	Known      bool     `json:"known"`                // players know it's there
+	Identified bool     `json:"identified,omitempty"` // players know what it is
+	AssignedTo string   `json:"assignedTo,omitempty"`
+	Operations int      `json:"operations,omitempty"` // operations survived in this campaign
+	Record     []string `json:"record,omitempty"`     // service record
 	// Radio contact, set by the referee and by events.
 	RadioDown    bool    `json:"radioDown,omitempty"`
 	OutOfContact bool    `json:"outOfContact,omitempty"` // worked out by RefreshComms

@@ -96,7 +96,7 @@ type promptUnit struct {
 	Side     string   `json:"side"`
 	Count    int      `json:"count,omitempty"`
 	Where    string   `json:"where"`
-	Skills   string   `json:"skills"`
+	Bonus    string   `json:"usualBonus"`
 	Kit      string   `json:"kit,omitempty"`
 	Status   string   `json:"status,omitempty"`
 	Notes    string   `json:"notes,omitempty"`
@@ -118,7 +118,7 @@ func (r *Room) where(mod *Module, col, row int) string {
 func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 	cl := mod.Class(u.Class)
 	p := promptUnit{ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Col, u.Row),
-		Skills: skillsText(mod, u), Kit: KitOf(mod, u), Status: u.Status, Notes: u.Notes, Facts: r.acceptedFacts(u.ID),
+		Bonus: bonusText(mod, u), Kit: KitOf(mod, u), Status: u.Status, Notes: u.Notes, Facts: r.acceptedFacts(u.ID),
 		Hidden: !r.VisibleToPlayers(mod, u)}
 	if cl.IsGroup() || u.Strength > 1 {
 		p.Count = u.Strength
@@ -142,18 +142,13 @@ func (r *Room) nearby(mod *Module, u *Unit, within int) []promptUnit {
 }
 
 func (r *Room) settingText(mod *Module) string {
-	var skills []string
-	for _, s := range mod.Skills {
-		skills = append(skills, fmt.Sprintf("%s (id %s): %s", s.Name, s.ID, s.Note))
-	}
-	var adv []string
-	for _, a := range mod.Advantages {
-		adv = append(adv, fmt.Sprintf("%s %+d%%", a.Name, a.Value))
+	var fs []string
+	for _, f := range mod.Factors {
+		fs = append(fs, fmt.Sprintf("%s %+d", f.Name, f.Value))
 	}
 	return fmt.Sprintf(`The game: %s. %s Each map hex is %s; each turn is %s.
-Skills are percentages: %s.
-Contests: each side's chance is skill + advantage (5%%-95%%); each rolls d100 and succeeds at or under its chance; if both succeed the bigger margin wins; if both fail, nobody gets what they wanted and something complicates things. A check is one side rolling alone.
-Typical advantages: %s.`, mod.Name, mod.Intro, mod.Scale.Hex, mod.Scale.Turn, strings.Join(skills, "; "), strings.Join(adv, ", "))
+Rolls: when a situation is in doubt, each side rolls a d10 and adds one bonus: everything that matters summed into a single number (how good the unit is, veterancy, the situation, surprise, the weather). The result is just the two totals, like "Okafor 5, the horde 9". There's no rule for what totals mean: the referee compares them, considers what each side was trying to do, and decides. A side can also roll alone, against the situation.
+Each unit's usual bonus (quality plus veterancy) is given. Factors that often count: %s.`, mod.Name, mod.Intro, mod.Scale.Hex, mod.Scale.Turn, strings.Join(fs, ", "))
 }
 
 // PromptFor builds a run's prompts. It reports false if there's nothing to do.
@@ -199,11 +194,11 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 
 ` + r.settingText(mod) + `
 
-For each order, suggest the contests or checks the referee might roll, in the order they'd happen. Most orders need zero to three. Don't roll for things that would simply work (walking down an empty street) or simply fail. Pick the skill that fits; for an opponent, use the unit's own skill if it's listed nearby, or give a value for something not on the map (a locked door, a frightened survivor). Give advantages only with a reason grounded in the order or the situation; a good plan in the order deserves a bonus. Mark a contest secret when players shouldn't see the numbers (a hidden enemy's stealth, say). Use only the unit ids given.
+For each order, suggest the rolls the referee might make, in the order they'd happen. Most orders need zero to two. Don't roll for things that would simply work (walking down an empty street) or simply fail. For each side, list the situational factors that change its usual bonus, with a value and a short reason grounded in the order or the situation: a good plan in the order deserves +1; an ambush +3; darkness -1. Don't repeat the unit's usual bonus; it's added for you. For an opponent that isn't a unit on the list (a locked door, a frightened survivor), give a name and its whole bonus as factors. Mark a roll secret when players shouldn't see it (a hidden enemy noticing them, say). Use only the unit ids given.
 
 Reply with only a JSON object:
-{"contests":[{"order":"<order id>","title":"<short label>","a":{"unit":"<unit id>","skill":"<skill id>","advantage":<percent>,"why":"<reason for the advantage>"},"b":{"unit":"<unit id, or empty>","name":"<who, if not a unit>","skill":"<skill id>","value":<percent, if not a unit>,"advantage":<percent>,"why":"<reason>"},"secret":false}]}
-Leave "b" out for a check against no one.`
+{"contests":[{"order":"<order id>","title":"<short label>","a":{"unit":"<unit id>","factors":[{"name":"<why>","value":<number>}]},"b":{"unit":"<unit id, or empty>","name":"<who, if not a unit>","factors":[{"name":"<why>","value":<number>}]},"secret":false}]}
+Leave "b" out when a side rolls alone.`
 	b, _ := json.MarshalIndent(map[string]any{"turn": run.Turn, "threat": r.Threat, "facts": r.acceptedFacts(""), "orders": items}, "", " ")
 	return system, string(b), true
 }
@@ -234,7 +229,7 @@ func (r *Room) outcomePrompt(mod *Module, run *Run) (string, string, bool) {
 
 ` + r.settingText(mod) + `
 
-Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Follow the dice faithfully: a narrow win costs something, a decisive one doesn't; both failing means a complication, not nothing. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
+Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Read the rolls as the referee would: compare each side's total with the other's and with what each was trying to do. A big gap is decisive; a small one is close and costs something; a low total rolled alone means the situation got the better of them. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
 	b, _ := json.MarshalIndent(map[string]any{
 		"order": o.Text, "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
 		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes}, "", " ")
@@ -279,13 +274,14 @@ func (r *Room) applySuggestions(mod *Module, run *Run, reply string, decode func
 	if r.Desk == nil || r.Desk.Turn != run.Turn || r.Phase != PhaseResolving {
 		return fmt.Errorf("turn %d is no longer being adjudicated", run.Turn)
 	}
+	type factor struct {
+		Name  string `json:"name"`
+		Value int    `json:"value"`
+	}
 	type side struct {
-		Unit      string `json:"unit"`
-		Name      string `json:"name"`
-		Skill     string `json:"skill"`
-		Value     int    `json:"value"`
-		Advantage int    `json:"advantage"`
-		Why       string `json:"why"`
+		Unit    string   `json:"unit"`
+		Name    string   `json:"name"`
+		Factors []factor `json:"factors"`
 	}
 	var out struct {
 		Contests []struct {
@@ -300,18 +296,26 @@ func (r *Room) applySuggestions(mod *Module, run *Run, reply string, decode func
 		return err
 	}
 	toParty := func(s side) (PartyInput, bool) {
+		in := PartyInput{Unit: s.Unit, Name: s.Name}
 		if r.Unit(s.Unit) == nil {
-			s.Unit = ""
+			in.Unit = ""
 		}
-		if mod.Skill(s.Skill) == nil {
-			s.Skill = ""
+		var why []string
+		sum := 0
+		for _, f := range s.Factors {
+			v := min(10, max(-10, f.Value))
+			sum += v
+			if n := strings.TrimSpace(f.Name); n != "" {
+				why = append(why, fmt.Sprintf("%s %+d", n, v))
+			}
 		}
-		if s.Unit != "" && s.Skill != "" {
-			s.Value = 0 // take it from the unit
+		in.Why = strings.Join(why, ", ")
+		if in.Unit != "" {
+			in.Situation = sum
+		} else {
+			in.Bonus = &sum
 		}
-		in := PartyInput{Unit: s.Unit, Name: s.Name, Skill: s.Skill, Value: min(100, max(0, s.Value)),
-			Advantage: min(90, max(-90, s.Advantage)), Why: s.Why}
-		return in, s.Unit != "" || s.Name != ""
+		return in, in.Unit != "" || in.Name != ""
 	}
 	added := 0
 	for _, c := range out.Contests {

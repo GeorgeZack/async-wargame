@@ -6,16 +6,34 @@ import (
 	"strings"
 )
 
-// SkillOf is a unit's skill in percent: its own value if the referee set
-// one, else its template's. Zero means it can't really do that.
-func SkillOf(mod *Module, u *Unit, skill string) int {
-	if v, ok := u.Skills[skill]; ok {
-		return v
+// QualityOf is how good a unit is, as a bonus to its rolls: the referee's
+// value for it if set, else its template's.
+func QualityOf(mod *Module, u *Unit) int {
+	if u.Quality != nil {
+		return *u.Quality
 	}
 	if cl := mod.Class(u.Class); cl != nil {
-		return cl.Skills[skill]
+		return cl.Quality
 	}
 	return 0
+}
+
+// VeteranOf is the suggested bonus for experience: +1 per operation
+// survived, up to +2.
+func VeteranOf(u *Unit) int { return min(2, u.Operations) }
+
+// baseBonus is a unit's usual bonus before the situation, and what it's
+// made of: "quality +2, veteran +1".
+func baseBonus(mod *Module, u *Unit) (int, string) {
+	q, v := QualityOf(mod, u), VeteranOf(u)
+	var why []string
+	if q != 0 {
+		why = append(why, fmt.Sprintf("quality %+d", q))
+	}
+	if v != 0 {
+		why = append(why, fmt.Sprintf("veteran %+d", v))
+	}
+	return q + v, strings.Join(why, ", ")
 }
 
 // KitOf is what a unit carries: its own kit if set, else its template's.
@@ -29,37 +47,6 @@ func KitOf(mod *Module, u *Unit) string {
 	return ""
 }
 
-// SkillLine is one skill as shown on a card.
-type SkillLine struct {
-	ID, Name, Note string
-	Value          int
-	Changed        bool // differs from the template
-}
-
-// SkillLines lists a unit's skills in module order, leaving out ones it
-// doesn't have.
-func SkillLines(mod *Module, u *Unit) []SkillLine {
-	cl := mod.Class(u.Class)
-	var out []SkillLine
-	for _, s := range mod.Skills {
-		v := SkillOf(mod, u, s.ID)
-		if v == 0 {
-			continue
-		}
-		out = append(out, SkillLine{ID: s.ID, Name: s.Name, Note: s.Note, Value: v, Changed: cl != nil && cl.Skills[s.ID] != v})
-	}
-	return out
-}
-
-// skillsText is a unit's skills in a line: "Shoot 60, Fight 50, ...".
-func skillsText(mod *Module, u *Unit) string {
-	var parts []string
-	for _, s := range SkillLines(mod, u) {
-		parts = append(parts, fmt.Sprintf("%s %d", s.Name, s.Value))
-	}
-	return strings.Join(parts, ", ")
-}
-
 // UnitEdit is the referee changing a unit during play.
 type UnitEdit struct {
 	Name       *string
@@ -68,7 +55,7 @@ type UnitEdit struct {
 	Status     *string
 	Notes      *string
 	Kit        *string
-	Skills     map[string]int // only the ones to change
+	Quality    *int
 	Known      *bool
 	Identified *bool
 	RadioDown  *bool
@@ -135,20 +122,14 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 			u.Kit = &t
 		}
 	}
-	for id, v := range e.Skills {
-		if mod.Skill(id) == nil {
-			return bad("unknown skill %q", id)
+	if e.Quality != nil {
+		if *e.Quality < -5 || *e.Quality > 10 {
+			return bad("quality is -5 to +10")
 		}
-		if v < 0 || v > 100 {
-			return bad("skills are 0 to 100")
-		}
-		if u.Skills == nil {
-			u.Skills = map[string]int{}
-		}
-		if cl := mod.Class(u.Class); cl != nil && cl.Skills[id] == v {
-			delete(u.Skills, id)
+		if cl := mod.Class(u.Class); cl != nil && cl.Quality == *e.Quality {
+			u.Quality = nil
 		} else {
-			u.Skills[id] = v
+			u.Quality = e.Quality
 		}
 	}
 	if e.Known != nil && !playable {

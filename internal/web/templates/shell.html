@@ -20,7 +20,6 @@
   <nav class="screen-tabs" id="screen-tabs" data-live aria-label="Screens">
     {{range .Tabs}}<a class="screen-tab{{if .Active}} active{{end}}" href="{{.Href}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}{{if .Badge}} <span class="count{{if .Calm}} calm{{end}}">{{.Badge}}</span>{{end}}</a>{{end}}
     <span class="spacer"></span>
-    <a class="screen-tab tool{{if eq .Screen "rules"}} active{{end}}" href="{{.Base}}/rules"{{if eq .Screen "rules"}} aria-current="page"{{end}}>Rules</a>
     {{if .IsReferee}}<a class="screen-tab tool{{if eq .Screen "edit"}} active{{end}}" href="{{.Base}}/edit"{{if eq .Screen "edit"}} aria-current="page"{{end}}>Editor</a>{{end}}
   </nav>
 </header>

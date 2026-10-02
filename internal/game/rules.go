@@ -13,8 +13,7 @@ type (
 	Contact   = rules.Contact
 	EdgeType  = rules.EdgeType
 	Crossing  = rules.Crossing
-	Skill     = rules.Skill
-	Advantage = rules.Advantage
+	Factor    = rules.Factor
 	Party     = rules.Party
 	Result    = rules.Result
 	EventDef  = rules.EventDef

@@ -37,8 +37,8 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 		reply := "Okafor's grenade lands true; the lobby goes quiet."
 		switch {
 		case strings.Contains(system, `"contests"`):
-			reply = "```json\n" + `{"contests":[{"order":"` + orderID + `","title":"The grenade","a":{"unit":"m2","skill":"shoot","advantage":20,"why":"surprise"},"b":{"unit":"z3","skill":"sneak","advantage":0}},` +
-				`{"order":"nope","title":"bogus","a":{"unit":"m2","skill":"shoot"}},{"order":"` + orderID + `","title":"ghost","a":{"unit":"ghost","skill":"shoot"}}]}` + "\n```"
+			reply = "```json\n" + `{"contests":[{"order":"` + orderID + `","title":"The grenade","a":{"unit":"m2","factors":[{"name":"surprise","value":3}]},"b":{"unit":"z3","factors":[]}},` +
+				`{"order":"nope","title":"bogus","a":{"unit":"m2"}},{"order":"` + orderID + `","title":"ghost","a":{"unit":"ghost"}}]}` + "\n```"
 		case strings.Contains(system, "radio operator"):
 			reply = "Grenade in the lobby. Quiet after."
 		}
@@ -97,14 +97,14 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 			contests = append(contests, *c)
 		}
 	})
-	if len(contests) != 1 || contests[0].Source != "ai" || contests[0].Result != nil || contests[0].A.Value != 60 ||
-		contests[0].A.Advantage != 20 || contests[0].B == nil || contests[0].B.Value != 70 {
+	if len(contests) != 1 || contests[0].Source != "ai" || contests[0].Result != nil || contests[0].A.Bonus != 5 ||
+		contests[0].A.Why != "quality +2, surprise +3" || contests[0].B == nil || contests[0].B.Bonus != 2 {
 		t.Fatalf("suggested contests: %+v", contests)
 	}
 
 	// Roll it, then have the assistant draft the outcome.
 	update(func(r *game.Room, mod *game.Module, ref *game.Member) error {
-		if err := r.RollContest(ref, contests[0].ID, 10, 90, now); err != nil {
+		if err := r.RollContest(ref, contests[0].ID, 6, 3, now); err != nil {
 			return err
 		}
 		return r.RunNow(ref, game.RunOutcome, orderID, now)
@@ -112,7 +112,7 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 	if !w.Once(ctx) {
 		t.Fatal("no outcome run")
 	}
-	if !strings.Contains(prompts[1], "The grenade") || !strings.Contains(prompts[1], "rolled 10") {
+	if !strings.Contains(prompts[1], "The grenade") || !strings.Contains(prompts[1], "LCpl. Okafor 11 (rolled 6") {
 		t.Errorf("outcome prompt lacks the roll: %s", prompts[1])
 	}
 	var oc game.Outcome

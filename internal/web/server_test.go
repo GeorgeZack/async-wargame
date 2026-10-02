@@ -68,7 +68,7 @@ func (b *browser) post(path string, form url.Values) (*http.Response, string) {
 func (b *browser) room(base string) (*http.Response, string) {
 	b.t.Helper()
 	res, body := b.get(base)
-	for _, screen := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders"} {
+	for _, screen := range []string{"turn", "notes", "events", "forces", "people", "messages", "reports", "activity", "room", "orders"} {
 		_, more := b.get(base + "/" + screen)
 		body += more
 	}
@@ -116,7 +116,7 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 	code := strings.TrimPrefix(res.Request.URL.Path, "/r/")
 	mustContain(t, body, "Shamblers by the canal", "Duarte")
 	_, body = ref.room("/r/" + code)
-	mustContain(t, body, "Access requests", "Referee notes")
+	mustContain(t, body, "Access requests", "Scenario notes")
 
 	// Lowercase code with a dash is accepted.
 	lower := strings.ToLower(code[:3] + "-" + code[3:])
@@ -654,28 +654,28 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 	_, body = ref.get(base + "/turn")
 	mustContain(t, body, "Turn 1: what happens", "tosses a grenade", "Add a roll", "What happened")
 
-	// A grenade into the lobby: Okafor's Shoot against the crawler's Sneak.
+	// A grenade into the lobby: Okafor, with surprise, against the crawler.
 	res, msg := ref.post(base+"/desk/contests", url.Values{"order": {orderID}, "title": {"The grenade"},
-		"a_unit": {"m2"}, "a_skill": {"shoot"}, "a_adv": {"20"}, "a_why": {"Surprise"},
-		"b_unit": {"z3"}, "b_skill": {"sneak"}, "submit": {"roll"}})
+		"a_unit": {"m2"}, "a_mod": {"3"}, "a_why": {"surprise +3"},
+		"b_unit": {"z3"}, "submit": {"roll"}})
 	if res.StatusCode != 200 {
 		t.Fatalf("roll: %d %s", res.StatusCode, msg)
 	}
 	// And a secret check for the runners hearing it.
 	ref.post(base+"/desk/contests", url.Values{"order": {orderID}, "title": {"Do the runners hear it?"},
-		"a_unit": {"z4"}, "a_skill": {"spot"}, "a_adv": {"30"}, "secret": {"on"}, "submit": {"roll"}})
-	if res, _ := hicks.post(base+"/desk/contests", url.Values{"order": {orderID}, "a_unit": {"m2"}, "a_skill": {"shoot"}}); res.StatusCode != 403 {
+		"a_unit": {"z4"}, "a_mod": {"2"}, "secret": {"on"}, "submit": {"roll"}})
+	if res, _ := hicks.post(base+"/desk/contests", url.Values{"order": {orderID}, "a_unit": {"m2"}}); res.StatusCode != 403 {
 		t.Errorf("a player added a roll: %d", res.StatusCode)
 	}
 	var c1 *game.Contest
 	store.Read(code, func(r *game.Room) { c := *r.Desk.Contests[0]; c1 = &c })
-	if c1.Result == nil || c1.A.Value != 60 || c1.A.Chance() != 80 || c1.B == nil || c1.B.Value != 70 {
+	if c1.Result == nil || c1.A.Bonus != 5 || c1.B == nil || c1.B.Bonus != 2 {
 		t.Fatalf("contest %+v", c1)
 	}
 	// Table dice override the server's.
-	ref.post(base+"/desk/contests/"+c1.ID+"/roll", url.Values{"die_a": {"12"}, "die_b": {"85"}})
+	ref.post(base+"/desk/contests/"+c1.ID+"/roll", url.Values{"die_a": {"4"}, "die_b": {"9"}})
 	store.Read(code, func(r *game.Room) {
-		if c := r.Desk.Contests[0]; !c.Manual || c.Result.A.Die != 12 || c.Result.Winner != "a" {
+		if c := r.Desk.Contests[0]; !c.Manual || c.Result.A.Total != 9 || c.Result.B.Total != 11 {
 			t.Errorf("table dice: %+v", c.Result)
 		}
 	})
@@ -693,7 +693,7 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 
 	ref.post(base+"/turn/next", nil)
 	_, body = hicks.get(base + "/reports")
-	mustContain(t, body, "Something small shrieks", "The grenade: LCpl. Okafor 60%", "= 80%, rolled 12")
+	mustContain(t, body, "Something small shrieks", "The grenade: LCpl. Okafor 9 (rolled 4", "Basement crawler 11 (rolled 9")
 	mustNotContain(t, body, "Do the runners hear it", "The runners stir")
 	_, body = ref.get(base + "/reports")
 	mustContain(t, body, "Do the runners hear it", "The runners stir", "secret")
@@ -714,7 +714,7 @@ func TestOrdersOverHTTPAndClosing(t *testing.T) {
 	_, body := ref.room(base)
 	mustContain(t, body, "Link up with the doc", "Admin view")
 	_, body = hicks.room(base)
-	mustContain(t, body, "The referee switched to admin view")
+	mustContain(t, body, "The referee is in admin view")
 	ref.post(base+"/admin-mode", url.Values{"on": {"0"}})
 
 	// Closing stops everything; players see the closed page; reopening restores.
@@ -753,38 +753,44 @@ func TestRulesCardsAndFacts(t *testing.T) {
 	base := "/r/" + code
 	ref.post(base+"/start", nil)
 
-	_, body := hicks.get(base + "/rules")
-	mustContain(t, body, "How to play", "Facts: building the world together", "both sides roll", "Cover", "Automatic rifleman")
-	mustNotContain(t, body, "Everyone else", "Brute")
-	_, body = ref.get(base + "/rules")
-	mustContain(t, body, "Everyone else", "Brute")
-
+	if res, _ := hicks.get(base + "/rules"); res.StatusCode != 404 {
+		t.Errorf("rules page still served: %d", res.StatusCode)
+	}
+	var body string
 	_, body = hicks.get(base + "/units/m2")
-	mustContain(t, body, `id="unit-card"`, "LCpl. Okafor", "Shoot", "60%", "Kit", "underslung light", "Propose")
+	mustContain(t, body, `id="unit-card"`, "LCpl. Okafor", "Usual bonus", "quality", "Kit", "underslung light", "Propose")
 	mustNotContain(t, body, "Change this unit")
 	if res, _ := hicks.get(base + "/units/z3"); res.StatusCode != 404 {
 		t.Errorf("player read a hidden enemy's card: %d", res.StatusCode)
 	}
-	if res, _ := newBrowser(t, ts).get(base + "/rules"); res.StatusCode != 403 {
-		t.Errorf("stranger read the rules: %d", res.StatusCode)
+	if res, _ := newBrowser(t, ts).get(base + "/units/m2"); res.StatusCode != 403 {
+		t.Errorf("stranger read a card: %d", res.StatusCode)
 	}
 
 	// Co-creation: Hicks proposes, the referee amends and accepts.
 	hicks.post(base+"/facts", url.Values{"unit": {"m2"}, "text": {"Okafor carries a breaching charge"}})
 	var id string
 	store.Read(code, func(r *game.Room) { id = r.Facts[0].ID })
-	_, body = ref.get(base + "/facts")
+	_, body = ref.get(base + "/notes")
 	mustContain(t, body, "Okafor carries a breaching charge", "Accept", "Turn down")
 	ref.post(base+"/facts/"+id, url.Values{"action": {"accept"}, "text": {"Okafor carries one breaching charge"}, "reply": {"Just the one."}})
 	_, body = hicks.get(base + "/units/m2")
 	mustContain(t, body, "Okafor carries one breaching charge", "Just the one.")
-	_, body = hicks.get(base + "/facts")
+	_, body = hicks.get(base)
+	mustContain(t, body, "What we know", "Okafor carries one breaching charge")
+	_, body = ref.get(base + "/notes")
 	mustContain(t, body, "originally: “Okafor carries a breaching charge”")
+	if res, _ := hicks.get(base + "/notes"); res.Request.URL.Path != base {
+		t.Errorf("a player opened Notes: %s", res.Request.URL.Path)
+	}
+	if res, _ := hicks.get(base + "/activity"); res.Request.URL.Path != base {
+		t.Errorf("a player opened Activity: %s", res.Request.URL.Path)
+	}
 
 	// The referee edits a marine from the card.
-	ref.post(base+"/units/m2/edit", url.Values{"status": {"limping"}, "skill_move": {"35"}})
+	ref.post(base+"/units/m2/edit", url.Values{"status": {"limping"}, "quality": {"3"}})
 	_, body = hicks.get(base + "/units/m2")
-	mustContain(t, body, "limping", "35%")
+	mustContain(t, body, "limping", "quality &#43;3")
 
 	ref.post(base+"/operation/end", nil)
 	_, body = ref.get(base + "/units/m2")

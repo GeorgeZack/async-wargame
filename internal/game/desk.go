@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -10,9 +9,10 @@ import (
 )
 
 // Adjudication. Once a turn locks, the referee works through it at the
-// desk: they read each order, call for a contest or a check wherever the
-// outcome is in doubt, and write what happened. The server rolls the dice
-// (or the referee enters dice rolled at the table). The referee moves
+// desk: they read each order, call for a roll wherever the outcome is in
+// doubt (each side a d10 plus one bonus for everything that matters), and
+// write what happened. The server rolls the dice (or the referee enters
+// dice rolled at the table). The referee moves
 // counters and changes units as they go, but players keep seeing the board
 // as it was at the lock until the turn is published, when everyone gets
 // the report.
@@ -24,7 +24,7 @@ type Desk struct {
 	Outcomes []*Outcome `json:"outcomes,omitempty"`
 }
 
-// Contest is a roll: one side against another, or a check against no one.
+// Contest is a roll: one side against another, or one side alone.
 type Contest struct {
 	ID     string  `json:"id"`
 	Order  string  `json:"order,omitempty"` // the order it belongs to, if any
@@ -88,42 +88,47 @@ func (r *Room) lockedOrder(id string) *Order {
 	return nil
 }
 
-// PartyInput is one side of a contest as the referee fills it in: a unit
-// and a skill, or a name and a number.
+// PartyInput is one side of a roll as the referee fills it in: a unit, or
+// a name. Bonus, if set, is the whole bonus; if not, it's the unit's
+// quality and veterancy plus Situation.
 type PartyInput struct {
 	Unit      string
 	Name      string
-	Skill     string
-	Value     int // used when there's no unit, or to override
-	Advantage int
-	Why       string
+	Bonus     *int
+	Situation int    // added to the unit's usual bonus when Bonus isn't set
+	Why       string // what went into the bonus
 }
 
 func (r *Room) party(mod *Module, in PartyInput) (Party, string, error) {
-	p := Party{Name: strings.TrimSpace(in.Name), Skill: in.Skill, Value: in.Value, Advantage: in.Advantage, Why: clip(in.Why, 120)}
-	if p.Advantage < -90 || p.Advantage > 90 {
-		return p, "", bad("advantage is -90%% to +90%%")
-	}
+	p := Party{Name: strings.TrimSpace(in.Name), Why: clip(strings.TrimSpace(in.Why), 160)}
 	unit := ""
-	if u := r.Unit(in.Unit); u != nil {
+	u := r.Unit(in.Unit)
+	if u != nil {
 		unit = u.ID
 		if p.Name == "" {
 			p.Name = u.Name
 		}
-		if in.Skill != "" && in.Value == 0 {
-			p.Value = SkillOf(mod, u, in.Skill)
-		}
 	}
-	if in.Skill != "" {
-		if s := mod.Skill(in.Skill); s == nil {
-			return p, "", bad("unknown skill %q", in.Skill)
+	switch {
+	case in.Bonus != nil:
+		p.Bonus = *in.Bonus
+	case u != nil:
+		base, why := baseBonus(mod, u)
+		p.Bonus = base + in.Situation
+		switch {
+		case why != "" && p.Why != "":
+			p.Why = why + ", " + p.Why
+		case why != "":
+			p.Why = why
 		}
+	default:
+		p.Bonus = in.Situation
 	}
 	if p.Name == "" {
 		return p, "", bad("say who's rolling")
 	}
-	if p.Value < 0 || p.Value > 100 {
-		return p, "", bad("skill is 0%% to 100%%")
+	if p.Bonus < -20 || p.Bonus > 20 {
+		return p, "", bad("a bonus is -20 to +20")
 	}
 	p.Name = clip(p.Name, 60)
 	return p, unit, nil
@@ -157,8 +162,8 @@ func (r *Room) AddContest(actor *Member, mod *Module, orderID, title string, a P
 	}
 	if c.Title == "" {
 		c.Title = c.A.Name
-		if s := mod.Skill(c.A.Skill); s != nil {
-			c.Title += ": " + strings.ToLower(s.Name)
+		if c.B != nil {
+			c.Title += " against " + c.B.Name
 		}
 	}
 	d.Contests = append(d.Contests, c)
@@ -413,20 +418,5 @@ func ResultSummary(c *Contest) string {
 	if c.Result == nil {
 		return "not rolled"
 	}
-	res := c.Result
-	switch res.Winner {
-	case rules.WinnerA:
-		if c.B == nil {
-			return "success, " + res.Degree
-		}
-		return fmt.Sprintf("%s wins, %s", c.A.Name, res.Degree)
-	case rules.WinnerB:
-		return fmt.Sprintf("%s wins, %s", c.B.Name, res.Degree)
-	case rules.WinnerTie:
-		return "dead even"
-	}
-	if c.B == nil {
-		return "failure, " + res.Degree
-	}
-	return "both fail: complication"
+	return c.Result.Short()
 }

@@ -97,8 +97,8 @@ func New(store *game.Store, opts Options) (*Server, error) {
 			return out
 		},
 	}
-	for _, page := range []string{"home", "pending", "briefing", "holding", "editor", "message", "invite", "closed", "unit", "rules",
-		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-messages", "screen-room", "screen-orders", "screen-facts"} {
+	for _, page := range []string{"home", "pending", "briefing", "holding", "editor", "message", "invite", "closed", "unit",
+		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-messages", "screen-room", "screen-orders", "screen-notes"} {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/map.html", "templates/shell.html", "templates/sections.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, err
@@ -122,7 +122,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	}
 	seat("GET ", s.room)
 	seat("GET /live", s.events)
-	for _, name := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders", "facts"} {
+	for _, name := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders", "notes"} {
 		seat("GET /"+name, s.screen(name))
 	}
 	seat("GET /edit", s.editor)
@@ -150,7 +150,6 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /assistant/draft", s.useDraft)
 	seat("POST /reports/{op}/{turn}/narrative", s.decideNarrative)
 	seat("GET /units/{id}", s.unitCard)
-	seat("GET /rules", s.rulesPage)
 	seat("POST /operation/end", s.endOperation)
 	seat("POST /orders", s.saveOrder)
 	seat("POST /orders/{id}/withdraw", s.withdrawOrder)

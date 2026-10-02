@@ -6,6 +6,7 @@
     <aside class="info-col" aria-label="Selection">
       <section class="panel"><h2>Selected</h2>{{template "sec-inspector" .}}</section>
       {{if ne .Me.Status "pending"}}{{template "sec-order-box" .}}{{end}}
+      {{if not .IsReferee}}{{template "sec-known" .}}{{end}}
       <section class="panel"><h2>Key and places</h2>{{template "legend" .}}{{template "sec-places" .}}</section>
     </aside>
   </div>

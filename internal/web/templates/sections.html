@@ -1,6 +1,7 @@
 {{define "sec-next"}}
 <div class="next" id="next" data-live role="status">
     <p><strong>Next:</strong> {{.NextAction}}</p>
+    {{if .Watched}}<p class="small">The referee is in admin view and can see this turn's orders as you write them.</p>{{end}}
     {{if and .IsReferee .Clock.AllIn}}
     <form method="post" action="{{.Base}}/turn/lock" data-enhance data-confirm="Lock turn {{.Turn}} now? Players can't change orders after this.">
       <button type="submit">Lock turn {{.Turn}} now</button>
@@ -73,7 +74,7 @@
   {{with .Desk}}
   <div class="desk-head">
     <h2 id="desk-h">Turn {{$.Turn}}: what happens</h2>
-    <p class="small">Read each order. Where the outcome is in doubt, add a roll: skill plus advantage against the other side, or a check against no one. Then write what happened. Players see the board as it was at the lock until you publish.</p>
+    <p class="small">Read each order. Where the outcome is in doubt, roll: each side a d10 plus one bonus for everything that matters. Compare the totals with what each side wanted, and write what happened. Players see the board as it was at the lock until you publish.</p>
     <p class="small"><strong>{{len .Items}}</strong> {{if eq (len .Items) 1}}order{{else}}orders{{end}} · {{.Rolled}} rolled{{with .Unrolled}} · <strong>{{.}} waiting to roll</strong>{{end}}{{with .Unwritten}} · <strong>{{.}} without an outcome</strong>{{end}}</p>
     {{with .Missing}}<p class="small muted">No order this turn: {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}. They carry on as before.</p>{{end}}
     {{if $.AI.On}}<div class="row tight">
@@ -82,7 +83,7 @@
       {{if .Unwritten}}<form method="post" action="{{$.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="outcome"><input type="hidden" name="target" value="all">
         <button type="submit" class="secondary small-btn">Draft every missing outcome with AI</button></form>{{end}}
     </div>{{end}}
-    <datalist id="adv-list">{{range .Advantages}}<option value="{{.Name}}">{{signed .Value}}%</option>{{end}}</datalist>
+    <datalist id="factor-list">{{range .Factors}}<option value="{{.Name}} {{signed .Value}}"></option>{{end}}</datalist>
   </div>
 
   {{range .Items}}{{$it := .}}
@@ -97,9 +98,7 @@
     {{with .Unit.Status}}<p class="small unit-status">{{.}}</p>{{end}}
     <blockquote class="order-text">{{.Order.Text}}</blockquote>
     {{with .Order.Mark}}<p class="small muted">Marked <a href="{{$.Base}}?hex={{.}}" class="mono" data-goto="{{.}}">{{.}}</a></p>{{end}}
-    <details class="small card-peek"><summary>Skills and kit</summary>
-      <p>{{range $i, $sk := .Skills}}{{if $i}} · {{end}}{{$sk.Name}} <strong>{{$sk.Value}}</strong>{{end}}</p>
-      {{with .Kit}}<p>Kit: {{.}}</p>{{end}}</details>
+    <p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>
 
     {{range .Contests}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
     {{template "add-roll" (dict "V" $ "Order" .Order.ID "Unit" .Unit.ID "Open" false)}}
@@ -498,14 +497,6 @@
     </section>
 {{end}}
 
-{{define "sec-notes"}}
-<details class="panel" aria-label="Referee notes">
-      <summary><h2>Referee notes</h2></summary>
-      <p>{{.RefereeNotes}}</p>
-      <p class="muted small">Only you see this, along with units and places marked <span class="tag tag-hidden">hidden</span>.</p>
-    </details>
-{{end}}
-
 {{define "sec-danger"}}
 <details class="panel danger-zone">
       <summary><h2>Close the room</h2></summary>
@@ -739,18 +730,26 @@
 <div class="contest{{if $c.Result}} rolled{{end}}{{if $c.Secret}} secret{{end}}">
   <div class="contest-head"><strong>{{$c.Title}}</strong>
     {{if eq $c.Source "ai"}}<span class="tag" title="Suggested by {{$c.Model}}">AI suggestion</span>{{end}}
-    {{if $c.Secret}}<span class="tag tag-hidden">secret</span>{{end}}
-    {{if $c.Result}}<span class="tag tag-win-{{$c.Result.Winner}}">{{$c.Summary}}</span>{{end}}</div>
-  <p class="small contest-sides">
-    {{$c.A.Name}} {{$c.A.Value}}%{{if $c.A.Advantage}} {{signed $c.A.Advantage}}%{{end}} = <strong>{{$c.A.Chance}}%</strong>{{with $c.A.Why}} <span class="muted">({{.}})</span>{{end}}
-    {{with $c.B}} vs {{.Name}} {{.Value}}%{{if .Advantage}} {{signed .Advantage}}%{{end}} = <strong>{{.Chance}}%</strong>{{with .Why}} <span class="muted">({{.}})</span>{{end}}{{else}} <span class="muted">check</span>{{end}}</p>
-  {{if $c.Result}}<p class="small contest-result">{{$c.Text}}{{if $c.Manual}} <span class="muted">(table dice)</span>{{end}}</p>{{end}}
+    {{if $c.Secret}}<span class="tag tag-hidden">secret</span>{{end}}</div>
+  {{with $c.Result}}
+  <div class="roll-totals">
+    <span class="roll-side"><span class="roll-name">{{.A.Name}}</span> <strong class="roll-total">{{.A.Total}}</strong>
+      <span class="muted small">rolled {{.A.Die}}{{if .A.Bonus}} {{signed .A.Bonus}}{{end}}{{with .A.Why}}: {{.}}{{end}}</span></span>
+    {{with .B}}<span class="roll-vs">vs</span>
+    <span class="roll-side"><span class="roll-name">{{.Name}}</span> <strong class="roll-total">{{.Total}}</strong>
+      <span class="muted small">rolled {{.Die}}{{if .Bonus}} {{signed .Bonus}}{{end}}{{with .Why}}: {{.}}{{end}}</span></span>{{end}}
+    {{if $c.Manual}}<span class="muted small">(table dice)</span>{{end}}
+  </div>
+  {{else}}
+  <p class="small">{{$c.A.Name}} {{signed $c.A.Bonus}}{{with $c.A.Why}} <span class="muted">({{.}})</span>{{end}}
+    {{with $c.B}} vs {{.Name}} {{signed .Bonus}}{{with .Why}} <span class="muted">({{.}})</span>{{end}}{{else}} <span class="muted">rolling alone</span>{{end}}</p>
+  {{end}}
   <div class="row tight">
     <form method="post" action="{{$v.Base}}/desk/contests/{{$c.ID}}/roll" data-enhance><button type="submit" class="small-btn{{if $c.Result}} secondary{{end}}">{{if $c.Result}}Roll again{{else}}Roll{{end}}</button></form>
     <details class="table-dice"><summary class="small">Rolled at the table?</summary>
       <form method="post" action="{{$v.Base}}/desk/contests/{{$c.ID}}/roll" class="row tight" data-enhance>
-        <label class="inline small">{{$c.A.Name}} <input type="number" name="die_a" min="1" max="100" required class="num-s"></label>
-        {{if $c.B}}<label class="inline small">{{$c.B.Name}} <input type="number" name="die_b" min="1" max="100" required class="num-s"></label>{{end}}
+        <label class="inline small">{{$c.A.Name}} d10 <input type="number" name="die_a" min="1" max="10" required class="num-s"></label>
+        {{if $c.B}}<label class="inline small">{{$c.B.Name}} d10 <input type="number" name="die_b" min="1" max="10" required class="num-s"></label>{{end}}
         <button type="submit" class="secondary small-btn">Use these</button></form></details>
     <form method="post" action="{{$v.Base}}/desk/contests/{{$c.ID}}/delete" data-enhance><button type="submit" class="link small danger">Delete</button></form>
   </div>
@@ -761,43 +760,40 @@
 <details class="add-roll"{{if .Open}} open{{end}}><summary class="small">Add a roll</summary>
   <form method="post" action="{{$v.Base}}/desk/contests" class="stack roll-form" data-enhance data-reset>
     <input type="hidden" name="order" value="{{.Order}}">
-    <input name="title" maxlength="80" class="compact-input" placeholder="What's at stake: the grenade, sneaking past the lobby" aria-label="What's at stake">
-    <fieldset class="side-fields"><legend>Who's trying</legend>
+    <input name="title" maxlength="80" class="compact-input" placeholder="What's in doubt: the grenade, getting past the lobby" aria-label="What's in doubt">
+    <p class="muted small">Each side rolls a d10 plus one bonus. For a unit, it starts from its usual bonus (quality and veterancy); add the situation here. For anyone else, give the whole bonus.</p>
+    <fieldset class="side-fields"><legend>Who</legend>
       <div class="row tight">
         <select name="a_unit" class="compact" aria-label="Unit">{{$u := .Unit}}<option value="">someone else…</option>{{range $d.Units}}<option value="{{.ID}}"{{if eq .ID $u}} selected{{end}}>{{.Name}}</option>{{end}}</select>
         <input name="a_name" maxlength="60" class="compact-input" placeholder="or name" aria-label="Name, if not a unit">
-        <select name="a_skill" class="compact" aria-label="Skill">{{range $d.Skills}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-        <label class="inline small">% <input type="number" name="a_value" min="0" max="100" class="num-s" placeholder="skill" aria-label="Skill percent, to override"></label>
-        <label class="inline small">adv <input type="number" name="a_adv" min="-90" max="90" step="5" value="0" class="num-s" aria-label="Advantage percent"></label>
-        <input name="a_why" maxlength="120" list="adv-list" class="compact-input grow-input" placeholder="why: cover, surprise…" aria-label="Why the advantage">
+        <label class="inline small">± <input type="number" name="a_mod" min="-20" max="20" value="0" class="num-s" aria-label="Situation, or whole bonus"></label>
+        <input name="a_why" maxlength="160" list="factor-list" class="compact-input grow-input" placeholder="why: ambush +3, night -1" aria-label="What counts">
       </div></fieldset>
-    <fieldset class="side-fields"><legend>Against <span class="muted small">(leave empty for a check)</span></legend>
+    <fieldset class="side-fields"><legend>Against <span class="muted small">(leave empty to roll alone)</span></legend>
       <div class="row tight">
         <select name="b_unit" class="compact" aria-label="Opposing unit"><option value="">nobody / someone else…</option>{{range $d.Units}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-        <input name="b_name" maxlength="60" class="compact-input" placeholder="or name: the door" aria-label="Opponent name, if not a unit">
-        <select name="b_skill" class="compact" aria-label="Opposing skill"><option value="">skill…</option>{{range $d.Skills}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-        <label class="inline small">% <input type="number" name="b_value" min="0" max="100" class="num-s" aria-label="Opposing percent"></label>
-        <label class="inline small">adv <input type="number" name="b_adv" min="-90" max="90" step="5" value="0" class="num-s" aria-label="Opposing advantage"></label>
-        <input name="b_why" maxlength="120" list="adv-list" class="compact-input grow-input" placeholder="why" aria-label="Why their advantage">
+        <input name="b_name" maxlength="60" class="compact-input" placeholder="or name: the chained door" aria-label="Opponent, if not a unit">
+        <label class="inline small">± <input type="number" name="b_mod" min="-20" max="20" value="0" class="num-s" aria-label="Their situation, or whole bonus"></label>
+        <input name="b_why" maxlength="160" list="factor-list" class="compact-input grow-input" placeholder="why" aria-label="What counts for them">
       </div></fieldset>
-    <label class="toggle small"><input type="checkbox" name="secret"> Secret: players don't see these numbers</label>
+    <label class="toggle small"><input type="checkbox" name="secret"> Secret: players don't see this roll</label>
     <div class="row tight">
       <button type="submit" name="submit" value="roll" class="small-btn">Add and roll</button>
       <button type="submit" name="submit" value="add" class="secondary small-btn">Add without rolling</button></div>
   </form></details>
 {{end}}
 
-{{define "sec-facts"}}
+{{define "sec-fact-notes"}}
 <section class="panel" id="facts" data-live aria-labelledby="facts-h">
-      <h2 id="facts-h">Facts {{with .OpenFacts}}<span class="count">{{.}}</span>{{end}}</h2>
-      <p class="small">The world is built together. Propose something you'd like to be true about your marine or the city; {{if .IsReferee}}you accept it, change it, or turn it down. Accepted facts are true from then on.{{else}}the referee accepts it, changes it, or turns it down. Accepted facts are true from then on, for everyone. A fact with a cost or a complication attached is more likely to be accepted.{{end}}</p>
+      <h2 id="facts-h">Notes {{with .OpenFacts}}<span class="count">{{.}}</span>{{end}}</h2>
+      <p class="small">What's true in this game. Players propose facts from their marines' cards; you accept them (changed if you like), keep them between you and that player, or turn them down. Accepted facts are shown to everyone. Add your own here: they're true at once.</p>
       <form method="post" action="{{.Base}}/facts" class="stack fact-form" data-enhance data-reset>
         <label class="sr-only" for="fact-text">The fact</label>
-        <textarea name="text" id="fact-text" rows="2" maxlength="400" required placeholder="{{if .IsReferee}}The east stairwell is blocked with gurneys.{{else}}Okafor carries a breaching charge, but it's his only one.{{end}}"></textarea>
+        <textarea name="text" id="fact-text" rows="2" maxlength="400" required placeholder="The east stairwell is blocked with gurneys."></textarea>
         <div class="row tight">
           <label class="inline small">About
             <select name="unit" class="compact"><option value="">the world</option>{{range .FactUnits}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
-          <button type="submit" class="small-btn">{{if .IsReferee}}Add fact{{else}}Propose{{end}}</button></div>
+          <button type="submit" class="small-btn">Add</button></div>
       </form>
       {{if not .Facts}}<p class="muted small">No facts yet.</p>{{end}}
       <ul class="plain list fact-list">{{range .Facts}}<li class="fact fact-{{.Status}}">
@@ -818,5 +814,13 @@
         {{if and .Mine (eq .Status "proposed") (not $.IsReferee)}}<form method="post" action="{{$.Base}}/facts/{{.ID}}" data-enhance>
           <button type="submit" name="action" value="withdraw" class="link small">Withdraw</button></form>{{end}}
       </li>{{end}}</ul>
+    </section>
+{{end}}
+
+{{define "sec-known"}}
+<section class="panel" id="known" data-live aria-labelledby="known-h">
+      <h2 id="known-h">What we know</h2>
+      {{range .Facts}}<p class="small known-fact">{{if ne .Status "accepted"}}<span class="tag tag-fact-{{.Status}}">{{if eq .Status "proposed"}}waiting{{else}}{{.Status}}{{end}}</span> {{end}}{{with .UnitName}}<strong>{{.}}:</strong> {{end}}{{.Text}}{{with .Reply}} <span class="muted">— {{.}}</span>{{end}}</p>
+      {{else}}<p class="muted small">Nothing established yet. Propose something from your marine's card.</p>{{end}}
     </section>
 {{end}}

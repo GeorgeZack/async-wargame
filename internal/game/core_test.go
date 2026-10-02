@@ -72,18 +72,22 @@ func TestDeskContestsOutcomesAndPublish(t *testing.T) {
 	if r.Phase != PhaseResolving || r.Desk == nil || r.Unwritten() != 1 {
 		t.Fatalf("phase %s, desk %v, unwritten %d", r.Phase, r.Desk, r.Unwritten())
 	}
-	if _, err := r.AddContest(hicks, mod, o.ID, "", PartyInput{Unit: "m1", Skill: "shoot"}, nil, false); err != ErrForbidden {
+	if _, err := r.AddContest(hicks, mod, o.ID, "", PartyInput{Unit: "m1"}, nil, false); err != ErrForbidden {
 		t.Errorf("a player added a roll: %v", err)
 	}
-	// Skill from the unit; the opponent's from theirs; a typed-in value for a door.
-	c, err := r.AddContest(ref, mod, o.ID, "", PartyInput{Unit: "m1", Skill: "shoot", Advantage: 20, Why: "surprise"},
-		&PartyInput{Unit: "z3", Skill: "sneak"}, false)
-	if err != nil || c.A.Value != 55 || c.A.Chance() != 75 || c.B.Value != 70 || c.Title != "Sgt. Reyes: shoot" {
-		t.Fatalf("contest %+v, %v", c, err)
+	// A unit's usual bonus plus the situation; the opponent's usual bonus;
+	// a whole bonus for a door.
+	c, err := r.AddContest(ref, mod, o.ID, "", PartyInput{Unit: "m1", Situation: 3, Why: "surprise +3"},
+		&PartyInput{Unit: "z3"}, false)
+	if err != nil || c.A.Bonus != 5 || c.A.Why != "quality +2, surprise +3" || c.B.Bonus != 2 || c.Title != "Sgt. Reyes against Basement crawler" {
+		t.Fatalf("contest %+v %+v, %v", c, c.B, err)
 	}
-	door, _ := r.AddContest(ref, mod, o.ID, "The fire door", PartyInput{Unit: "m1", Skill: "tech"}, &PartyInput{Name: "the door", Value: 50}, true)
-	if err := r.RollContest(ref, c.ID, 30, 80, now); err != nil || c.Result.Winner != "a" || !c.Manual {
+	door, _ := r.AddContest(ref, mod, o.ID, "The fire door", PartyInput{Unit: "m1"}, &PartyInput{Name: "the door", Bonus: ptr(1)}, true)
+	if err := r.RollContest(ref, c.ID, 3, 8, now); err != nil || c.Result.A.Total != 8 || c.Result.B.Total != 10 || !c.Manual {
 		t.Fatalf("roll: %v %+v", err, c.Result)
+	}
+	if err := r.RollContest(ref, c.ID, 11, 1, now); err == nil {
+		t.Error("accepted an 11 on a d10")
 	}
 	if err := r.RollContest(ref, door.ID, 0, 0, now); err != nil || door.Result == nil || door.Manual {
 		t.Fatalf("server roll: %v", err)
@@ -275,12 +279,12 @@ func TestEndOperationKeepsSurvivors(t *testing.T) {
 	sc := testScenario(t)
 	now := central(t, "2026-09-30 13:00")
 	r.EditUnit(ref, mod, "m2", UnitEdit{Strength: ptr(0)})
-	r.EditUnit(ref, mod, "m1", UnitEdit{Status: ptr("limping"), Skills: map[string]int{"move": 35}})
+	r.EditUnit(ref, mod, "m1", UnitEdit{Status: ptr("limping"), Quality: ptr(3)})
 	if err := r.EndOperation(ref, sc, mod, now); err != nil {
 		t.Fatal(err)
 	}
 	m1 := r.Unit("m1")
-	if m1.Operations != 1 || SkillOf(mod, m1, "move") != 35 || !strings.Contains(m1.Record[0], "limping") {
+	if m1.Operations != 1 || QualityOf(mod, m1) != 3 || VeteranOf(m1) != 1 || !strings.Contains(m1.Record[0], "limping") {
 		t.Errorf("survivor %+v", m1)
 	}
 	if !strings.Contains(r.Unit("m2").Name, "replacements") || r.Operations[0].Lost[0] != "LCpl. Okafor" {

@@ -82,29 +82,28 @@ cross the canal, reach the hospital, and bring the survivors out.
   back." A spot on the map can be marked, but nothing else is required.
   Orders are drafted, committed, and frozen at the lock; the squad leader can
   approve one or send it back with a note.
-- **Unit cards** list a marine's skills (percentages), kit, status, notes,
-  and established facts. The card doesn't list everything, and doesn't need
-  to: the referee interprets.
-- **Facts are co-created.** Anyone can propose something true about their
-  marine or the world ("the hospital has a loading dock on the canal side");
-  the referee accepts it, changes it, or turns it down with a reason.
-  Accepted facts are true for everyone from then on (or privately, between
-  one player and the referee).
-- **The dice:** each side's chance is skill plus advantage (cover, surprise,
-  a good plan) or minus a handicap, kept between 5% and 95%. Both roll d100;
-  at or under succeeds; if both succeed the bigger margin wins; if both fail,
-  nobody gets what they wanted and something complicates things. A check is
-  one side rolling alone. The server rolls, or the referee enters dice from
-  the table.
+- **Unit cards** show a marine's usual bonus (quality, plus veterancy),
+  kit, status, notes, and established facts. The card doesn't list
+  everything, and doesn't need to: the referee interprets.
+- **Facts are co-created.** Players propose something true about their
+  marine or the world from a card ("the hospital has a loading dock on the
+  canal side"); the referee accepts it, changes it, or turns it down on the
+  Notes screen. Accepted facts show on the cards and in "What we know" on
+  the map screen (or stay private between one player and the referee).
+- **The dice:** when a situation is in doubt, each side rolls a d10 plus one
+  bonus, everything that matters summed (quality, veterancy, cover, ambush,
+  weather). The result is just the totals, "Okafor 5, the horde 9", and the
+  referee reads them against what each side wanted, like an old Braunstein
+  game. The server rolls, or the referee enters dice from the table.
 - **The desk.** At the lock, every order lands on the referee's Turn screen.
-  For each, the referee adds rolls where needed, writes what happened, and
+  For each, the referee rolls where needed, writes what happened, and
   chooses who hears about it (the whole squad, only that player, or nobody
   yet). They move counters and change units (status, skills, kit, notes,
   radio) as they go; players keep seeing the board as it stood at the lock
   until the turn is published. Secret rolls stay on the referee's side of
   the report.
 - **The assistant (optional):** an AI model can suggest rolls from the
-  orders (skills, advantages, and why), draft outcomes from the rolls, and
+  orders (who rolls, and what counts for each side), draft outcomes from the rolls, and
   draft an opening narrative for each report. Suggestions sit unrolled until
   the referee rolls them; drafts until the referee keeps or rewrites them.
 - **Fog and radios, by hand.** The referee decides what players know about:
@@ -136,7 +135,7 @@ What's next: [docs/roadmap.md](docs/roadmap.md). Writing your own setting:
 ```
 main.go                       flags, wiring
 content/                      embedded module + scenario JSON
-internal/rules/               module schema and the dice (contests and checks)
+internal/rules/               module schema and the dice (d10 + bonus)
 internal/game/                campaigns: rooms, orders, resolution, fog, views, store
 internal/web/                 HTTP handlers, templates, static JS/CSS
 internal/push/                web push: VAPID and payload encryption

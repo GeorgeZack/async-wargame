@@ -1,8 +1,8 @@
 // Package rules holds a game module's schema and the dice. A module is data:
-// sides, skills, unit templates, map art, random events, and the rules text
-// players read. The referee interprets everything else: the dice only say
-// how well each side did, and the referee (or the AI assistant, with the
-// referee's approval) says what that means in the story.
+// sides, unit templates, suggested factors, map art, and random events. The
+// referee interprets everything else: the dice only say how each side did,
+// and the referee (or the AI assistant, with the referee's approval) says
+// what that means in the story.
 //
 // The campaign server (package game) depends on this package, never the
 // other way round, so a new setting can be written without touching it.
@@ -20,20 +20,18 @@ var ErrInvalid = errors.New("bad request")
 
 // Module is a versioned setting.
 type Module struct {
-	ID         string      `json:"id"`
-	Version    string      `json:"version"`
-	Name       string      `json:"name"`
-	Intro      string      `json:"intro,omitempty"`
-	Scale      Scale       `json:"scale"`
-	Rules      []Section   `json:"rules"`      // the rules page, in the setting's words
-	Skills     []Skill     `json:"skills"`     // what units can be good at, in percent
-	Advantages []Advantage `json:"advantages"` // suggested modifiers for contests
-	Sides      []Side      `json:"sides"`
-	Classes    []Class     `json:"classes"` // unit templates
-	Terrain    []Terrain   `json:"terrain"` // map art
-	EdgeTypes  []EdgeType  `json:"edges"`
-	Crossings  []Crossing  `json:"crossings"`
-	Events     []EventDef  `json:"events"`
+	ID        string     `json:"id"`
+	Version   string     `json:"version"`
+	Name      string     `json:"name"`
+	Intro     string     `json:"intro,omitempty"`
+	Scale     Scale      `json:"scale"`
+	Factors   []Factor   `json:"factors"` // things that often count toward a roll's bonus
+	Sides     []Side     `json:"sides"`
+	Classes   []Class    `json:"classes"` // unit templates
+	Terrain   []Terrain  `json:"terrain"` // map art
+	EdgeTypes []EdgeType `json:"edges"`
+	Crossings []Crossing `json:"crossings"`
+	Events    []EventDef `json:"events"`
 
 	terrainByCode map[byte]*Terrain
 	classByID     map[string]*Class
@@ -46,24 +44,11 @@ type Scale struct {
 	Turn string `json:"turn"`
 }
 
-// Section is part of the rules page.
-type Section struct {
-	Title string   `json:"title"`
-	Text  []string `json:"text"` // paragraphs
-}
-
-// Skill is something a unit can be good at, rated in percent.
-type Skill struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Note string `json:"note,omitempty"`
-}
-
-// Advantage is a modifier the referee might apply to one side of a contest.
-type Advantage struct {
+// Factor is something that often counts toward one side's bonus: "ambush
+// +3", "night -1". A suggestion for the referee, not a rule.
+type Factor struct {
 	Name  string `json:"name"`
-	Value int    `json:"value"` // percent; negative for a handicap
-	Note  string `json:"note,omitempty"`
+	Value int    `json:"value"`
 }
 
 type Side struct {
@@ -82,11 +67,13 @@ type Class struct {
 	Kind   string `json:"kind,omitempty"`   // "group" (strength is a headcount) or a single "special", "monster", "nest", "vehicle"
 	Symbol string `json:"symbol,omitempty"` // counter art
 	// Strength is the usual headcount for a new unit of this kind.
-	Strength    int            `json:"strength,omitempty"`
-	Skills      map[string]int `json:"skills"`
-	Description string         `json:"description,omitempty"`
-	Kit         string         `json:"kit,omitempty"`     // what it usually carries, in a sentence
-	Contact     *Contact       `json:"contact,omitempty"` // how players see it before it's identified
+	Strength int `json:"strength,omitempty"`
+	// Quality is how good a unit of this kind is, as a bonus to its rolls:
+	// 0 for ordinary, +1 or +2 for trained, more for the exceptional.
+	Quality     int      `json:"quality"`
+	Description string   `json:"description,omitempty"`
+	Kit         string   `json:"kit,omitempty"`     // what it usually carries, in a sentence
+	Contact     *Contact `json:"contact,omitempty"` // how players see it before it's identified
 }
 
 type Contact struct {
@@ -125,15 +112,6 @@ type Crossing struct {
 func (m *Module) TerrainAt(code byte) *Terrain { return m.terrainByCode[code] }
 func (m *Module) Class(id string) *Class       { return m.classByID[id] }
 func (m *Module) Side(id string) *Side         { return m.sideByID[id] }
-
-func (m *Module) Skill(id string) *Skill {
-	for i := range m.Skills {
-		if m.Skills[i].ID == id {
-			return &m.Skills[i]
-		}
-	}
-	return nil
-}
 
 func (m *Module) EdgeType(id string) *EdgeType {
 	for i := range m.EdgeTypes {
@@ -191,29 +169,14 @@ func (m *Module) Index() error {
 	for i := range m.Sides {
 		m.sideByID[m.Sides[i].ID] = &m.Sides[i]
 	}
-	if len(m.Skills) == 0 {
-		return fmt.Errorf("a module needs at least one skill")
-	}
-	seenSkill := map[string]bool{}
-	for _, s := range m.Skills {
-		if s.ID == "" || seenSkill[s.ID] {
-			return fmt.Errorf("skill %q: missing or duplicate id", s.ID)
-		}
-		seenSkill[s.ID] = true
-	}
 	m.classByID = map[string]*Class{}
 	for i := range m.Classes {
 		cl := &m.Classes[i]
 		if m.sideByID[cl.Side] == nil {
 			return fmt.Errorf("class %q: unknown side %q", cl.ID, cl.Side)
 		}
-		for id, v := range cl.Skills {
-			if !seenSkill[id] {
-				return fmt.Errorf("class %q: unknown skill %q", cl.ID, id)
-			}
-			if v < 0 || v > 100 {
-				return fmt.Errorf("class %q: skill %q must be 0 to 100", cl.ID, id)
-			}
+		if cl.Quality < -5 || cl.Quality > 10 {
+			return fmt.Errorf("class %q: quality must be -5 to 10", cl.ID)
 		}
 		m.classByID[cl.ID] = cl
 	}

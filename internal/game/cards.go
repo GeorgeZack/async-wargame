@@ -1,5 +1,7 @@
 package game
 
+import "fmt"
+
 // UnitCard is one unit, as the viewer may see it: who they are, what
 // they're good at, what they carry, how they are, and what's been
 // established about them.
@@ -10,7 +12,9 @@ type UnitCard struct {
 	Sector     string
 	Contact    bool // a player's view of an unidentified unit
 	Playable   bool
-	Skills     []SkillLine
+	Quality    int    // the unit's quality bonus
+	Veteran    int    // suggested veterancy bonus
+	Bonus      string // what a roll usually starts from: "+3 (quality +2, veteran +1)"
 	Kit        string
 	Notes      string
 	Record     []string
@@ -65,7 +69,12 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		card.SideName = "Unknown"
 		return card, nil
 	}
-	card.Skills, card.Kit, card.Notes = SkillLines(mod, u), KitOf(mod, u), u.Notes
+	card.Quality, card.Veteran, card.Kit, card.Notes = QualityOf(mod, u), VeteranOf(u), KitOf(mod, u), u.Notes
+	if b, why := baseBonus(mod, u); why != "" {
+		card.Bonus = fmt.Sprintf("%+d (%s)", b, why)
+	} else {
+		card.Bonus = "+0"
+	}
 	card.Facts = r.FactsFor(me, u.ID)
 	if ref {
 		card.CanEdit, card.RawID, card.Strength, card.Status = true, u.ID, u.Strength, u.Status
@@ -87,40 +96,4 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		}
 	}
 	return card, nil
-}
-
-// Rules is everything the rules page prints, drawn from the module.
-type Rules struct {
-	Module      *Module
-	Scale       Scale
-	Schedule    string
-	MinPlanning string
-	Templates   []RuleClass // the player side's unit templates
-	Others      []RuleClass // referee only
-	IsReferee   bool
-}
-
-type RuleClass struct {
-	*Class
-	SideName string
-	Skills   []SkillLine
-}
-
-// BuildRules prepares the rules page.
-func BuildRules(r *Room, mod *Module, me *Member) *Rules {
-	ref := me.Role == RoleReferee
-	rl := &Rules{Module: mod, Scale: mod.Scale, IsReferee: ref, MinPlanning: "an hour",
-		Schedule: "Orders lock at " + joinTimes(r.Schedule) + ", " + daysText(r.Schedule.Days) + "."}
-	for i := range mod.Classes {
-		cl := &mod.Classes[i]
-		side := mod.Side(cl.Side)
-		rc := RuleClass{Class: cl, SideName: side.Name, Skills: SkillLines(mod, &Unit{Class: cl.ID})}
-		switch {
-		case side.Playable:
-			rl.Templates = append(rl.Templates, rc)
-		case ref:
-			rl.Others = append(rl.Others, rc)
-		}
-	}
-	return rl
 }

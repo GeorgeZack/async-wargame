@@ -57,6 +57,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 			continue
 		}
 		if s := survivors[tu.ID]; s != nil {
+			s.Formation, s.Detached = tu.Formation, false
 			s.X, s.Y = tu.X, tu.Y // survivors redeploy at the start positions
 			units = append(units, s)
 			delete(survivors, tu.ID)
@@ -72,10 +73,13 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 			units = append(units, s)
 		}
 	}
+	r.Formations = fresh.Formations
+	r.Moves, r.Plans = nil, nil
 	r.Units = units
 	r.Map, r.Features = fresh.Map, fresh.Features
 	r.Operations = append(r.Operations, rec)
 	r.Operation = op + 1
+	r.BriefingVignette = nil
 	r.Phase, r.Turn, r.Threat = PhaseSetup, 0, MinThreat
 	r.Deadline, r.LockedAt, r.Deferred = time.Time{}, time.Time{}, false
 	r.Desk, r.LockedUnits = nil, nil

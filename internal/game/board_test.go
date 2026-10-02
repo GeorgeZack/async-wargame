@@ -158,6 +158,7 @@ func TestOldSavesMoveToPoints(t *testing.T) {
 func TestMoveSeveralUnitsAtOnce(t *testing.T) {
 	r, mod, _, ref := testRoom(t)
 	hicks := &Member{ID: "h", Name: "Hicks", Role: RolePlayer, Status: StatusApproved}
+	r.Unit("m1").Detached, r.Unit("m2").Detached = true, true
 	moves := []UnitMove{{ID: "m1", At: Pos{100, 100}}, {ID: "m2", At: Pos{110, 100}}}
 	if err := r.MoveUnits(hicks, mod, moves); err != ErrForbidden {
 		t.Errorf("a player moved counters: %v", err)
@@ -197,7 +198,7 @@ func TestRefereeMovesShowAtTheDesk(t *testing.T) {
 		!strings.Contains(d.Items[0].Moved.Text, "Red Beach") || !strings.Contains(d.Items[0].Moved.Text, "0908") {
 		t.Fatalf("Reyes's move: %+v", d.Items[0].Moved)
 	}
-	if len(d.Moves) != 1 || d.Moves[0].Unit != "Shamblers by the canal" || !strings.Contains(d.Moves[0].Text, "Canal bridge") {
+	if len(d.Moves) != 4 || d.Moves[0].Unit != "Shamblers by the canal" || !strings.Contains(d.Moves[0].Text, "Canal bridge") {
 		t.Errorf("other moves: %+v", d.Moves)
 	}
 	// Moving him back where he started forgets the move.

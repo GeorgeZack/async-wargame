@@ -305,6 +305,7 @@ func (r *Room) Unwritten() int {
 // TurnReport is what a published turn says. Each entry has its own
 // visibility; players see the ones meant for them.
 type TurnReport struct {
+	Vignette  *Vignette     `json:"vignette,omitempty"`
 	Operation int           `json:"operation"`
 	Turn      int           `json:"turn"`
 	At        time.Time     `json:"at"`
@@ -320,14 +321,15 @@ type TurnReport struct {
 
 // ReportEntry is one order's outcome, or a standalone one.
 type ReportEntry struct {
-	Title  string   `json:"title"`
-	Unit   string   `json:"unit,omitempty"`
-	Holder string   `json:"holder,omitempty"` // member id holding the unit at the time
-	Order  string   `json:"order,omitempty"`  // what they ordered
-	Text   string   `json:"text"`
-	Rolls  []string `json:"rolls,omitempty"`  // contests players may see
-	Secret []string `json:"secret,omitempty"` // contests only the referee sees
-	Seen   string   `json:"seen"`
+	Holders []string `json:"holders,omitempty"`
+	Title   string   `json:"title"`
+	Unit    string   `json:"unit,omitempty"`
+	Holder  string   `json:"holder,omitempty"` // member id holding the unit at the time
+	Order   string   `json:"order,omitempty"`  // what they ordered
+	Text    string   `json:"text"`
+	Rolls   []string `json:"rolls,omitempty"`  // contests players may see
+	Secret  []string `json:"secret,omitempty"` // contests only the referee sees
+	Seen    string   `json:"seen"`
 }
 
 // PublishTurn turns the desk into a report and opens the next turn.
@@ -338,12 +340,16 @@ func (r *Room) PublishTurn(actor *Member, mod *Module, now time.Time) error {
 	if r.Phase != PhaseResolving {
 		return bad("the turn hasn't been locked yet")
 	}
-	r.publish(mod, now)
-	return nil
+	return r.publish(mod, now)
 }
 
-func (r *Room) publish(mod *Module, now time.Time) {
+func (r *Room) publish(mod *Module, now time.Time) error {
 	r.snapshot(now)
+	if ref := r.Referee(); ref != nil && len(r.PlansFor(ref)) > 0 {
+		if err := r.ApplyPlans(ref, mod); err != nil {
+			return err
+		}
+	}
 	d := r.Desk
 	if d == nil || d.Turn != r.Turn {
 		d = &Desk{Turn: r.Turn}
@@ -366,7 +372,12 @@ func (r *Room) publish(mod *Module, now time.Time) {
 		u := r.Unit(o.Unit)
 		e := ReportEntry{Order: o.Text, Seen: SeenByAll, Unit: o.Unit}
 		if u != nil {
-			e.Title, e.Holder = u.Name, u.AssignedTo
+			e.Title, e.Holder = r.orderName(o), u.AssignedTo
+			for _, member := range r.OrderMembers(o) {
+				if member.AssignedTo != "" {
+					e.Holders = append(e.Holders, member.AssignedTo)
+				}
+			}
 			if u.OutOfContact {
 				e.Seen = SeenByHolder
 			}
@@ -399,6 +410,8 @@ func (r *Room) publish(mod *Module, now time.Time) {
 	r.assistAtPublish(now)
 	r.logKind(VisAll, "sitrep", "Turn %d is published. The report is under Situation.", r.Turn)
 	r.openTurn(r.Turn+1, now)
+	r.Plans = nil // the snapshot retains plans if this turn is reopened
+	return nil
 }
 
 // sees reports whether member me may read a report entry.
@@ -409,6 +422,14 @@ func (r *Room) seesEntry(me *Member, e ReportEntry) bool {
 	case e.Seen == SeenByAll:
 		return true
 	case e.Seen == SeenByHolder:
+		for _, id := range e.Holders {
+			if id == me.ID {
+				return true
+			}
+			if h := r.memberOrNil(id); h != nil && me.Role == RoleCommander && h.ReportsTo == me.ID {
+				return true
+			}
+		}
 		holder := r.memberOrNil(e.Holder)
 		return e.Holder == me.ID || holder != nil && holder.ReportsTo == me.ID && me.Role == RoleCommander
 	}

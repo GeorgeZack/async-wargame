@@ -42,33 +42,35 @@ const (
 
 // Room is one hosted campaign: its membership, canonical state, and history.
 type Room struct {
-	Code          string            `json:"code"`
-	Name          string            `json:"name"`
-	ScenarioID    string            `json:"scenario"`
-	ModuleID      string            `json:"module"`
-	ModuleVersion string            `json:"moduleVersion"`
-	CreatedAt     time.Time         `json:"createdAt"`
-	Turn          int               `json:"turn"`
-	Phase         Phase             `json:"phase"`
-	Closed        bool              `json:"closed,omitempty"`
-	ClosedAt      time.Time         `json:"closedAt,omitzero"`
-	Schedule      Schedule          `json:"schedule"`
-	Deadline      time.Time         `json:"deadline,omitzero"`  // when planning locks
-	Deferred      bool              `json:"deferred,omitempty"` // the referee moved the deadline off the schedule
-	LockedAt      time.Time         `json:"lockedAt,omitzero"`
-	Threat        int               `json:"threat"`
-	Members       []*Member         `json:"members"`
-	Units         []*Unit           `json:"units"`
-	Features      []Feature         `json:"features"`
-	Map           *HexMap           `json:"map"`   // the drawn hex map (the background when Board.Background is hex)
-	Board         Board             `json:"board"` // background, grid, scale
-	Briefing      []string          `json:"briefing"`
-	RefereeNotes  string            `json:"refereeNotes"`
-	Events        []*GameEvent      `json:"events,omitempty"`
-	Invites       []*Invite         `json:"invites,omitempty"`
-	Orders        []*Order          `json:"orders,omitempty"`
-	Operation     int               `json:"operation,omitempty"` // current operation number, from 1
-	Operations    []OperationRecord `json:"operations,omitempty"`
+	BriefingVignette *Vignette         `json:"briefingVignette,omitempty"`
+	Code             string            `json:"code"`
+	Name             string            `json:"name"`
+	ScenarioID       string            `json:"scenario"`
+	ModuleID         string            `json:"module"`
+	ModuleVersion    string            `json:"moduleVersion"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	Turn             int               `json:"turn"`
+	Phase            Phase             `json:"phase"`
+	Closed           bool              `json:"closed,omitempty"`
+	ClosedAt         time.Time         `json:"closedAt,omitzero"`
+	Schedule         Schedule          `json:"schedule"`
+	Deadline         time.Time         `json:"deadline,omitzero"`  // when planning locks
+	Deferred         bool              `json:"deferred,omitempty"` // the referee moved the deadline off the schedule
+	LockedAt         time.Time         `json:"lockedAt,omitzero"`
+	Threat           int               `json:"threat"`
+	Members          []*Member         `json:"members"`
+	Units            []*Unit           `json:"units"`
+	Features         []Feature         `json:"features"`
+	Map              *HexMap           `json:"map"`   // the drawn hex map (the background when Board.Background is hex)
+	Board            Board             `json:"board"` // background, grid, scale
+	Objectives       []string          `json:"objectives"`
+	Briefing         []string          `json:"briefing"`
+	RefereeNotes     string            `json:"refereeNotes"`
+	Events           []*GameEvent      `json:"events,omitempty"`
+	Invites          []*Invite         `json:"invites,omitempty"`
+	Orders           []*Order          `json:"orders,omitempty"`
+	Operation        int               `json:"operation,omitempty"` // current operation number, from 1
+	Operations       []OperationRecord `json:"operations,omitempty"`
 	// Desk is the referee's work on the turn being adjudicated.
 	Desk *Desk `json:"desk,omitempty"`
 	// LockedUnits is the board as it stood at the lock: what players see
@@ -78,6 +80,7 @@ type Room struct {
 	Facts       []*Fact       `json:"facts,omitempty"`
 	Intentions  []*Intention  `json:"intentions,omitempty"` // what enemy units mean to do, by turn
 	Moves       []*Move       `json:"moves,omitempty"`      // counters the referee moved, by turn
+	Plans       []*Plan       `json:"plans,omitempty"`
 	Formations  []*Formation  `json:"formations,omitempty"` // units that share a token
 	Log         []LogEntry    `json:"log"`
 	Messages    []*Message    `json:"messages,omitempty"`
@@ -314,7 +317,7 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 	r := &Room{
 		Code: code, Name: name, ScenarioID: sc.ID, ModuleID: mod.ID, ModuleVersion: mod.Version,
 		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Members: []*Member{ref},
-		Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), RefereeNotes: sc.RefereeNotes,
+		Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), Objectives: slices.Clone(sc.Objectives), RefereeNotes: sc.RefereeNotes,
 	}
 	for _, f := range sc.Formations {
 		f := f
@@ -337,6 +340,11 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 			X: p.X, Y: p.Y, Strength: str, Brief: su.Brief, Formation: su.Formation,
 			Known: su.Known || side.Playable, Identified: su.Known || side.Playable,
 		})
+	}
+	for _, f := range r.Formations {
+		if members := r.members(f.ID); len(members) > 0 {
+			r.moveWithFormation(members[0])
+		}
 	}
 	r.logf(VisAll, "%s opened the campaign as referee.", refName)
 	return r

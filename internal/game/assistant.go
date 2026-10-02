@@ -193,12 +193,13 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 		return "", "", false
 	}
 	type item struct {
-		Order  string       `json:"order"`
-		Text   string       `json:"orderText"`
-		Mark   string       `json:"markedSpot,omitempty"`
-		Wants  string       `json:"wantsToReach,omitempty"`
-		Unit   promptUnit   `json:"unit"`
-		Nearby []promptUnit `json:"nearby,omitempty"`
+		Members []promptUnit `json:"members,omitempty"`
+		Order   string       `json:"order"`
+		Text    string       `json:"orderText"`
+		Mark    string       `json:"markedSpot,omitempty"`
+		Wants   string       `json:"wantsToReach,omitempty"`
+		Unit    promptUnit   `json:"unit"`
+		Nearby  []promptUnit `json:"nearby,omitempty"`
 	}
 	var items []item
 	for _, o := range r.LockedOrders() {
@@ -206,7 +207,7 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 		if u == nil {
 			continue
 		}
-		it := item{Order: o.ID, Text: o.Text, Unit: r.promptUnit(mod, u), Nearby: r.nearby(mod, u, 3)}
+		it := item{Members: r.orderPromptUnits(mod, o), Order: o.ID, Text: o.Text, Unit: r.promptUnit(mod, u), Nearby: r.nearby(mod, u, 3)}
 		if o.Mark != nil {
 			it.Mark = r.where(mod, *o.Mark)
 			it.Wants = r.IntendedMove(mod, u, o)
@@ -219,6 +220,8 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 	system := `You are Jev, assistant to the referee of a referee-led, old-school roleplaying wargame. Players write free-text orders for their characters; the referee decides what happens, calling for dice only where the outcome is genuinely in doubt and the stakes matter.
 
 ` + r.settingText(mod) + `
+
+Orders can be global squad instructions: the members list names every participating character. Treat a shared instruction as one order and use the relevant member for each roll.
 
 For each order, suggest the rolls the referee might make, in the order they'd happen. Most orders need zero to two. Don't roll for things that would simply work (walking down an empty street) or simply fail. For each side, list the situational factors that change its usual bonus, with a value and a short reason grounded in the order or the situation: a good plan in the order deserves +1; an ambush +3; darkness -1. Don't repeat the unit's usual bonus; it's added for you. For an opponent that isn't a unit on the list (a locked door, a frightened survivor), give a name and its whole bonus as factors. Mark a roll secret when players shouldn't see it (a hidden enemy noticing them, say). Enemy units may say what they intend this turn ("intends"); the referee decided that before reading the orders, so use it. Use only the unit ids given.
 
@@ -255,9 +258,11 @@ func (r *Room) outcomePrompt(mod *Module, run *Run) (string, string, bool) {
 
 ` + r.settingText(mod) + `
 
+For a shared squad instruction, describe what happened to all listed participating members; the unit field is only the lead character.
+
 Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Read the rolls as the referee would: compare each side's total with the other's and with what each was trying to do. A big gap is decisive; a small one is close and costs something; a low total rolled alone means the situation got the better of them. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Enemy units nearby may say what they intend this turn; they act on it. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
 	b, _ := json.MarshalIndent(map[string]any{
-		"order": o.Text, "wantsToReach": r.IntendedMove(mod, u, o), "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
+		"members": r.orderPromptUnits(mod, o), "order": o.Text, "wantsToReach": r.IntendedMove(mod, u, o), "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
 		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes, "refereeMovedCounter": r.moveForAI(u.ID)}, "", " ")
 	return system, string(b), true
 }
@@ -265,6 +270,13 @@ Write 40 to 130 words, past tense, plain and concrete, like a tough after-action
 // moveForAI says where the referee put a unit's counter this turn, so a
 // drafted outcome ends where the counter now stands.
 func (r *Room) moveForAI(unitID string) string {
+	if ref := r.Referee(); ref != nil {
+		for _, p := range r.PlansFor(ref) {
+			if p.Unit == unitID {
+				return "The referee staged a final destination at " + r.Where(p.To, true) + ". This move takes effect on publish; describe the outcome as ending there."
+			}
+		}
+	}
 	if mv := r.MoveOf(unitID); mv != nil {
 		return "The referee moved this unit's counter by hand this turn: " + mv.Text + " Treat where it ended as where the marine got to."
 	}
@@ -736,4 +748,12 @@ func (r *Room) scaleForAI() string {
 		return "Scale: " + t
 	}
 	return "No scale is set"
+}
+
+func (r *Room) orderPromptUnits(mod *Module, o *Order) []promptUnit {
+	var out []promptUnit
+	for _, u := range r.OrderMembers(o) {
+		out = append(out, r.promptUnit(mod, u))
+	}
+	return out
 }

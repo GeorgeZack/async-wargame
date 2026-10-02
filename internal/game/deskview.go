@@ -73,7 +73,9 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 		if u == nil {
 			continue
 		}
-		ordered[u.ID] = true
+		for _, member := range r.OrderMembers(o) {
+			ordered[member.ID] = true
+		}
 		it := DeskItem{Order: r.orderView(o, false), Unit: unitView(r, u, mod, me), Bonus: bonusText(mod, u), Kit: KitOf(mod, u),
 			Outcome: d.outcomeFor(o.ID), Busy: ai.Busy[RunOutcome+"/"+o.ID], Question: d.Questions[o.ID], Asking: ai.Busy[RunQuestion+"/"+o.ID]}
 		if h := r.memberOrNil(u.AssignedTo); h != nil && h.Status == StatusApproved {
@@ -121,6 +123,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 
 // ReportView is a published report as one member may read it.
 type ReportView struct {
+	Art             VignetteView
 	Operation, Turn int
 	Corrected       string
 	Narrative       string // players: only once approved
@@ -141,7 +144,7 @@ func addReports(v *View, r *Room, me *Member) {
 	ref := me.Role == RoleReferee
 	for i := len(r.Reports) - 1; i >= 0 && len(v.Reports) < 10; i-- {
 		rep := r.Reports[i]
-		rv := ReportView{Operation: rep.Operation, Turn: rep.Turn, Corrected: rep.Corrected, Latest: i == len(r.Reports)-1}
+		rv := ReportView{Art: r.vignetteView(max(rep.Operation, 1), rep.Turn, ref), Operation: rep.Operation, Turn: rep.Turn, Corrected: rep.Corrected, Latest: i == len(r.Reports)-1}
 		if ref || rep.NarrativeStatus == NarrativeApproved {
 			rv.Narrative, rv.NarrativeStatus, rv.NarrativeModel, rv.NarrativeEdited = rep.Narrative, rep.NarrativeStatus, rep.NarrativeModel, rep.NarrativeEdited
 		}
@@ -149,7 +152,7 @@ func addReports(v *View, r *Room, me *Member) {
 			if !r.seesEntry(me, e) {
 				continue
 			}
-			ev := EntryView{ReportEntry: e, Mine: e.Holder == me.ID, Hidden: e.Seen != SeenByAll}
+			ev := EntryView{ReportEntry: e, Mine: e.Holder == me.ID || containsHolder(e.Holders, me.ID), Hidden: e.Seen != SeenByAll}
 			if !ref {
 				ev.Secret = nil
 			}

@@ -735,7 +735,7 @@ func TestOrdersOverHTTPAndClosing(t *testing.T) {
 	}
 	ref.post(base+"/reopen", nil)
 	_, body = hicks.room(base)
-	mustContain(t, body, "Your order, turn 1")
+	mustContain(t, body, "Your order")
 
 	// Deleting needs the room closed and the code typed.
 	if res, _ := ref.post(base+"/delete", url.Values{"confirm": {code}}); res.StatusCode != 400 {
@@ -858,7 +858,7 @@ func TestScreensByRole(t *testing.T) {
 	}
 	// A player has one page: situation, map, character, order, talk.
 	_, body := hicks.get(base)
-	mustContain(t, body, "Situation", "Your character", "Your order, turn 1", "Game Chat", `id="map"`)
+	mustContain(t, body, "Situation", "Your character", "Your order", "Game Chat", `id="map"`)
 	mustNotContain(t, body, `id="screen-tabs"`, ">Desk<", ">Setup<")
 }
 

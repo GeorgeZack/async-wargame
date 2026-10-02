@@ -231,7 +231,7 @@ func (r *Room) questionPrompt(mod *Module, run *Run) (string, string, bool) {
 	system := `You are Jev, assistant to the referee of a referee-led, old-school roleplaying wargame. A player's order may be read more than one way. Draft one short, friendly question the referee could send the player to settle what they meant, in the referee's voice, addressed to the player. Ask about what matters for how it will go: the route, the sequence, what triggers a fallback, who goes first, what they do if they meet resistance. If the order is perfectly clear, ask about the one detail most likely to matter. One or two sentences, no preamble, no quotation marks.
 
 ` + r.settingText(mod)
-	b, _ := json.MarshalIndent(map[string]any{"order": o.Text, "unit": r.promptUnit(mod, u), "nearby": r.nearby(mod, u, 2), "facts": r.acceptedFacts("")}, "", " ")
+	b, _ := json.MarshalIndent(map[string]any{"members": r.orderPromptUnits(mod, o), "order": o.Text, "unit": r.promptUnit(mod, u), "nearby": r.nearby(mod, u, 2), "facts": r.acceptedFacts("")}, "", " ")
 	return system, string(b), true
 }
 

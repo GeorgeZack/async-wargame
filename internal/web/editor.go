@@ -65,7 +65,13 @@ func (s *Server) editOps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) editText(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		if _, ok := r.Form["objectives"]; ok {
+			if err := room.SetObjectives(me, r.FormValue("objectives")); err != nil {
+				return err
+			}
+		}
 		return room.SetTexts(me, r.FormValue("campaign"), r.FormValue("briefing"), r.FormValue("notes"))
 	})
 }

@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 )
@@ -201,6 +202,26 @@ func (r *Room) MoveUnits(actor *Member, mod *Module, moves []UnitMove) error {
 	}
 	if len(moves) == 0 || len(moves) > 200 {
 		return bad("move 1 to 200 units at a time")
+	}
+	// Validate the whole batch before changing any positions.
+	destinations := map[string]Pos{}
+	for _, m := range moves {
+		if r.Unit(m.ID) == nil {
+			return ErrNotFound
+		}
+		if math.IsNaN(m.At.X) || math.IsNaN(m.At.Y) || math.IsInf(m.At.X, 0) || math.IsInf(m.At.Y, 0) {
+			return bad("choose a point on the map")
+		}
+	}
+	for _, m := range moves {
+		u := r.Unit(m.ID)
+		if u.together() {
+			at := r.clampPos(m.At)
+			if previous, ok := destinations[u.Formation]; ok && previous != at {
+				return bad("members of a formation move together; split them off to move separately")
+			}
+			destinations[u.Formation] = at
+		}
 	}
 	for _, m := range moves {
 		at := m.At

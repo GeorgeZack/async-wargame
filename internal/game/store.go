@@ -78,6 +78,9 @@ func OpenStore(path string, cat *Catalog) (*Store, error) {
 				r.Board = sc.Board
 			}
 		}
+		if r.Objectives == nil {
+			r.Objectives = append([]string{}, cat.Scenarios[r.ScenarioID].Objectives...)
+		}
 		r.Board = r.Board.withDefaults()
 		s.rooms[r.Code] = r
 	}

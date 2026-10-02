@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -94,7 +95,7 @@ func (r *Room) SplitOff(actor *Member, unitID string) error {
 	if f := r.formation(u.Formation); f != nil {
 		name = f.Name
 	}
-	r.logf(VisAll, "%s split off from %s.", u.Name, name)
+	r.logf(VisReferee, "%s split off from %s.", u.Name, name)
 	return nil
 }
 
@@ -115,12 +116,13 @@ func (r *Room) Rejoin(actor *Member, unitID string) error {
 		u.X, u.Y = at.X, at.Y
 	}
 	u.Detached = false
+	r.Plans = slices.DeleteFunc(r.Plans, func(p *Plan) bool { return p.Member == actor.ID && p.Unit == u.ID && p.Turn == r.Turn })
 	r.noteMove(u, from)
 	name := u.Formation
 	if f := r.formation(u.Formation); f != nil {
 		name = f.Name
 	}
-	r.logf(VisAll, "%s rejoined %s.", u.Name, name)
+	r.logf(VisReferee, "%s rejoined %s.", u.Name, name)
 	return nil
 }
 

@@ -23,6 +23,10 @@
         <button type="button" class="secondary" data-zoom="reset">Fit</button>
         <button type="button" class="secondary ruler-btn" data-ruler aria-pressed="false" title="Measure a distance (M)">Measure</button>
         {{if .IsReferee}}<button type="button" class="secondary multi-btn" data-multi aria-pressed="false" title="Select several counters to move together: click each, or drag a box around them (or hold Shift)">Select several</button>{{end}}
+        <div id="map-plan-controls" class="row tight" data-live>
+        {{if and .IsReferee (eq .Phase "resolving")}}<span class="small">Drag to stage moves · applied when you publish</span>{{else}}<button type="button" class="secondary" data-plan aria-pressed="false">{{if .IsReferee}}Stage moves{{else}}Plan a move{{end}}</button>{{end}}
+        {{if .IsReferee}}<form method="post" action="{{.Base}}/plans/clear" data-enhance><button type="submit" class="secondary small-btn" id="clear-plans"{{if not .Data.Plans}} disabled{{end}}>Clear staged moves</button></form>{{end}}
+        </div>
         <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Names</label>
         <label class="toggle"><input type="checkbox" id="grid-toggle" checked> Grid</label>
       </div>
@@ -36,13 +40,13 @@
 
 {{define "sec-order-box"}}
 <section class="panel order-box" id="order-box" aria-labelledby="of-h"{{if or (not .Data.Orders.Open) (not .Data.Orders.Units)}} hidden{{end}}>
-      <h2 id="of-h">Your order, turn {{.Turn}}</h2>
+      <h2 id="of-h">Your order</h2>
       <form method="post" action="{{.Base}}/orders" class="stack" id="order-form" data-enhance>
         <label{{if le (len .Data.Orders.Units) 1}} hidden{{end}}>Who
           <select name="unit" id="of-unit">{{range .Data.Orders.Units}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select></label>
         <label for="of-text" class="sr-only">What they do</label>
         <textarea name="text" id="of-text" rows="5" maxlength="1500" required
-            placeholder="Say it like you would on the radio: what, how, and why. “I go up the east stairwell slow, check the landing, then cover the corridor while Doyle comes up behind me. If it's crawling with them, we pull back to the lobby.”"></textarea>
+            placeholder="Describe what, how, and why: advance to the bridge, keep to cover, and hold the crossing. Say what to do if the way is blocked."></textarea>
         <div class="mark-row">
           <input type="hidden" name="mark_x" id="of-mark-x"><input type="hidden" name="mark_y" id="of-mark-y">
           <button type="button" class="secondary small-btn js-only" id="of-pick">Drop a pin</button>
@@ -93,7 +97,7 @@
   <article class="desk-item" id="item-{{.Order.ID}}" aria-labelledby="item-h-{{.Order.ID}}">
     <header class="item-head">
       {{template "radio" .Unit}}<span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span>
-      <h3 id="item-h-{{.Order.ID}}"><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card>{{.Unit.Name}}</a></h3>
+      <h3 id="item-h-{{.Order.ID}}"><a href="{{$.Base}}/units/{{.Unit.ID}}{{if .Order.Group}}?squad=1{{end}}" class="unit-link" data-card>{{.Order.UnitName}}</a></h3>
       <a href="{{$.Base}}#map" class="small" data-goto="{{.Unit.ID}}">{{.Unit.Where}}</a>
       <span class="muted small">{{.Unit.AssignedName}}</span>
       {{if .Outcome}}{{if .Outcome.Text}}<span class="tag tag-order-committed">written</span>{{end}}{{end}}
@@ -103,7 +107,7 @@
     {{if .Wants}}<p class="small">Pin: {{.Wants}}.</p>{{else if .Order.Mark}}<p class="small muted">Pin: {{.Order.MarkLabel}}</p>{{end}}
     {{with .Reach}}<p class="small muted">Moves {{.}}.</p>{{end}}
     {{with .Moved}}<p class="small moved">{{.Text}}</p>{{end}}
-    <p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>
+    {{if .Order.Group}}<p class="small muted">Members: {{.Order.Members}}. Choose the member whose ability is relevant for each roll.</p>{{else}}<p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>{{end}}
 
     {{range .Contests}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
     {{template "add-roll" (dict "V" $ "Order" .Order.ID "Unit" .Unit.ID "Open" false)}}
@@ -112,7 +116,7 @@
       <input type="hidden" name="order" value="{{.Order.ID}}">
       <label class="small"><strong>What happened</strong>
         {{with .Outcome}}{{if eq .Source "ai"}}<span class="tag">{{if .Edited}}AI draft, edited{{else}}AI draft{{with .Model}} · {{.}}{{end}}{{end}}</span>{{end}}{{end}}
-        <textarea name="text" rows="4" maxlength="3000" placeholder="What {{.Unit.Name}} did, and how it went.">{{with .Outcome}}{{.Text}}{{end}}</textarea></label>
+        <textarea name="text" rows="4" maxlength="3000" placeholder="What {{.Order.UnitName}} did, and how it went.">{{with .Outcome}}{{.Text}}{{end}}</textarea></label>
       <div class="row tight">
         <label class="inline small">Who hears about it
           <select name="seen" class="compact">{{$seen := "all"}}{{with .Outcome}}{{$seen = .Seen}}{{else}}{{if eq .Unit.Radio "down"}}{{$seen = "holder"}}{{end}}{{end}}
@@ -236,7 +240,7 @@
 
 {{define "sec-orders"}}
 <section class="panel" id="orders-panel" data-live aria-labelledby="orders-h"{{if not (or .MyOrders .CheckIns)}} hidden{{end}}>
-      <h2 id="orders-h">Orders, turn {{.Turn}}</h2>
+      <h2 id="orders-h">Orders this turn</h2>
       {{if .CheckIns}}<h3 class="checkin-h">Who's in <span class="muted small">{{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}</span></h3>
       <ul class="plain list checkins">{{range .CheckIns}}<li class="checkin ci-{{.Status}}">
         <div><span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><strong>{{.Unit.Name}}</strong> <span class="muted small">{{.Holder}}</span>
@@ -247,6 +251,15 @@
       {{if $.Blind}}<p class="muted small">Refereeing blind: you see who's in, not what they wrote, until the lock.</p>{{end}}{{end}}
       {{if eq .Phase "planning"}}<p class="muted small">Orders lock {{.Clock.DeadlineText}}. A marine without a committed order carries on as before, and the referee decides what that means.</p>
       {{else if eq .Phase "resolving"}}<p class="muted small">Orders are locked while the referee works out what happens.</p>{{end}}
+      {{if .SquadOrders}}
+      <h3>Global orders</h3>
+      <p class="small muted">One instruction for the squad. Individual orders take precedence for members acting separately; changing the global order keeps those exceptions.</p>
+      <ul class="plain list squad-orders">{{range .SquadOrders}}<li class="order-slot">
+        <strong>{{.Name}}</strong> {{with .Order}}<span class="tag tag-order-{{.Status}}">{{.Status}}</span><p class="small muted">Following: {{.Members}}</p><blockquote class="order-text">{{.Text}}</blockquote>{{else}}<p class="muted small">No shared order yet.</p>{{end}}
+        {{if $.Data.Orders.Open}}<a class="button secondary small-btn" href="{{$.Base}}?order={{.ID}}#order-box" data-order-unit="{{.ID}}">{{if .Order}}Edit global order{{else}}Write global order{{end}}</a>{{end}}
+      </li>{{end}}</ul>
+      {{end}}
+      {{if .MyOrders}}<h3>Individual orders</h3><p class="small muted">Give a member a separate task to break off from the shared order. Withdraw that task to follow the squad again. Map positions change when the referee resolves the turn.</p>{{end}}
       <ul class="plain list">
         {{range .MyOrders}}<li class="order-slot">
           <div>{{template "radio" .Unit}}<span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card><strong>{{.Unit.Name}}</strong></a>
@@ -256,7 +269,7 @@
           {{with .Unit.Status}}<div class="small unit-status">{{.}}</div>{{end}}
           {{with .Moved}}<div class="small moved">{{.Text}}</div>{{end}}
           {{if .NoContact}}<div class="small no-contact">{{.Unit.RadioText}}. Their orders stay with {{if .Holder}}{{.Holder}}{{else}}them{{end}} until they're back on the radio.</div>{{end}}
-          {{with .Order}}<blockquote class="order-text">{{.Text}}</blockquote>
+          {{with .Order}}{{if .Group}}<p class="small">Following the global order for <strong>{{.UnitName}}</strong>.</p>{{else}}<blockquote class="order-text">{{.Text}}</blockquote>{{end}}
           <div class="small muted">{{if .Mark}}Pin: {{.MarkLabel}} · {{end}}{{if .Author}}by {{.Author}}{{end}}</div>
           {{if eq .Review "approved"}}<div class="small review ok">Approved by {{.ReviewedBy}}{{with .ReviewNote}}: “{{.}}”{{end}}</div>{{end}}
           {{if eq .Review "returned"}}<div class="small review back">Sent back by {{.ReviewedBy}}: “{{.ReviewNote}}” Revise it and commit again before the lock.</div>{{end}}
@@ -266,7 +279,7 @@
             <button type="submit" name="action" value="return" class="secondary small-btn">Send back</button>
           </form>{{end}}{{end}}
           {{if and $.Data.Orders.Open (not .NoContact)}}<div class="row tight slot-actions">
-            <a class="button secondary small-btn" href="{{$.Base}}?order={{.Unit.ID}}#order-box" data-order-unit="{{.Unit.ID}}">{{if .Order}}Edit order{{else}}Write order{{end}}</a></div>{{end}}
+            <a class="button secondary small-btn" href="{{$.Base}}?order={{.Unit.ID}}#order-box" data-order-unit="{{.Unit.ID}}">{{if .Order}}{{if .Order.Group}}Write individual order{{else}}Edit individual order{{end}}{{else}}Write individual order{{end}}</a></div>{{end}}
         </li>{{end}}
       </ul>
       {{if .OtherOrders}}
@@ -469,6 +482,7 @@
         {{with $rp.Corrected}}<p class="small correction">The referee corrected this turn after publishing it: {{.}}</p>{{end}}
         {{if $.IsReferee}}{{template "narrative-desk" (pair $ $rp)}}{{else if $rp.Narrative}}<div class="narrative"><p>{{$rp.Narrative}}</p>
           <p class="muted small">{{if $rp.NarrativeModel}}Drafted with AI{{if $rp.NarrativeEdited}}, edited{{end}} and approved by the referee.{{else}}From the referee.{{end}}</p></div>{{end}}
+        {{template "vignette" (pair $ $rp.Art)}}
         {{range $rp.Entries}}<article class="entry{{if .Mine}} mine{{end}}">
           <h3 class="entry-h">{{.Title}}{{if and $.IsReferee .Hidden}} <span class="tag tag-hidden">{{if eq .Seen "holder"}}only their player{{else}}referee only{{end}}</span>{{end}}</h3>
           {{with .Order}}<details class="small"><summary>The order</summary><blockquote class="order-text">{{.}}</blockquote></details>{{end}}
@@ -616,7 +630,7 @@
     <li class="{{if eq $stage "plan"}}now{{else if ne $stage "setup"}}done{{end}}"><strong>1 · Orders</strong><span>Players say what their marines do.</span></li>
     <li class="{{if eq $stage "plan"}}next{{else if ne $stage "setup"}}done{{end}}"><strong>2 · Lock</strong><span>At the deadline, or when you lock early.</span></li>
     <li class="{{if eq $stage "judge"}}now{{else if eq $stage "publish"}}done{{end}}"><strong>3 · Judge</strong><span>{{if eq .Phase "resolving"}}{{if .Clock.Unwritten}}{{.Clock.Unwritten}} {{if eq .Clock.Unwritten 1}}order{{else}}orders{{end}} still to write up.{{else}}Every order has an outcome.{{end}}{{else}}Roll where it's in doubt; write what happened.{{end}}</span></li>
-    <li class="{{if eq $stage "publish"}}now{{end}}"><strong>4 · Publish</strong><span>Players get the report, and the next turn opens.</span></li>
+    <li class="{{if eq $stage "publish"}}now{{end}}"><strong>4 · Publish</strong><span>Staged moves take effect, players get the report, and the next turn opens.</span></li>
   </ol>
   <div class="row step-action">
     {{if eq $stage "setup"}}
@@ -628,7 +642,8 @@
       <span class="small">{{if .Clock.AllIn}}Every player has committed.{{else}}Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}.{{with .Clock.Waiting}} Waiting on {{range $i, $w := .}}{{if $i}}, {{end}}{{$w}}{{end}}.{{end}}{{end}} Otherwise it locks {{.Clock.DeadlineText}}. <a href="{{.Base}}/setup#turn-clock">Defer or change the schedule</a></span>
     {{else}}
       {{if and (eq $stage "judge") (ne .Screen "desk")}}<a class="button secondary" href="{{.Base}}/desk#desk">Go to the desk</a>{{end}}
-      <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Players get the report, the board catches up, and turn {{.Clock.NextTurn}} opens.{{if .Clock.Unwritten}} {{.Clock.Unwritten}} order(s) have no outcome written; players will read 'carried out without incident'.{{end}}">
+      <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? All referee-staged moves take effect, players get the report, and turn {{.Clock.NextTurn}} opens.{{if .Clock.Unwritten}} {{.Clock.Unwritten}} order(s) have no outcome written; players will read 'carried out without incident'.{{end}}">
+        {{if .Data.Plans}}<p class="small">{{len .Data.Plans}} staged unit move(s) will be applied with this report.</p>{{end}}
         <button type="submit"{{if .Clock.Unwritten}} class="secondary"{{end}}>Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>
     {{end}}
   </div>
@@ -877,18 +892,20 @@
 {{define "sec-situation"}}
 <section class="panel situation" id="situation" data-live aria-labelledby="sit-h">
   <h2 id="sit-h">Situation</h2>
-  {{if not .Reports}}<details class="briefing-again" open><summary>Briefing</summary>{{range .Briefing}}<p>{{.}}</p>{{end}}</details>
+  {{if not .Reports}}<details class="briefing-again" open><summary>Briefing</summary>{{template "vignette" (pair . .BriefingArt)}}{{range .Briefing}}<p>{{.}}</p>{{end}}{{template "objectives" .}}</details>
   {{else}}{{with index .Reports 0}}{{$rp := .}}
   <h3 class="sit-turn">{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}{{if $rp.Corrected}} <span class="tag">corrected</span>{{end}}</h3>
   {{with $rp.Corrected}}<p class="small correction">The referee corrected this turn after publishing it: {{.}}</p>{{end}}
   {{if $.IsReferee}}{{template "narrative-desk" (pair $ $rp)}}{{else if $rp.Narrative}}<div class="narrative"><p>{{$rp.Narrative}}</p></div>{{end}}
+  {{template "vignette" (pair $ $rp.Art)}}
   {{range $rp.Entries}}{{template "entry" (pair $ .)}}{{end}}
   {{end}}
-  <details class="briefing-again"><summary>Briefing</summary>{{range .Briefing}}<p>{{.}}</p>{{end}}</details>
+  <details class="briefing-again"><summary>Briefing</summary>{{template "vignette" (pair . .BriefingArt)}}{{range .Briefing}}<p>{{.}}</p>{{end}}{{template "objectives" .}}</details>
   {{if gt (len .Reports) 1}}<details class="history"><summary>Earlier turns</summary>
     {{range $i, $rp := .Reports}}{{if $i}}<details class="report"><summary><strong>{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}</strong>{{if $rp.Corrected}} <span class="tag">corrected</span>{{end}}</summary>
       {{if $rp.Narrative}}<div class="narrative"><p>{{$rp.Narrative}}</p></div>{{end}}
-      {{range $rp.Entries}}{{template "entry" (pair $ .)}}{{end}}
+      {{template "vignette" (pair $ $rp.Art)}}
+  {{range $rp.Entries}}{{template "entry" (pair $ .)}}{{end}}
     </details>{{end}}{{end}}
   </details>{{end}}
   {{end}}
@@ -915,6 +932,7 @@
         <p class="muted small">{{.Unit.ClassName}} · <a href="#map" data-goto="{{.Unit.ID}}">{{.Unit.Where}}</a></p>
         {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $c.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}</div>
     </div>
+    {{with .FormationName}}<p class="small">With {{.}}: {{range $i, $name := $c.Companions}}{{if $i}}, {{end}}{{$name}}{{end}} · {{if $c.Unit.Detached}}split off{{else}}together{{end}}</p>{{end}}
     {{with .Unit.Status}}<p class="unit-status">{{.}}</p>{{end}}
     {{with .Brief}}<details class="brief" open><summary>Private brief</summary><p class="pre">{{.}}</p><p class="muted small">Only you and the referee can read this.</p></details>{{end}}
     <p class="small"><strong>Usual bonus {{.Bonus}}</strong>{{with .Kit}} · {{.}}{{end}}</p>
@@ -1003,3 +1021,10 @@
 {{end}}
 
 {{define "ai-cancel"}}<form method="post" action="{{.V.Base}}/assistant/cancel" class="inline-form" data-enhance><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.Target}}"><button type="submit" class="link small danger">Cancel</button></form>{{end}}
+
+{{define "objectives"}}
+<section class="objectives" aria-label="Objectives">
+ <h2>Objectives</h2>
+ {{if .Objectives}}<ol>{{range .Objectives}}<li>{{.}}</li>{{end}}</ol>{{else}}<p class="muted small">The referee has not set objectives yet.</p>{{end}}
+</section>
+{{end}}

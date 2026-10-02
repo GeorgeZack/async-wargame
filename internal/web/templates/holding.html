@@ -4,7 +4,7 @@
   <span class="campaign">{{.Name}}</span>
   <span class="who">{{.Me.Name}} <span class="tag tag-{{.Me.Role}}">{{.Me.Role}}</span></span>
 </header>
-<main id="main" class="narrow holding" data-base="{{.Base}}" data-version="{{.Version}}">
+<main id="main" class="narrow holding" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}">
   <section class="card">
     <p class="eyebrow">Room <span class="mono">{{.CodeDisplay}}</span></p>
     <h1>Standing by</h1>
@@ -17,7 +17,9 @@
     {{range .MyCards}}{{if .Brief}}<section class="brief"><h2>For {{.Unit.Name}} only</h2><p class="pre">{{.Brief}}</p></section>{{end}}{{end}}
     <details>
       <summary>Read the briefing again</summary>
+      {{template "vignette" (pair . .BriefingArt)}}
       {{range .Briefing}}<p>{{.}}</p>{{end}}
+      {{template "objectives" .}}
     </details>
   </section>
 </main>

@@ -29,6 +29,7 @@ type MapView struct {
 	Scale      ScaleBar
 	K          float64 // how much to scale counters and labels: one grid cell to one drawn hex
 	Features   []FeatureMark
+	Tethers    []Tether
 	Stacks     []Stack        // one per visible unit, at its point
 	Proposed   []ProposedMark // referee only: where a pending event would act
 	OrderMarks []OrderMark    // spots players marked in their orders
@@ -81,16 +82,25 @@ type FeatureMark struct {
 
 // Stack is a counter on the board: one unit, at its point (nudged a little
 // when several sit on the same spot).
+type Tether struct{ X1, Y1, X2, Y2 float64 }
+type Pip struct {
+	X        float64
+	Detached bool
+}
 type Stack struct {
-	X, Y  float64
-	Top   UnitView
-	Count int
-	Label string // accessible description
+	Members string
+	Pips    []Pip
+	Chit    bool
+	X, Y    float64
+	Top     UnitView
+	Count   int
+	Label   string // accessible description
 }
 
 // InspectorData is the JSON the client uses: the board's measures, orders,
 // and (for the editor) the drawn map's terrain and hex sides.
 type InspectorData struct {
+	Plans   []*Plan               `json:"plans,omitempty"`
 	Width   float64               `json:"width"`
 	Height  float64               `json:"height"`
 	Cell    float64               `json:"cell"`
@@ -193,7 +203,32 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 
 	// Counters: the viewer's own on top, then friendly, then the rest. Ones
 	// on the same spot fan out a little so each can be seen and clicked.
-	us := slices.Clone(units)
+	// Build only from the filtered (and possibly frozen) view, never live units.
+	var us []UnitView
+	formations := map[string][]UnitView{}
+	for _, u := range units {
+		if u.Formation != "" && !u.Stale && !u.Detached && r.formation(u.Formation) != nil {
+			formations[u.Formation] = append(formations[u.Formation], u)
+		} else {
+			us = append(us, u)
+		}
+	}
+	for _, f := range r.Formations {
+		ms := formations[f.ID]
+		if len(ms) == 0 {
+			continue
+		}
+		u := ms[0]
+		u.ID, u.Name, u.Abbr, u.Card = FormationToken(f.ID), f.Name, f.Abbr, ms[0].ID
+		u.ClassName, u.Strength, u.Status, u.AssignedName, u.Radio = "Formation", "", "", "", ""
+		u.Mine = false
+		for _, m := range ms {
+			u.Members = append(u.Members, m.ID)
+			u.Mine = u.Mine || m.Mine
+		}
+		us = append(us, u)
+	}
+	data.Units = slices.Clone(units)
 	sort.SliceStable(us, func(i, j int) bool { return stackRank(us[i]) > stackRank(us[j]) })
 	var placed []Pos
 	nudge := 22 * mv.K
@@ -217,9 +252,30 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 		if u.Stale {
 			label += fmt.Sprintf(" (out of contact: where they last called in, turn %d)", u.SeenTurn)
 		}
-		mv.Stacks = append(mv.Stacks, Stack{X: p.X, Y: p.Y, Top: u, Count: 1, Label: label})
-		u.X, u.Y = p.X, p.Y
-		data.Units = append(data.Units, u)
+		st := Stack{X: p.X, Y: p.Y, Top: u, Count: 1, Label: label, Chit: u.Detached, Members: strings.Join(u.Members, " ")}
+		if len(u.Members) > 0 {
+			for _, m := range units {
+				if m.Formation == u.Formation && !m.Stale {
+					st.Pips = append(st.Pips, Pip{Detached: m.Detached})
+				}
+			}
+			for i := range st.Pips {
+				st.Pips[i].X = (float64(i) - float64(len(st.Pips)-1)/2) * 3
+			}
+			u.X, u.Y = p.X, p.Y
+			data.Units = append(data.Units, u)
+		}
+		mv.Stacks = append(mv.Stacks, st)
+	}
+	for _, st := range mv.Stacks {
+		if !st.Chit || st.Top.Stale {
+			continue
+		}
+		for _, anchor := range mv.Stacks {
+			if len(anchor.Pips) > 0 && anchor.Top.Formation == st.Top.Formation {
+				mv.Tethers = append(mv.Tethers, Tether{st.X, st.Y, anchor.X, anchor.Y})
+			}
+		}
 	}
 	return mv, legend, data
 }

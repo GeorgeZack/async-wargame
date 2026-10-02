@@ -4,6 +4,8 @@ import "time"
 
 // OrderView is an order as one member may see it.
 type OrderView struct {
+	Group      string      `json:"group,omitempty"`
+	Members    string      `json:"members,omitempty"`
 	ID         string      `json:"id"`
 	UnitID     string      `json:"unit"`
 	UnitName   string      `json:"unitName"`
@@ -56,10 +58,10 @@ type OrderUnit struct {
 }
 
 func (r *Room) orderView(o *Order, editable bool) OrderView {
-	ov := OrderView{ID: o.ID, UnitID: o.Unit, Text: o.Text, Status: o.Status, Version: o.Version, UpdatedAt: o.UpdatedAt,
+	ov := OrderView{Group: o.Group, Members: r.orderMemberNames(o), ID: o.ID, UnitID: o.Unit, Text: o.Text, Status: o.Status, Version: o.Version, UpdatedAt: o.UpdatedAt,
 		Editable: editable && r.Phase == PhasePlanning, Review: o.Review, ReviewNote: o.ReviewNote, ReviewedBy: o.ReviewedBy}
 	if u := r.Unit(o.Unit); u != nil {
-		ov.UnitName = u.Name
+		ov.UnitName = r.orderName(o)
 	}
 	if m := r.memberOrNil(o.Author); m != nil {
 		ov.Author = m.Name
@@ -133,6 +135,10 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 			if ov.CanReview {
 				v.AwaitingReview++
 			}
+			if o.Group != "" {
+				ov.Editable = false
+				ov.CanReview = false
+			}
 			slot.Order = &ov
 			v.Data.Orders.Orders[u.ID] = ov
 			if o.Status == OrderCommitted {
@@ -140,9 +146,29 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 			}
 		}
 		v.MyOrders = append(v.MyOrders, slot)
-		v.Data.Orders.Units = append(v.Data.Orders.Units, OrderUnit{ID: u.ID, Label: u.Name, X: u.X, Y: u.Y})
+		v.Data.Orders.Units = append(v.Data.Orders.Units, OrderUnit{ID: u.ID, Label: "Individual · " + u.Name, X: u.X, Y: u.Y})
+	}
+	// Global instructions are separate form choices and appear once in the list.
+	for _, f := range r.Formations {
+		if !r.CanOrderSquad(mod, me, f.ID) {
+			continue
+		}
+		members := r.members(f.ID)
+		slot := SquadOrderSlot{ID: FormationToken(f.ID), Name: f.Name}
+		for _, u := range members {
+			slot.Members = append(slot.Members, u.Name)
+		}
+		if o := r.SquadOrder(f.ID); o != nil {
+			ov := r.orderView(o, true)
+			ov.UnitID = slot.ID
+			slot.Order = &ov
+			v.Data.Orders.Orders[slot.ID] = ov
+		}
+		v.SquadOrders = append(v.SquadOrders, slot)
+		v.Data.Orders.Units = append([]OrderUnit{{ID: slot.ID, Label: "Global · " + f.Name, X: members[0].X, Y: members[0].Y}}, v.Data.Orders.Units...)
 	}
 	// Other friendly orders the viewer may read: committed and in contact.
+	seenGroups := map[string]bool{}
 	for _, o := range r.Orders {
 		if o.Turn != r.Turn || mine[o.Unit] {
 			continue
@@ -154,10 +180,23 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 		if u == nil || !r.seesOrder(me, u) || r.Blind(me) && u.AssignedTo != "" {
 			continue
 		}
+		if o.Group != "" {
+			if seenGroups[o.Group] {
+				continue
+			}
+			seenGroups[o.Group] = true
+		}
 		v.OtherOrders = append(v.OtherOrders, r.orderView(o, false))
 	}
 	// Marks on the map: the viewer's own orders and the others they can read.
+	markedGroups := map[string]bool{}
 	mark := func(o OrderView, own bool) {
+		if o.Group != "" {
+			if markedGroups[o.Group] {
+				return
+			}
+			markedGroups[o.Group] = true
+		}
 		if o.Mark == nil {
 			return
 		}
@@ -182,4 +221,11 @@ func markOrderStatus(v *View) {
 			}
 		}
 	}
+}
+
+// SquadOrderSlot is a global order the viewer is authorized to write.
+type SquadOrderSlot struct {
+	ID, Name string
+	Members  []string
+	Order    *OrderView
 }

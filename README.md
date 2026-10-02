@@ -1,6 +1,8 @@
 # Async Wargame
 
 Browser-based, referee-led asynchronous wargames. See [design-doc.md](design-doc.md).
+The interface uses an era-neutral field-manual style: paper and olive in light
+mode, charcoal and brass in dark mode, suitable for historical or future settings.
 
 ## Run
 
@@ -110,6 +112,42 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
   room (Setup screen). What's sent: unit names and stats, orders and their
   intent, positions, and report lines. Not messages, and not anyone's name.
 
+### Situation vignettes (separate image API)
+
+Each opening briefing and published situation report can have **one vignette**.
+The referee reviews the scene description, generates a private preview, and
+approves it for players. Hide, discard, or regenerate it from that brief.
+No map or character images are generated.
+
+Image generation has its own connection and runs independently of the text
+assistant. No image model is selected by default. Once you choose one, configure:
+
+```ini
+image-api = https://api.openai.com/v1
+image-model = your-image-model-id
+image-key-file = ~/.config/async-wargame/image-key.env
+image-size = 1024x1024
+```
+
+The key file contains the key alone or `AW_IMAGE_KEY=...`; alternatively use
+`image-key` in the config or `AW_IMAGE_KEY` in the environment. Image generation
+never falls back to `AW_AI_KEY`, `OPENCODE_API_KEY`, or `ai-model`.
+
+The client uses the [OpenAI Images generation format](https://developers.openai.com/api/reference/resources/images/methods/generate):
+`POST /images/generations`, one PNG/JPEG returned as `data[0].b64_json`.
+GPT Image returns base64 by default; leave `image-response-format` unset for
+those models. Compatible gateways that require an explicit request can use
+`image-response-format = b64_json`. URL-only image responses are not supported.
+Choose a size supported by your model; the default is `1024x1024`.
+
+Suggested descriptions use only shared briefing/objective text and public
+report outcomes. No private orders, briefs, notes, or rolls are appended.
+The form shows the image provider and model before sending. Jobs run in the
+background, one per room at a time, with cancellation and saved previews.
+Cancelled, failed, or interrupted requests are never automatically retried;
+the provider may already have charged for the work. Generated files live in
+`maps/` next to the campaign state, with access checked on every request.
+
 ## How it plays
 
 A referee-led, old-school game played over days: players say what their
@@ -135,6 +173,32 @@ cross the canal, reach the hospital, and bring the survivors out.
   how far. The scale is on the map: "1 hex = 50 m · 1 turn = 10 minutes".
   Select a counter and tap anywhere to measure; the referee drags counters
   to move them.
+- **Formations:** Lantern Squad starts as one counter, with a pip for each
+  marine. The referee can split a member off into a round chit and rejoin
+  them later. Moving the squad moves its attached members together. Opening
+  the squad counter offers the squad overview; individual character links,
+  including those in Orders this turn, open only that character's card.
+  Private briefs remain restricted to their holder and the referee.
+- **Objectives** appear as a numbered section below the briefing and are
+  editable on Setup, one objective per line.
+- **Global and individual orders:** someone commanding the whole squad can
+  send one global instruction. An individual order takes its member out of
+  that instruction; changing the global order preserves individual exceptions.
+  Withdrawing an individual order returns the member to the existing squad
+  instruction. This yields one to as many orders as there are members. The
+  desk and report show shared instructions once; readiness still counts each
+  member covered. Existing ownership, command, and radio restrictions apply.
+- **Private planning:** players use **Plan a move** to sketch a destination;
+  their own ghost and order pin show the request for adjudication. A full-squad
+  drag preserves a shared order; an individual planned move becomes an exception.
+- **Referee staging:** during adjudication, dragging counters stages their final
+  positions. **Publish turn** applies all referee-staged moves with the report
+  and clears temporary plans. **Clear staged moves** abandons those destinations.
+  Player intentions are not automatically made real. Reopening a published turn
+  restores its prior positions and staged moves for correction.
+- **Writing an order:** opens a dialog; **Drop a pin** closes it while you
+  choose a point, then reopens it with your text intact. Without JavaScript,
+  the form stays inline. A brief announcement marks each newly opened turn.
 - **Unit cards** show a marine's usual bonus (quality, plus veterancy),
   kit, status, notes, and established facts. The card doesn't list
   everything, and doesn't need to: the referee interprets.

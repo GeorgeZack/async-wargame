@@ -1,5 +1,5 @@
 {{define "content"}}{{template "shell-top" .}}
-<main id="main" class="screen screen-map{{if .IsReferee}} as-referee{{else}} as-player{{end}}" data-base="{{.Base}}" data-version="{{.Version}}"{{if .IsReferee}} data-referee="1"{{end}}>
+<main id="main" class="screen screen-map{{if .IsReferee}} as-referee{{else}} as-player{{end}}" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}"{{if .IsReferee}} data-referee="1"{{end}}>
   {{template "sec-next" .}}
   <div class="table-layout">
     <div class="board-col">
@@ -10,6 +10,7 @@
       {{if .IsReferee}}
         {{template "sec-steps" .}}
         {{template "sec-orders" .}}
+        {{template "sec-order-box" .}}
         {{template "sec-talk" .}}
         {{template "sec-situation" .}}
         {{template "sec-known" .}}

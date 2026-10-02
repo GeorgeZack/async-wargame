@@ -3,11 +3,17 @@
   "name": "St. Ines",
   "module": "dark-coast",
   "summary": "A four-marine squad lands on Red Beach, crosses the canal into the edge of the city, reaches St. Ines Hospital, and brings the survivors back over the bridge to the dropship.",
+  "formations": [{"id": "lantern", "name": "Lantern Squad", "abbr": "SQD"}],
   "briefing": [
-    "Port Ines stopped transmitting thirty hours ago. A distress beacon is still pinging from St. Ines Hospital, just across the canal from Red Beach.",
+    "The year is 2486. Port Ines, a settlement on a distant colony world, stopped transmitting thirty hours ago. A distress beacon is still pinging from St. Ines Hospital, just across the canal from Red Beach.",
     "Your squad goes in alone: one dropship, Halyard, will hold just offshore of Red Beach and can take everyone you bring back. It can't come inland.",
     "Avenida do Porto runs from the beach over the canal bridge to the hospital's front gate. There's an old footbridge at the harbor lock, north by the port. Find whoever set off that beacon and get them to the beach. Nobody knows what's in the streets. Assume the worst and move like it.",
     "Squad leader, you have the radio. Everyone else: if you lose sight of your sergeant, you're on your own until you find them again."
+  ],
+  "objectives": [
+    "Reach St. Ines Hospital and locate the source of the distress beacon.",
+    "Find and recover survivors, then escort them back across the canal to Red Beach.",
+    "Extract aboard Halyard with the squad and everyone you can bring back."
   ],
   "refereeNotes": "Nine survivors are barricaded on the hospital's second floor with a wounded nurse, Ana Reis, who set off the beacon. She was bitten on the forearm yesterday and is hiding it (Okafor knows her; Lin's antiviral is too late for her, though nobody can be sure); a crawler is in the basement and will take anyone who goes looking for the generator. The compound wall has two ways in: the front gate on the avenue, chained, and the ambulance bay round the back. Three more people are holed up in Duarte's Pharmacy on Rua Duarte, with shamblers pressing at the shutters. One group of shamblers is in the open strip across the canal at the start and can be seen from the beach. Runners are lying up in the old town to the north-east; they come at noise. The police post by the bridge has a locked armory. The radio mast on Signal Hill would boost the squad's radios if someone got it running. Raise the threat when the squad is loud, or slow. The road bridge is the only crossing a stretcher can make; the lock footbridge is one person wide and rotten in the middle.",
   "board": {
@@ -676,6 +682,7 @@
   "units": [
     {
       "id": "m1",
+      "formation": "lantern",
       "brief": "You have the squad and the radio. Halyard's pilot, Lt. Marsh, will hold for three hours and not a minute longer: after that the tide turns and the dropship has to lift. Company wants the beacon's source found. You have not told the squad that the beacon uses a staff code: whoever set it off works at the hospital, and Company wants them out above anyone else.",
       "name": "Sgt. Reyes",
       "class": "sergeant",
@@ -685,6 +692,7 @@
     },
     {
       "id": "m2",
+      "formation": "lantern",
       "brief": "Your sister's girlfriend, Ana, is a nurse at St. Ines. You haven't heard from her in two days. Nobody in the squad knows, and you'd like it to stay that way. You know the old city a little from shore leave: the pharmacy on Calle Duarte has steel shutters and a back way through the alley.",
       "name": "LCpl. Okafor",
       "class": "rifleman",
@@ -694,6 +702,7 @@
     },
     {
       "id": "m3",
+      "formation": "lantern",
       "brief": "You carry the gun and four belts. Belt-fed fire carries a long way in empty streets, and you've heard what the infected do when they hear it. You also carry the breaching charge: two of them, actually. The second one isn't on the manifest.",
       "name": "PFC Doyle",
       "class": "gunner",
@@ -703,6 +712,7 @@
     },
     {
       "id": "m4",
+      "formation": "lantern",
       "brief": "You carry the squad's only medical kit and four doses of the antiviral the brass swear works if given within the hour of a bite. They've never told anyone it works after that. Company earmarked three of them for whoever set off the beacon. Who gets the fourth is up to you.",
       "name": "HM3 Lin",
       "class": "corpsman",

@@ -156,6 +156,9 @@ func (s *Server) moveUnits(w http.ResponseWriter, r *http.Request) {
 		moves[i] = game.UnitMove{ID: id, At: game.Pos{X: x, Y: y}}
 	}
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		if strings.HasSuffix(r.URL.Path, "/plans") || me.Role == game.RoleReferee && room.Phase == game.PhaseResolving {
+			return room.PlanUnits(me, s.store.Cat.Modules[room.ModuleID], moves, time.Now())
+		}
 		return room.MoveUnits(me, s.store.Cat.Modules[room.ModuleID], moves)
 	})
 }

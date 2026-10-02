@@ -22,10 +22,10 @@ the problem. A module or scenario can't reuse a built-in id.
 
 | Section | What it is |
 |---|---|
-| `id`, `version`, `name`, `intro` | Campaigns lock to the version they started with. `intro` is a line describing the setting. |
+| `id`, `version`, `name`, `intro` | Campaigns record their starting version; rooms with the same module ID load using the installed module, even after a version bump. `intro` is a line describing the setting. |
 | `factors` | `{name, value}`. Things that often count toward a roll's bonus ("Ambush or surprise" +3, "Night" -1). They're offered at the desk and to the AI; the referee can type anything. |
 | `sides` | `playable` sides are the players'; `enemy` sides are the referee's opposition; anything else is neutral (civilians). |
-| `classes` | Unit templates: `side`, `name`, `abbr`, `kind` (`group` for crowds, where strength is a headcount, or a single `soldier`, `special`, `monster`, ...), `symbol` (counter art), `strength` (the usual headcount), `quality` (a bonus to its rolls: 0 ordinary, +2 trained, more for the exceptional), `description`, `kit` (one sentence), and `contact` (`{abbr, label}`: how players see it before it's identified). |
+| `classes` | Unit templates: `side`, `name`, `abbr`, `kind` (`group` for crowds, where strength is a headcount, or a single `soldier`, `special`, `monster`, ...), `symbol` (counter art), `strength` (the usual headcount), `quality` (a bonus to its rolls: 0 ordinary, +2 trained, more for the exceptional), `description`, `kit` (one sentence), optional `speed` and `run` (km/h at a careful pace and a run), and `contact` (`{abbr, label}`: how players see it before it's identified). |
 | `terrain` | Map art: one-character `code`, `id`, `name`, `water: true` for water, and an optional `note`. |
 | `edges`, `crossings` | Features drawn along hex sides (rivers, ridges, walls) and what can cross them. `blocks: true` makes random events route around an edge. |
 | `events` | The random event table (below). |
@@ -66,7 +66,8 @@ Rolled events are proposals: nothing changes until the referee applies one.
 `features` (places: `kind` is one of beachhead, hospital, port, utility,
 police, shelter, relay, hive; `hidden` ones only the referee sees), `units`
 (`class`, position, optional `strength`, `known`, and `brief`), `briefing`
-paragraphs, and `refereeNotes`.
+paragraphs, an optional `objectives` array of goal strings (displayed below the
+briefing), and `refereeNotes`.
 
 `board` says what the map is and what it measures:
 
@@ -91,3 +92,21 @@ they're put at its center) or an exact point as `x` and `y`. A unit's
 from above, what they know that the others don't. Hex sides are written from the hex that owns them
 (directions 0 east, 4 south-west, 5 south-east); the loader says which side
 to flip if one isn't.
+
+## Formations and movement
+
+A scenario can give several characters one map counter:
+
+```json
+"formations": [{"id": "lantern", "name": "Lantern Squad", "abbr": "SQD"}]
+```
+
+Set `"formation": "lantern"` on each member unit. Attached members start at
+its first member's position, move together, and retain individual orders,
+players, cards, and private briefs. The referee can split and rejoin them.
+Formation IDs must be unique; unit IDs cannot reuse `f-` plus a formation ID.
+
+Class `speed` and `run` values combine with the board's distance scale and
+turn duration to describe how far a unit can reach. If `run` is omitted, it
+is three times `speed`. These are guidance for the referee and AI, rather
+than enforced movement limits. Without a scale or speed, no reach is given.

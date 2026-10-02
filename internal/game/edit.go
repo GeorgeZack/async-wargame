@@ -362,6 +362,8 @@ func (r *Room) ResetToScenario(actor *Member, sc *Scenario, mod *Module) error {
 		assigned[u.ID] = u.AssignedTo
 	}
 	fresh := newRoom(r.Code, r.Name, sc, mod, "", "")
+	r.BriefingVignette = nil
+	r.Objectives = append([]string{}, fresh.Objectives...)
 	r.Map, r.Features, r.Units = fresh.Map, fresh.Features, fresh.Units
 	r.Briefing, r.RefereeNotes, r.Threat = fresh.Briefing, fresh.RefereeNotes, MinThreat
 	for _, u := range r.Units {
@@ -418,6 +420,7 @@ type Editor struct {
 	FeatureKinds   []string
 	Units          []EditUnit
 	Places         []EditPlace
+	ObjectivesText string
 	BriefingText   string
 	EventTable     []EventRow
 	ThreatLevels   []int
@@ -453,7 +456,7 @@ func BuildEditor(r *Room, sc *Scenario, mod *Module, me *Member) *Editor {
 	e := &Editor{
 		View: BuildView(r, sc, mod, me), Live: r.Phase != PhaseSetup,
 		TerrainOptions: mod.Terrain, EdgeTypes: mod.EdgeTypes, Crossings: mod.Crossings,
-		FeatureKinds: FeatureKinds, BriefingText: strings.Join(r.Briefing, "\n\n"),
+		FeatureKinds: FeatureKinds, BriefingText: strings.Join(r.Briefing, "\n\n"), ObjectivesText: strings.Join(r.Objectives, "\n"),
 	}
 	for _, cl := range mod.Classes {
 		e.Classes = append(e.Classes, ClassOption{ID: cl.ID, Name: cl.Name, SideName: mod.Side(cl.Side).Name, Group: cl.IsGroup()})
@@ -598,4 +601,23 @@ func describeEffect(f EffectDef, mod *Module) string {
 		return fmt.Sprintf("Jam %s radios for %s turns", count, rangeText(f.Turns))
 	}
 	return f.Op
+}
+
+// SetObjectives keeps the mission goals separate from scene-setting prose.
+func (r *Room) SetObjectives(actor *Member, text string) error {
+	if actor.Role != RoleReferee {
+		return ErrForbidden
+	}
+	text, err := cleanText(text, maxTextLen)
+	if err != nil {
+		return err
+	}
+	goals := []string{}
+	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			goals = append(goals, line)
+		}
+	}
+	r.Objectives = goals
+	return nil
 }

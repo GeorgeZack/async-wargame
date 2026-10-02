@@ -13,11 +13,14 @@ import (
 // View is everything one member may see of a room. Building it is where
 // hidden-state filtering happens: nothing outside a View reaches a browser.
 type View struct {
+	ImageAI      ImageAIView // referee-only image service details
+	BriefingArt  VignetteView
 	Code         string
 	CodeDisplay  string
 	Name         string
 	ScenarioName string
 	Summary      string
+	Objectives   []string
 	Briefing     []string
 	RefereeNotes string
 	ModuleName   string
@@ -81,9 +84,10 @@ type View struct {
 	Frozen     bool // players: the board as it stood at the lock
 	Watched    bool // players: the referee can see this turn's orders (admin view)
 
-	Facts       []FactView  // the viewer can read, newest first
-	OpenFacts   int         // referee: proposals waiting
-	FactUnits   []UnitView  // units the viewer may propose facts about
+	Facts       []FactView // the viewer can read, newest first
+	OpenFacts   int        // referee: proposals waiting
+	FactUnits   []UnitView // units the viewer may propose facts about
+	SquadOrders []SquadOrderSlot
 	MyOrders    []OrderSlot // units the viewer can give orders to
 	CheckIns    []CheckIn   // referee, while orders are open: each player unit's status
 	OtherOrders []OrderView // other friendly orders the viewer may see
@@ -165,34 +169,38 @@ type ForceGroup struct {
 }
 
 type UnitView struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	ClassName    string  `json:"class"`
-	Kind         string  `json:"kind"` // group, soldier, special, monster
-	Abbr         string  `json:"abbr"`
-	Symbol       string  `json:"-"` // counter symbol; empty for an unidentified contact (drawn face down)
-	Factors      string  `json:"-"` // printed on the counter: a headcount
-	Side         string  `json:"side"`
-	Role         string  `json:"-"` // the side's role: player, enemy, or neutral
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	Where        string  `json:"where,omitempty"` // grid reference and nearest place
-	Strength     string  `json:"strength"`
-	Status       string  `json:"status,omitempty"`
-	Bonus        string  `json:"bonus,omitempty"` // what its rolls start from
-	Kit          string  `json:"kit,omitempty"`
-	Description  string  `json:"description,omitempty"`
-	Hidden       bool    `json:"hidden,omitempty"`  // referee view: players don't know about it
-	Contact      bool    `json:"contact,omitempty"` // player view: seen but not identified
-	Stale        bool    `json:"stale,omitempty"`   // out of contact: shown where it last called in
-	SeenTurn     int     `json:"seenTurn,omitempty"`
-	AssignedTo   string  `json:"-"`
-	AssignedName string  `json:"commander,omitempty"`
-	Mine         bool    `json:"mine,omitempty"`
-	OrderStatus  string  `json:"-"`               // this turn's order, if the viewer may see it
-	Assignable   bool    `json:"-"`               // the viewer may reassign it
-	Radio        string  `json:"radio,omitempty"` // friendly units: "up" or "down"
-	RadioText    string  `json:"radioText,omitempty"`
+	Formation    string   `json:"formation,omitempty"`
+	Detached     bool     `json:"detached,omitempty"`
+	Members      []string `json:"members,omitempty"`
+	Card         string   `json:"card,omitempty"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	ClassName    string   `json:"class"`
+	Kind         string   `json:"kind"` // group, soldier, special, monster
+	Abbr         string   `json:"abbr"`
+	Symbol       string   `json:"-"` // counter symbol; empty for an unidentified contact (drawn face down)
+	Factors      string   `json:"-"` // printed on the counter: a headcount
+	Side         string   `json:"side"`
+	Role         string   `json:"-"` // the side's role: player, enemy, or neutral
+	X            float64  `json:"x"`
+	Y            float64  `json:"y"`
+	Where        string   `json:"where,omitempty"` // grid reference and nearest place
+	Strength     string   `json:"strength"`
+	Status       string   `json:"status,omitempty"`
+	Bonus        string   `json:"bonus,omitempty"` // what its rolls start from
+	Kit          string   `json:"kit,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Hidden       bool     `json:"hidden,omitempty"`  // referee view: players don't know about it
+	Contact      bool     `json:"contact,omitempty"` // player view: seen but not identified
+	Stale        bool     `json:"stale,omitempty"`   // out of contact: shown where it last called in
+	SeenTurn     int      `json:"seenTurn,omitempty"`
+	AssignedTo   string   `json:"-"`
+	AssignedName string   `json:"commander,omitempty"`
+	Mine         bool     `json:"mine,omitempty"`
+	OrderStatus  string   `json:"-"`               // this turn's order, if the viewer may see it
+	Assignable   bool     `json:"-"`               // the viewer may reassign it
+	Radio        string   `json:"radio,omitempty"` // friendly units: "up" or "down"
+	RadioText    string   `json:"radioText,omitempty"`
 }
 
 type FeatureView struct {
@@ -209,7 +217,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	ref := me.Role == RoleReferee
 	v := &View{
 		Code: r.Code, CodeDisplay: DisplayCode(r.Code), Name: r.Name,
-		ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing,
+		ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing, Objectives: r.Objectives,
 		ModuleName: mod.Name, ModuleVer: r.ModuleVersion, ScaleText: r.Board.ScaleText(), Board: r.Board,
 		Turn: r.Turn, Operation: max(r.Operation, 1), Phase: r.Phase, Version: r.Version, IsReferee: ref,
 		Me: memberView(r, me, me),
@@ -321,14 +329,17 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 
 	v.Clock = buildClock(r)
 	v.Map, v.Legend, v.Data = buildMap(r, mod, me, visible)
+	v.Data.Plans = r.PlansFor(me)
 	addOrders(v, r, mod, me)
 	markOrderStatus(v)
+	v.BriefingArt = r.vignetteView(max(r.Operation, 1), 0, v.IsReferee)
 	addReports(v, r, me)
 	v.Channels = r.Channels(me)
 	v.Facts = r.FactsFor(me, "")
 	if ref {
 		addRefereeEvents(v, r, mod)
 		v.AI = assistantView(r)
+
 		v.Desk = buildDesk(r, mod, me, v.AI)
 		if r.intentionsOpen() == nil {
 			v.Intentions = r.intentionViews(mod, me)
@@ -411,6 +422,9 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 	}
 	switch {
 	case side.Playable || ref || u.Identified:
+		if ref || side.Playable {
+			uv.Formation, uv.Detached = u.Formation, u.Detached
+		}
 		uv.Bonus, uv.Kit = bonusText(mod, u), KitOf(mod, u)
 		switch {
 		case side.Playable && kind == "soldier":

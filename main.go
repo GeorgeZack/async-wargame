@@ -24,6 +24,8 @@ import (
 	"asyncwargame/internal/ai"
 	"asyncwargame/internal/assist"
 	"asyncwargame/internal/game"
+	"asyncwargame/internal/imageai"
+	"asyncwargame/internal/imagework"
 	"asyncwargame/internal/push"
 	"asyncwargame/internal/web"
 )
@@ -39,10 +41,14 @@ func main() {
 	aiContext := flag.Int("ai-context", 8192, "context size for -ai local")
 	aiInstructions := flag.String("ai-instructions", "", `instructions added to every prompt the assistant sends, e.g. "Answer directly; don't reason at length." (\n for a new line)`)
 	aiInstructionsFile := flag.String("ai-instructions-file", "", "file of instructions added to every prompt the assistant sends (after -ai-instructions)")
+	imageAPI := flag.String("image-api", "", "separate OpenAI-format image API base URL ending in /v1; empty disables vignette generation")
+	imageModel := flag.String("image-model", "", "image model ID (required with image-api; independent of ai-model)")
+	imageSize := flag.String("image-size", "1024x1024", "image size supported by the image model")
+	imageResponseFormat := flag.String("image-response-format", "", "empty for provider default; b64_json for gateways that require it")
 	pushKey := flag.String("push-key", "", "VAPID key file for web push notifications (default: vapid.pem next to the -data file); created if missing")
 	noPush := flag.Bool("no-push", false, "turn web push notifications off")
 	proxy := flag.Bool("proxy", false, "running behind a reverse proxy or tunnel that terminates HTTPS (trusts X-Forwarded-Proto and X-Forwarded-For)")
-	flag.String("config", defaultConfig, "settings file: the flags above as name = value lines, plus ai-key, ai-key-file, host-password, and push-contact (see async-wargame.example.conf)")
+	flag.String("config", defaultConfig, "settings file: the flags above as name = value lines, plus ai-key, ai-key-file, image-key, image-key-file, host-password, and push-contact (see async-wargame.example.conf)")
 	configFile, err := loadConfig(flag.CommandLine, os.Args[1:])
 	if err != nil {
 		log.Fatalf("config: %v", err)
@@ -121,6 +127,18 @@ func main() {
 		if in := client.Instructions(); in != "" {
 			log.Printf("AI instructions added to every prompt: %q", in)
 		}
+	}
+
+	if *imageAPI != "" {
+		client, err := imageai.New(imageai.Config{BaseURL: *imageAPI, Model: *imageModel, APIKey: os.Getenv("AW_IMAGE_KEY"), Size: *imageSize, ResponseFormat: *imageResponseFormat})
+		if err != nil {
+			log.Fatalf("image AI: %v", err)
+		}
+		srv.SetImageAI(client)
+		go (&imagework.Worker{Store: store, Client: client}).Run(ctx)
+		log.Printf("Vignette images: %s via %s", client.Model(), client.Provider())
+	} else if *imageModel != "" {
+		log.Fatal("image-model needs a separate image-api")
 	}
 
 	hs := &http.Server{

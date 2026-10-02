@@ -1,7 +1,7 @@
 {{define "map"}}
 <div class="map-wrap">
   <svg id="map" viewBox="{{.Map.ViewBox}}" data-viewbox="{{.Map.ViewBox}}" tabindex="0" role="application"
-       class="bg-{{.Map.Background}} grid-{{.Map.Grid}}" style="--k:{{.Map.K}}"
+       class="bg-{{.Map.Background}} grid-{{.Map.Grid}}"
        aria-label="Map of {{.ScenarioName}}{{with .ScaleText}}. {{.}}{{end}}. Select a counter or a place to read about it in the Selected panel; arrow keys pan."
        aria-describedby="inspector" preserveAspectRatio="xMidYMid meet">
     <defs>
@@ -42,8 +42,9 @@
     <g id="orders-layer" data-live>{{range .Map.OrderMarks}}<g class="order-mark s-{{.Status}}{{if .Mine}} mine{{end}}" transform="translate({{f1 .X}} {{f1 .Y}}) scale({{$.Map.K}})"><title>{{.Label}}</title>{{template "pin"}}</g>{{end}}</g>
     <g id="ruler-layer" aria-hidden="true"></g>
     <g id="pin-layer" aria-hidden="true"></g>
+    <g id="tethers-layer" data-live aria-hidden="true">{{range .Map.Tethers}}<line class="formation-tether" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}"/>{{end}}</g>
     <g id="units-layer" data-live>
-      {{range .Map.Stacks}}<g class="marker" data-unit="{{.Top.ID}}" data-x="{{f1 .X}}" data-y="{{f1 .Y}}" transform="translate({{f1 .X}} {{f1 .Y}}) scale({{$.Map.K}})">{{template "counter" .}}
+      {{range .Map.Stacks}}<g class="marker" role="button" tabindex="0" aria-label="{{.Label}}" data-unit="{{.Top.ID}}" data-members="{{.Members}}" data-x="{{f1 .X}}" data-y="{{f1 .Y}}" transform="translate({{f1 .X}} {{f1 .Y}}) scale({{$.Map.K}})">{{template "counter" .}}
         {{if or .Top.Mine (eq .Top.Role "player")}}<text class="ctr-name" y="15.5">{{.Top.Name}}</text>{{end}}</g>{{end}}
     </g>
     <g id="edit-preview" aria-hidden="true"></g>
@@ -77,13 +78,13 @@
         <title>{{.Label}}</title>
         {{if gt .Count 2}}<rect class="ctr-edge" x="-7" y="-7" width="18" height="18" rx="1"/>{{end}}
         {{if gt .Count 1}}<rect class="ctr-back" x="-8" y="-8" width="18" height="18" rx="1"/>{{end}}
-        <rect class="ctr-edge" x="-8.4" y="-8.4" width="18" height="18" rx="1"/>
+        {{if .Chit}}<circle class="ctr" r="7"/><circle class="ctr-line" r="6.2"/>{{else}}<rect class="ctr-edge" x="-8.4" y="-8.4" width="18" height="18" rx="1"/>
         <rect class="ctr" x="-9" y="-9" width="18" height="18" rx="1"/>
-        <rect class="ctr-line" x="-8.2" y="-8.2" width="16.4" height="16.4" rx=".6"/>
+        <rect class="ctr-line" x="-8.2" y="-8.2" width="16.4" height="16.4" rx=".6"/>{{end}}
         {{if .Top.Contact}}<text class="ctr-q" y="4.2">{{.Top.Abbr}}</text>
         {{else}}<text class="ctr-id" y="-5">{{.Top.Abbr}}</text>
         {{with .Top.Symbol}}<use href="#s-{{.}}" y="-.2"/>{{end}}
-        <text class="ctr-f" y="7.6">{{.Top.Factors}}</text>{{end}}
+        {{if .Pips}}{{range .Pips}}<circle class="formation-pip{{if .Detached}} detached{{end}}" cx="{{f1 .X}}" cy="6" r="1"/>{{end}}{{else}}<text class="ctr-f" y="7.6">{{.Top.Factors}}</text>{{end}}{{end}}
         {{if gt .Count 1}}<text class="ctr-n" x="7.6" y="-5.4">{{.Count}}</text>{{end}}
         {{with .Top.Radio}}<circle class="ctr-radio r-{{.}}" cx="-6.6" cy="-6.6" r="1.5"><title>{{$.Top.RadioText}}</title></circle>{{end}}
       </g>{{end}}

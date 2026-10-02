@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"html"
 	"image"
 	"image/png"
 	"mime/multipart"
@@ -109,6 +110,11 @@ func TestBriefsAndRevealsOverHTTP(t *testing.T) {
 func TestMoveSeveralOverHTTP(t *testing.T) {
 	_, store, ref, hicks, code, _ := setupSquad(t)
 	base := "/r/" + code
+	for _, id := range []string{"m1", "m2", "m3"} {
+		if res, _ := ref.post(base+"/units/"+id+"/split", nil); res.StatusCode != 200 {
+			t.Fatal("split failed")
+		}
+	}
 	form := url.Values{"unit": {"m1", "m2", "m3"}, "x": {"100", "120", "140"}, "y": {"200", "200", "200"}}
 	if res, _ := hicks.post(base+"/units/move", form); res.StatusCode != 403 {
 		t.Errorf("a player moved counters: %d", res.StatusCode)
@@ -130,4 +136,45 @@ func TestMoveSeveralOverHTTP(t *testing.T) {
 	mustContain(t, body, "Select several", `id="select-box"`)
 	_, body = hicks.get(base)
 	mustNotContain(t, body, "Select several")
+}
+
+func TestFormationAndPrivatePlansOverHTTP(t *testing.T) {
+	_, store, ref, player, code, _ := setupSquad(t)
+	base := "/r/" + code
+	ref.post(base+"/start", nil)
+	for _, action := range []string{"split", "rejoin"} {
+		if res, _ := player.post(base+"/units/m2/"+action, nil); res.StatusCode != 403 {
+			t.Fatalf("player %s: %d", action, res.StatusCode)
+		}
+	}
+	if res, _ := ref.post(base+"/units/m2/split", nil); res.StatusCode != 200 {
+		t.Fatal(res.StatusCode)
+	}
+	_, body := ref.get(base)
+	mustContain(t, body, `data-unit="f-lantern"`, `class="formation-tether"`, `formation-pip detached`)
+	if res, _ := ref.post(base+"/units/m2/rejoin", nil); res.StatusCode != 200 {
+		t.Fatal(res.StatusCode)
+	}
+	_, body = player.get(base + "/units/m2?squad=1")
+	mustContain(t, body, "Lantern Squad", "Sgt. Reyes", "LCpl. Okafor", "PFC Doyle", "HM3 Lin")
+	// setupSquad assigns this player m2. The squad card must preserve brief privacy.
+	var ownBrief, otherBrief string
+	store.Read(code, func(r *game.Room) { ownBrief = r.Unit("m2").Brief; otherBrief = r.Unit("m1").Brief })
+	mustContain(t, body, html.EscapeString(ownBrief))
+	mustNotContain(t, body, html.EscapeString(otherBrief))
+	form := url.Values{"unit": {"m2"}, "x": {"211"}, "y": {"177"}}
+	if res, _ := player.post(base+"/plans", form); res.StatusCode != 200 {
+		t.Fatalf("plan: %d", res.StatusCode)
+	}
+	_, body = player.get(base)
+	mustContain(t, body, `"plans":[`, `"to":{"x":211,"y":177}`)
+	_, body = ref.get(base)
+	mustNotContain(t, body, `"plans":[`)
+	if res, _ := player.post(base+"/plans/apply", nil); res.StatusCode != 403 {
+		t.Fatal("player applied plans")
+	}
+	form.Set("x", "NaN")
+	if res, _ := ref.post(base+"/plans", form); res.StatusCode != 400 {
+		t.Fatal("nonfinite plan accepted")
+	}
 }

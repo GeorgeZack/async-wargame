@@ -1,15 +1,18 @@
 {{define "content"}}
 {{template "shell-top" .}}
-<main id="main" class="screen card-screen" data-base="{{.Base}}" data-version="{{.Version}}">
-{{with .Card}}
-  <article class="card unit-card" id="unit-card" aria-labelledby="card-h">
+<main id="main" class="screen card-screen" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}">
+<div id="unit-card">
+<svg width="0" height="0" aria-hidden="true"><defs>{{template "counter-defs"}}</defs></svg>
+{{with .FormationName}}<h1>{{.}}</h1>{{end}}
+{{range $card := .Cards}}
+  <article class="card unit-card" aria-labelledby="card-h-{{.Unit.ID}}">
     <div class="card-head">
-      <svg class="card-counter" viewBox="-11 -11 23 23" aria-hidden="true"><defs>{{template "counter-defs"}}</defs>{{template "counter" .Counter}}</svg>
+      <svg class="card-counter" viewBox="-11 -11 23 23" aria-hidden="true">{{template "counter" .Counter}}</svg>
       <div>
         <p class="eyebrow">{{.SideName}} · {{.Unit.ClassName}}</p>
-        <h1 id="card-h">{{.Unit.Name}}</h1>
+        <h1 id="card-h-{{.Unit.ID}}">{{.Unit.Name}}</h1>
         <p class="muted small">{{.Unit.Where}}{{if .Unit.Stale}} · last called in from here{{end}}{{with .Commander}} · played by {{.}}{{end}}</p>
-        {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $.Card.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}
+        {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $card.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}
       </div>
     </div>
 
@@ -75,6 +78,7 @@
     {{end}}
   </article>
 {{end}}
+</div>
 </main>
 {{template "shell-bottom" $}}
 {{end}}

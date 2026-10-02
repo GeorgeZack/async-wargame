@@ -9,34 +9,36 @@ import (
 // they're good at, what they carry, how they are, and what's been
 // established about them.
 type UnitCard struct {
-	Unit       UnitView
-	Counter    Stack // for drawing the counter
-	SideName   string
-	Contact    bool // a player's view of an unidentified unit
-	Playable   bool
-	Quality    int    // the unit's quality bonus
-	Veteran    int    // suggested veterancy bonus
-	Bonus      string // what a roll usually starts from: "+3 (quality +2, veteran +1)"
-	Kit        string
-	Notes      string
-	Record     []string
-	Operations int
-	Commander  string
-	RadioText  string
-	RadioDown  bool
-	Order      *OrderView
-	Facts      []FactView
-	CanPropose bool   // the viewer may propose a fact about this unit
-	CanEdit    bool   // the referee
-	Brief      string // private: the holder and the referee only
-	KnownTo    []string
-	Viewers    []Viewer // referee: who could be shown this unit privately
-	RawID      string
-	Strength   int
-	Status     string
-	Known      bool
-	Identified bool
-	Kits       string // the template's kit, for the referee's edit form
+	FormationName string
+	Companions    []string
+	Unit          UnitView
+	Counter       Stack // for drawing the counter
+	SideName      string
+	Contact       bool // a player's view of an unidentified unit
+	Playable      bool
+	Quality       int    // the unit's quality bonus
+	Veteran       int    // suggested veterancy bonus
+	Bonus         string // what a roll usually starts from: "+3 (quality +2, veteran +1)"
+	Kit           string
+	Notes         string
+	Record        []string
+	Operations    int
+	Commander     string
+	RadioText     string
+	RadioDown     bool
+	Order         *OrderView
+	Facts         []FactView
+	CanPropose    bool   // the viewer may propose a fact about this unit
+	CanEdit       bool   // the referee
+	Brief         string // private: the holder and the referee only
+	KnownTo       []string
+	Viewers       []Viewer // referee: who could be shown this unit privately
+	RawID         string
+	Strength      int
+	Status        string
+	Known         bool
+	Identified    bool
+	Kits          string // the template's kit, for the referee's edit form
 }
 
 // BuildUnitCard finds a unit by id (or, for players, by contact id) and
@@ -68,6 +70,20 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		Playable: side.Playable, Counter: Stack{Top: uv, Count: 1}}
 	if at, stale := r.reportedAt(u, me); stale {
 		card.Unit.Where, card.Unit.X, card.Unit.Y, card.Unit.Stale = r.Where(at, me.Role == RoleReferee), at.X, at.Y, true
+	}
+	if uv.Formation != "" {
+		if f := r.formation(uv.Formation); f != nil {
+			card.FormationName = f.Name
+		}
+		for _, m := range units {
+			if m.ID != u.ID && m.Formation == u.Formation && r.KnownBy(mod, m, me) {
+				name := m.Name
+				if p := r.Member(m.AssignedTo); p != nil {
+					name += " (" + p.Name + ")"
+				}
+				card.Companions = append(card.Companions, name)
+			}
+		}
 	}
 	if uv.Contact {
 		card.SideName = "Unknown"

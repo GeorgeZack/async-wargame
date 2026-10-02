@@ -14,6 +14,7 @@ type Scenario struct {
 	Name         string            `json:"name"`
 	Module       string            `json:"module"`
 	Summary      string            `json:"summary"`
+	Objectives   []string          `json:"objectives,omitempty"`
 	Briefing     []string          `json:"briefing"`
 	RefereeNotes string            `json:"refereeNotes"`
 	Map          HexMap            `json:"map"`
@@ -146,12 +147,27 @@ func (s *Scenario) validate(m *Module) error {
 			return fmt.Errorf("feature %q is off the map", f.ID)
 		}
 	}
+	formations := map[string]bool{}
+	for _, f := range s.Formations {
+		if f.ID == "" || f.Name == "" || formations[f.ID] {
+			return fmt.Errorf("invalid or duplicate formation %q", f.ID)
+		}
+		formations[f.ID] = true
+	}
 	seen := map[string]bool{}
 	for _, u := range s.Units {
 		if seen[u.ID] {
 			return fmt.Errorf("duplicate unit id %q", u.ID)
 		}
 		seen[u.ID] = true
+		if u.Formation != "" && !formations[u.Formation] {
+			return fmt.Errorf("unit %q: unknown formation %q", u.ID, u.Formation)
+		}
+		for fid := range formations {
+			if u.ID == FormationToken(fid) {
+				return fmt.Errorf("unit %q conflicts with a formation token", u.ID)
+			}
+		}
 		if m.Class(u.Class) == nil {
 			return fmt.Errorf("unit %q: unknown class %q", u.ID, u.Class)
 		}

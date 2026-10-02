@@ -2,12 +2,14 @@
 <header class="topbar">
   <a class="brand" href="/">Async Wargame</a>
 </header>
-<main id="main" class="narrow briefing" data-base="{{.Base}}" data-version="{{.Version}}">
+<main id="main" class="narrow briefing" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}">
   <article class="card briefing">
     <p class="eyebrow">Briefing · {{.ScenarioName}}</p>
     <h1>{{.Name}}</h1>
     <p class="muted">Welcome, {{.Me.Name}}. The referee approved your access.</p>
+    {{template "vignette" (pair . .BriefingArt)}}
     {{range .Briefing}}<p>{{.}}</p>{{end}}
+    {{template "objectives" .}}
     {{range .MyCards}}{{if .Brief}}<section class="brief"><h2>For {{.Unit.Name}} only</h2><p class="pre">{{.Brief}}</p>
       <p class="muted small">Only you and the referee can read this. Share as much of it as you like, when you like.</p></section>{{end}}{{end}}
     <dl class="facts">

@@ -1,5 +1,5 @@
 {{define "content"}}{{template "shell-top" .}}
-<main id="main" class="screen screen-people" data-base="{{.Base}}" data-version="{{.Version}}">
+<main id="main" class="screen screen-people" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}">
   {{template "sec-next" .}}
   {{template "sec-ledger" .}}
   <div class="cols cols-3">

@@ -82,3 +82,32 @@ func TestAIInstructionText(t *testing.T) {
 		t.Errorf("from config: %q, %v", *in, err)
 	}
 }
+
+func TestIndependentImageKey(t *testing.T) {
+	t.Setenv("AW_AI_KEY", "text-key")
+	t.Setenv("OPENCODE_API_KEY", "opencode-key")
+	t.Setenv("AW_IMAGE_KEY", "")
+	dir := t.TempDir()
+	key := filepath.Join(dir, "image.env")
+	os.WriteFile(key, []byte("AW_AI_KEY=wrong\nAW_IMAGE_KEY='image-key'\n"), 0600)
+	conf := filepath.Join(dir, "image.conf")
+	os.WriteFile(conf, []byte("image-key-file = "+key+"\nimage-api = https://images.example/v1\nimage-model = image-model\n"), 0600)
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	fs.String("config", "", "")
+	api := fs.String("image-api", "", "")
+	model := fs.String("image-model", "", "")
+	if _, err := loadConfig(fs, []string{"-config", conf}); err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("AW_IMAGE_KEY") != "image-key" || os.Getenv("AW_AI_KEY") != "text-key" || *api != "https://images.example/v1" || *model != "image-model" {
+		t.Fatal("image config not independent")
+	}
+	t.Setenv("AW_IMAGE_KEY", "environment-key")
+	if _, err := loadConfig(fs, []string{"-config", conf}); err != nil || os.Getenv("AW_IMAGE_KEY") != "environment-key" {
+		t.Fatal("image environment precedence")
+	}
+	os.WriteFile(key, []byte("AW_AI_KEY=wrong\nOPENCODE_API_KEY=wrong\n"), 0600)
+	if _, err := readNamedKeyFile(key, []string{"AW_IMAGE_KEY"}); err == nil {
+		t.Fatal("image key borrowed text credentials")
+	}
+}

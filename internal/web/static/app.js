@@ -196,7 +196,7 @@
       this.svg.addEventListener("keydown", (e) => this.key(e));
     },
 
-    marker(id) { return id ? this.svg?.querySelector(`[data-unit="${CSS.escape(id)}"]`) : null; },
+    marker(id) { return id ? this.svg?.querySelector(`[data-unit="${CSS.escape(id)}"], [data-members~="${CSS.escape(id)}"]`) : null; },
     markerPos(m) { return { x: parseFloat(m.dataset.x), y: parseFloat(m.dataset.y) }; },
 
     // Small screens open zoomed in on the viewer's own counters, or the middle.
@@ -271,7 +271,12 @@
 
     // The referee can drag counters (and, in the editor, places).
     draggable(target) {
-      if (ruler.on) return null;
+      if (ruler.on || orders.mode === "picking") return null;
+      if (planning.on) {
+        const m = target.closest?.("[data-unit]");
+        const u = mapData()?.units?.find((u) => u.id === m?.dataset.unit);
+        return m && (mapData()?.referee || (u?.mine && mapData()?.orders?.open)) ? m : null;
+      }
       if (main()?.dataset.referee !== "1" && !editor.active) return null;
       if (editor.active && editor.tool !== "inspect") return null;
       const m = target.closest?.("[data-unit], [data-place]");
@@ -281,7 +286,7 @@
 
     down(e) {
       this.svg.setPointerCapture(e.pointerId);
-      if (this.pointers.size === 0 && e.button === 0 && editor.wantsDrag()) {
+      if (this.pointers.size === 0 && e.button === 0 && editor.wantsDrag() && !planning.on) {
         this.editing = true;
         editor.dragStart(this.toSvg(e.clientX, e.clientY));
         return;
@@ -382,32 +387,36 @@
       const moved = g.pieces.filter((m) => m.to);
       if (!moved.length) return;
       const units = moved.filter((m) => m.el.dataset.unit);
-      if (editor.active) {
+      if (editor.active && !planning.on) {
         const places = mapData()?.places || [];
-        editor.send(moved.map((m) => m.el.dataset.unit
-          ? { op: "unit-move", unit: m.el.dataset.unit, x: +m.to.x.toFixed(1), y: +m.to.y.toFixed(1) }
-          : { op: "feature-move", feature: places[+m.el.dataset.place]?.id, x: +m.to.x.toFixed(1), y: +m.to.y.toFixed(1) })
+        editor.send(moved.flatMap((m) => m.el.dataset.unit
+          ? (m.el.dataset.members || m.el.dataset.unit).split(" ").map((id) => ({ op: "unit-move", unit: id, x: +m.to.x.toFixed(1), y: +m.to.y.toFixed(1) }))
+          : [{ op: "feature-move", feature: places[+m.el.dataset.place]?.id, x: +m.to.x.toFixed(1), y: +m.to.y.toFixed(1) }])
           .filter((op) => op.unit || op.feature));
         return;
       }
       if (!units.length) return;
       const body = new URLSearchParams();
       for (const m of units) {
-        body.append("unit", m.el.dataset.unit);
-        body.append("x", m.to.x.toFixed(1));
-        body.append("y", m.to.y.toFixed(1));
+        for (const id of (m.el.dataset.members || m.el.dataset.unit).split(" ")) {
+          if (planning.on && !mapData()?.referee && !mapData()?.units?.find((u) => u.id === id)?.mine) continue;
+          body.append("unit", id);
+          body.append("x", m.to.x.toFixed(1));
+          body.append("y", m.to.y.toFixed(1));
+        }
       }
-      const res = await fetch(`${main().dataset.base}/units/move`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
-      if (!res.ok) {
-        alert((await res.text()) || "That didn't work.");
-        units.forEach((m) => m.el.setAttribute("transform", m.from));
-      }
+      try {
+        const res = await fetch(`${main().dataset.base}/${planning.on ? "plans" : "units/move"}`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
+        if (!res.ok) throw new Error((await res.text()) || "That didn't work.");
+        if (planning.on && body.getAll("unit").includes(orders.unit())) orders.setMark({ x: +body.get("x"), y: +body.get("y") });
+      } catch (err) { alert(err.message || "Couldn't reach the server."); }
+      units.forEach((m) => m.el.setAttribute("transform", m.from));
       await refresh();
     },
 
     // --- selecting several counters (the referee) ---
 
-    canGroup() { return main()?.dataset.referee === "1" || editor.active; },
+    canGroup() { return !planning.on && (main()?.dataset.referee === "1" || editor.active); },
 
     paintGroup() {
       this.svg?.querySelectorAll("[data-unit]").forEach((m) => m.classList.toggle("picked", this.group.has(m.dataset.unit)));
@@ -488,7 +497,7 @@
       if (s && !this.moved) {
         const p = this.toSvg(e.clientX, e.clientY);
         if (ruler.click(p, s.target)) return;
-        if (editor.click(p)) return;
+        if (!planning.on && editor.click(p)) return;
         if (orders.click(p)) return;
         const hit = s.target.closest && s.target.closest("[data-unit], [data-place]");
         if (hit && hit.dataset.unit && s.add) this.toggleInGroup(hit.dataset.unit);
@@ -500,6 +509,10 @@
     },
 
     key(e) {
+      const marker = e.target.closest?.(".marker[data-unit]");
+      if (marker && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault(); this.select(marker.dataset.unit, false); return;
+      }
       const step = this.vb.w / 10;
       const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
       if (moves[e.key]) {
@@ -711,20 +724,70 @@
     if (!box || !data) return;
     const u = data.units?.find((x) => x.id === id);
     if (!u) { box.replaceChildren(el("p", { class: "muted small" }, "Not on the map any more.")); return; }
-    const canOrder = data.orders?.open && data.orders.units?.some((x) => x.id === u.id);
+    const orderID = data.orders?.units?.find((x) => x.id === u.id || u.members?.includes(x.id))?.id;
+    const canOrder = data.orders?.open && orderID;
     const ref = data.referee;
     box.replaceChildren(...[
       el("div", {}, el("span", { class: `abbr side-${u.side}`, "aria-hidden": "true" }, u.abbr),
-        el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
+        el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
         u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.stale ? " (where they last called in)" : ""),
       el("div", { class: "muted small" }, [u.class, u.strength, u.where, u.commander].filter(Boolean).join(" · ")),
       u.status ? el("div", { class: "small unit-status" }, u.status) : null,
-      ref ? el("p", { class: "muted small" }, "Drag it to move it.") : null,
+      ref ? el("p", { class: "muted small" }, main()?.dataset.phase === "resolving" ? "Drag to stage its final position. Publishing applies the move." : "Drag it to move it.") : null,
       el("div", { class: "row tight" },
         el("button", { type: "button", class: "link small", "data-measure-unit": u.id, "data-name": u.name }, "Measure from here"),
-        canOrder ? el("button", { type: "button", class: "link small", "data-order-unit": u.id }, data.orders.orders?.[u.id] ? "Edit order" : "Write order") : null,
-        el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "small", "data-card": "" }, "Open card"))].filter(Boolean));
+        canOrder ? el("button", { type: "button", class: "link small", "data-order-unit": orderID }, data.orders.orders?.[orderID] ? "Edit order" : "Write order") : null,
+        el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "small", "data-card": "" }, "Open card"))].filter(Boolean));
+    const ms = u.members ? data.units.filter((m) => !m.members && m.formation === u.formation) : u.formation ? [u] : [];
+    for (const m of ms) {
+      const row = el("p", { class: "small" }, [m.name, m.class, m.commander, m.status, m.detached ? "split off" : m.stale ? "last known position" : "together"].filter(Boolean).join(" · "));
+      box.append(row);
+      if (ref) {
+        const form = el("form", { method: "post", action: `${main().dataset.base}/units/${m.id}/${m.detached ? "rejoin" : "split"}`, "data-enhance": "" },
+          el("button", { type: "submit", class: "secondary small-btn" }, m.detached ? `Rejoin ${m.name}` : `Split off ${m.name}`));
+        box.append(form);
+      }
+    }
   }
+
+  const planning = {
+    on: false,
+    toggle() {
+      this.on = !this.on;
+      map.cancelDrag(); map.clearGroup(); map.setMulti(false); ruler.stop();
+      if (orders.mode === "picking") orders.stopPicking();
+      document.querySelectorAll("[data-plan]").forEach((b) => b.setAttribute("aria-pressed", String(this.on)));
+      ruler.hint(this.on ? (mapData()?.referee ? "Drag counters to stage final positions. Publishing applies these moves." : "Drag your counter to propose a destination for your order.") : "");
+      this.draw();
+    },
+    draw() {
+      const d = mapData();
+      if (!map.svg || !d) return;
+      let layer = document.getElementById("plans-layer");
+      if (!layer) { layer = svgEl("g", { id: "plans-layer", "aria-hidden": "true", "pointer-events": "none" }); map.svg.append(layer); }
+      layer.replaceChildren();
+      const seen = new Set();
+      for (const p of d.plans || []) {
+        const m = map.marker(p.unit);
+        if (!m) continue;
+        const key = `${m.dataset.unit}:${p.to.x}:${p.to.y}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const from = map.markerPos(m);
+        layer.append(svgEl("line", { class: "plan-arrow", x1: from.x, y1: from.y, x2: p.to.x, y2: p.to.y, "marker-end": "url(#arrow)" }));
+        const ghost = m.cloneNode(true);
+        ghost.removeAttribute("data-unit"); ghost.removeAttribute("data-members");
+        ghost.removeAttribute("tabindex"); ghost.removeAttribute("role");
+        ghost.setAttribute("class", "plan-ghost");
+        ghost.setAttribute("transform", `translate(${p.to.x} ${p.to.y}) scale(${d.k})`);
+        layer.append(ghost);
+      }
+      document.querySelectorAll("[data-plan]").forEach((b) => b.setAttribute("aria-pressed", String(this.on)));
+      const clear = document.getElementById("clear-plans");
+      if (clear) clear.disabled = !(d.plans?.length);
+    },
+  };
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-plan]")) planning.toggle(); });
 
   // ---------- scenario editor ----------
   //
@@ -958,6 +1021,16 @@
     init() {
       this.box = document.getElementById("order-box");
       if (!this.box) return;
+      if (window.HTMLDialogElement) {
+        this.box.classList.remove("is-collapsed");
+        this.box.querySelector(".fold-btn")?.remove();
+        this.launcher = el("button", { type: "button", class: "order-launcher", "data-order-unit": "" }, "Write an order");
+        this.box.before(this.launcher);
+        this.dialog = el("dialog", { class: "card-dialog order-dialog", "aria-labelledby": "of-h" });
+        const close = el("button", { type: "button", class: "secondary small-btn card-close" }, "Close");
+        close.addEventListener("click", () => this.dialog.close());
+        this.dialog.append(close, this.box); document.body.append(this.dialog);
+      }
       const cancel = el("button", { type: "button", class: "secondary small-btn" }, "Cancel");
       this.pickbar = el("div", { class: "pick-bar", role: "status", hidden: "" },
         el("span", {}, "Tap the map where you want the pin."), cancel);
@@ -993,20 +1066,26 @@
       }
       sel.closest("label").hidden = units.length <= 1;
       this.box.hidden = !d.open || units.length === 0;
+      if (this.launcher) this.launcher.hidden = this.box.hidden;
+      if (this.box.hidden) this.dialog?.close();
       return keep !== sel.value;
     },
 
     open(unitId) {
       if (!this.box) return;
+      const before = this.unit();
       this.syncUnits();
       if (unitId && [...this.$("of-unit").options].some((o) => o.value === unitId)) this.$("of-unit").value = unitId;
-      this.load();
-      this.box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      if (before !== this.unit()) this.load();
+      if (this.dialog && !this.box.hidden) this.dialog.showModal();
+      else this.box.scrollIntoView({ block: "nearest", behavior: "smooth" });
       this.$("of-text").focus({ preventScroll: true });
     },
 
     pick() {
       ruler.stop();
+      if (planning.on) planning.toggle();
+      this.dialog?.close();
       this.mode = "picking";
       this.pickbar.hidden = false;
       map.svg?.classList.add("picking");
@@ -1014,6 +1093,7 @@
     },
 
     stopPicking() {
+      if (this.mode === "picking" && this.dialog && !this.box.hidden) this.dialog.showModal();
       this.mode = "idle";
       this.pickbar.hidden = true;
       map.svg?.classList.remove("picking");
@@ -1036,9 +1116,12 @@
       if (!d || !this.$("of-unit")) return;
       this.syncUnits();
       const o = d.orders[this.unit()];
-      this.$("of-text").value = o?.text || "";
-      this.$("of-mark-x").value = o?.mark ? o.mark.x : "";
-      this.$("of-mark-y").value = o?.mark ? o.mark.y : "";
+      this.$("of-h").textContent = this.unit()?.startsWith("f-") ? "Global squad order" : "Individual order";
+      const inherited = o?.group && !this.unit().startsWith("f-");
+      this.$("of-text").value = inherited ? "" : o?.text || "";
+      const p = o ? o.mark : mapData()?.plans?.find((p) => p.unit === this.unit())?.to;
+      this.$("of-mark-x").value = p ? p.x : "";
+      this.$("of-mark-y").value = p ? p.y : "";
       this.status();
       this.drawMark();
     },
@@ -1046,7 +1129,7 @@
     status() {
       const o = this.data()?.orders[this.unit()];
       const w = this.$("of-withdraw");
-      this.$("of-status").textContent = !o ? "No order yet."
+      this.$("of-status").textContent = o?.group && !this.unit().startsWith("f-") ? "Following the squad order. Writing here gives this member a separate order." : !o ? "No order yet."
         : o.status === "committed" ? `Sent${o.author ? ` by ${o.author}` : ""}. You can change it until the turn locks.`
         : `${o.status[0].toUpperCase()}${o.status.slice(1)}${o.author ? `, by ${o.author}` : ""}.`;
       if (w) {
@@ -1084,6 +1167,7 @@
     afterRefresh() {
       if (!this.box) return;
       if (this.syncUnits()) { this.load(); return; }
+      if (this.box.hidden && this.mode === "picking") this.stopPicking();
       this.status();
       this.drawMark();
     },
@@ -1124,6 +1208,20 @@
 
   // ---------- live updates ----------
 
+  function announceTurn() {
+    const m = main();
+    if (!m?.dataset.seat || !m.dataset.turn) return;
+    const turn = +m.dataset.turn;
+    const key = `aw-turn:${m.dataset.base.split("/k/")[0]}:${m.dataset.seat}:${m.dataset.operation}`;
+    let previous = 0;
+    try { previous = +(localStorage.getItem(key) || 0); localStorage.setItem(key, String(Math.max(turn, previous))); } catch { return; }
+    if (turn <= previous || m.dataset.phase !== "planning") return;
+    document.getElementById("turn-splash")?.remove();
+    const splash = el("div", { id: "turn-splash", class: "turn-splash", role: "status" }, `Turn ${turn} · orders are open`);
+    document.body.append(splash);
+    setTimeout(() => splash.remove(), 4200);
+  }
+
   let refreshing = null;
 
   async function refresh() {
@@ -1146,13 +1244,17 @@
         if (old.tagName === "DETAILS" && old.open) node.setAttribute("open", "");
         old.replaceWith(document.importNode(node, true));
       }
-      cur.dataset.version = next.dataset.version;
+      const turnChanged = cur.dataset.turn !== next.dataset.turn || cur.dataset.operation !== next.dataset.operation;
+      for (const key of ["version", "turn", "phase", "operation", "seat"]) cur.dataset[key] = next.dataset[key];
+      if (turnChanged) { planning.on = false; orders.dialog?.close(); orders.load(); }
+      announceTurn();
       document.getElementById("edit-preview")?.replaceChildren();
       localizeTimes();
       countdown();
       orders.afterRefresh();
       threadToEnd();
       map.afterRefresh();
+      planning.draw();
       folds.apply();
     } catch {
       // Offline or server restarting; the event stream will retry.
@@ -1233,11 +1335,13 @@
       if (res.ok && form.id === "order-form") {
         orders.load();
         if (e.submitter?.value === "commit") orders.stopPicking();
+        orders.dialog?.close();
       }
     } catch {
       alert("Couldn't reach the server. Check your connection and try again.");
     } finally {
       buttons.forEach((b) => (b.disabled = false));
+      planning.draw();
     }
   });
 
@@ -1447,6 +1551,8 @@
     map.init();
     editor.init();
     orders.init();
+    planning.draw();
+    announceTurn();
     localizeTimes();
     countdown();
     setInterval(countdown, 30000);

@@ -21,7 +21,7 @@ import (
 //
 // Flags on the command line win over the file. A few settings are secrets
 // and only go in the file (or the environment), never on the command line
-// where the process list shows them: ai-key, ai-key-file, host-password,
+// where the process list shows them: ai-key, ai-key-file, image-key, image-key-file, host-password,
 // and push-contact.
 
 const defaultConfig = "async-wargame.conf"
@@ -30,6 +30,7 @@ const defaultConfig = "async-wargame.conf"
 // the program to read. A variable already set in the environment wins.
 var secrets = map[string]string{
 	"ai-key":        "AW_AI_KEY",
+	"image-key":     "AW_IMAGE_KEY",
 	"host-password": "AW_HOST_PASSWORD",
 	"push-contact":  "AW_PUSH_CONTACT",
 }
@@ -64,12 +65,16 @@ func loadConfig(fs *flag.FlagSet, args []string) (string, error) {
 		switch {
 		case key == "config":
 			return "", fmt.Errorf("%s:%d: a config file can't name another one", path, n)
-		case key == "ai-key-file":
-			k, err := readKeyFile(expandHome(value))
+		case key == "ai-key-file" || key == "image-key-file":
+			env, names := "AW_AI_KEY", []string{"AW_AI_KEY", "OPENCODE_API_KEY"}
+			if key == "image-key-file" {
+				env, names = "AW_IMAGE_KEY", []string{"AW_IMAGE_KEY"}
+			}
+			k, err := readNamedKeyFile(expandHome(value), names)
 			if err != nil {
 				return "", fmt.Errorf("%s:%d: %w", path, n, err)
 			}
-			setIfUnset("AW_AI_KEY", k)
+			setIfUnset(env, k)
 		case secrets[key] != "":
 			setIfUnset(secrets[key], value)
 		case fs.Lookup(key) != nil:
@@ -106,6 +111,10 @@ func configPath(args []string) (path string, explicit bool) {
 // readKeyFile reads an API key from a file: either the key alone, or
 // shell-style lines (OPENCODE_API_KEY=..., export AW_AI_KEY=...).
 func readKeyFile(path string) (string, error) {
+	return readNamedKeyFile(path, []string{"AW_AI_KEY", "OPENCODE_API_KEY"})
+}
+
+func readNamedKeyFile(path string, names []string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -117,7 +126,7 @@ func readKeyFile(path string) (string, error) {
 		}
 		return text, nil
 	}
-	for _, want := range []string{"AW_AI_KEY", "OPENCODE_API_KEY"} {
+	for _, want := range names {
 		for _, line := range strings.Split(text, "\n") {
 			line = strings.TrimPrefix(strings.TrimSpace(line), "export ")
 			if k, v, ok := strings.Cut(line, "="); ok && strings.TrimSpace(k) == want {
@@ -125,7 +134,7 @@ func readKeyFile(path string) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("%s has no AW_AI_KEY= or OPENCODE_API_KEY= line", path)
+	return "", fmt.Errorf("%s has no %s= line", path, strings.Join(names, "= or "))
 }
 
 func setIfUnset(env, value string) {

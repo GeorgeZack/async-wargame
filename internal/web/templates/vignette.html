@@ -1,0 +1,44 @@
+{{define "vignette"}}{{$v := index . 0}}{{$art := index . 1}}
+{{if or $v.IsReferee $art.Image}}
+<div class="vignette">
+  {{with $art.Image}}
+    {{if eq .Status "done"}}<figure class="vignette-figure">
+      <img src="{{$v.Base}}/vignettes/image/{{.File}}" width="{{.Width}}" height="{{.Height}}" alt="{{.Caption}}" loading="lazy">
+      <figcaption>{{.Caption}} <span class="muted small">· AI illustration{{if .Approved}}, approved by the referee{{else}} · private preview{{end}}</span></figcaption>
+    </figure>{{end}}
+  {{end}}
+  {{if $v.IsReferee}}
+  <details class="vignette-desk"{{with $art.Image}}{{if not .Approved}} open{{end}}{{end}}>
+    <summary>Situation vignette{{with $art.Image}} · {{if .Approved}}shown to players{{else if .Busy}}generating{{else}}private draft{{end}}{{end}}</summary>
+    {{with $art.Image}}
+      <p class="small muted">{{.Model}} via {{.Provider}}</p>
+      {{if .Busy}}<p role="status">{{if eq .Status "pending"}}Queued.{{else}}Creating the vignette…{{end}} You can leave this page; the preview will be saved here.</p>{{end}}
+      {{with .Error}}<p class="alert" role="status">{{.}}</p>{{end}}
+      <form method="post" action="{{$v.Base}}/vignettes/{{$art.Operation}}/{{$art.Turn}}/decide" class="row tight" data-enhance>
+        <input type="hidden" name="id" value="{{.ID}}">
+        {{if .Busy}}<button type="submit" name="action" value="cancel" class="secondary small-btn">Cancel generation</button>
+        {{else}}
+          {{if eq .Status "done"}}
+            {{if .Approved}}<button type="submit" name="action" value="hide" class="secondary small-btn">Hide from players</button>
+            {{else}}<button type="submit" name="action" value="approve" class="small-btn">Approve vignette for players</button>{{end}}
+          {{end}}
+          <button type="submit" name="action" value="discard" class="secondary small-btn">Discard vignette</button>
+        {{end}}
+      </form>
+    {{end}}
+    {{if $v.ImageAI.Available}}
+      {{if not $art.Image.Busy}}
+      <form method="post" action="{{$v.Base}}/vignettes/{{$art.Operation}}/{{$art.Turn}}/generate" class="stack vignette-form" data-enhance>
+        <p class="small">Create one scene for this brief with <strong>{{$v.ImageAI.Model}}</strong> via {{$v.ImageAI.Provider}}. Review the description below; it is sent to the image service with illustration guidance. The result stays private until you approve it.</p>
+        <label>Scene description <textarea name="prompt" rows="5" minlength="10" maxlength="4000" required placeholder="Describe the setting, era, and one moment from this situation…">{{$art.SuggestedPrompt}}</textarea></label>
+        <label>Public image description <input name="caption" maxlength="240" required value="{{with $art.Image}}{{.Caption}}{{else}}{{if $art.Turn}}Turn {{$art.Turn}} situation{{else}}Opening situation{{end}}{{end}}"></label>
+        {{if $art.Image}}<p class="muted small">Generating again replaces this vignette with a private draft.</p>{{end}}
+        <div><button type="submit" class="secondary small-btn">{{if $art.Image}}Generate a replacement{{else}}Generate vignette{{end}}</button></div>
+      </form>
+      {{end}}
+    {{else}}<p class="small muted">Image generation is not configured on this server. It uses its own API and model, separate from the text assistant.</p>{{end}}
+  </details>
+  {{end}}
+</div>
+{{end}}
+{{end}}

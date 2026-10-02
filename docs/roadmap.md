@@ -41,7 +41,8 @@ Civil War module needs it.
   side writing free-text orders, and the assistant judging, to see what
   stories come out.
 - **Turn history browser:** what each side knew at any turn.
-- **Briefs:** AI images of resolved events, approved by the referee.
+- Situation-brief vignettes are implemented with a separate image API/model
+  and referee approval; choose an image provider/model before enabling them.
 - **Play-by-post view** over the same record.
 - **Playtest metrics:** referee time per turn, missed deadlines,
   corrections.

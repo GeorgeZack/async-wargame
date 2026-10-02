@@ -2,6 +2,8 @@ package game
 
 import (
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"time"
 )
@@ -26,6 +28,7 @@ const maxOrderLen = 1500
 
 // Order is one unit's order for one turn.
 type Order struct {
+	Group       string          `json:"group,omitempty"` // shared squad instruction; empty for individual orders
 	ID          string          `json:"id"`
 	Turn        int             `json:"turn"`
 	Unit        string          `json:"unit"`
@@ -81,6 +84,9 @@ func (r *Room) CurrentOrder(unitID string) *Order {
 // SaveOrder writes or revises a unit's order for this turn. mark is a spot
 // on the board, or nil.
 func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text string, mark *Pos, commit bool, now time.Time) (*Order, error) {
+	if strings.HasPrefix(unitID, "f-") {
+		return r.SaveSquadOrder(actor, mod, strings.TrimPrefix(unitID, "f-"), text, mark, commit, now)
+	}
 	if r.Phase != PhasePlanning {
 		return nil, bad("orders can only be written while a turn is in planning")
 	}
@@ -100,6 +106,9 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text string, mark *
 	}
 	var at *Pos
 	if mark != nil {
+		if math.IsNaN(mark.X) || math.IsNaN(mark.Y) || math.IsInf(mark.X, 0) || math.IsInf(mark.Y, 0) {
+			return nil, bad("choose a point on the map")
+		}
 		p := r.clampPos(*mark)
 		at = &p
 	}
@@ -108,6 +117,16 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text string, mark *
 		o = &Order{ID: newID(), Turn: r.Turn, Unit: u.ID}
 		r.Orders = append(r.Orders, o)
 	}
+	// Keep this seat's planning ghost in step with an explicitly edited pin.
+	for _, p := range r.PlansFor(actor) {
+		if p.Unit == u.ID && at != nil {
+			p.To = *at
+		}
+	}
+	if at == nil {
+		r.Plans = slices.DeleteFunc(r.Plans, func(p *Plan) bool { return p.Member == actor.ID && p.Turn == r.Turn && p.Unit == u.ID })
+	}
+	o.Group = ""
 	o.Author, o.Text, o.Mark = actor.ID, text, at
 	o.Status, o.Review, o.ReviewNote, o.ReviewedBy, o.CommittedAt = OrderDraft, "", "", "", nil
 	if commit {
@@ -136,8 +155,20 @@ func (r *Room) WithdrawOrder(actor *Member, mod *Module, id string, now time.Tim
 		if u == nil || !r.CanOrder(mod, actor, u) || !r.seesOrder(actor, u) {
 			return ErrForbidden
 		}
-		o.Status, o.UpdatedAt = OrderWithdrawn, now.UTC()
-		o.History = append(o.History, OrderRevision{Version: o.Version, At: now.UTC(), By: actor.Name, Status: OrderWithdrawn})
+		peers := r.sharedOrderPeers(o)
+		for _, p := range peers {
+			unit := r.Unit(p.Unit)
+			if unit == nil || !r.CanOrder(mod, actor, unit) || !r.seesOrder(actor, unit) {
+				return ErrForbidden
+			}
+		}
+		for _, p := range peers {
+			p.Status, p.UpdatedAt = OrderWithdrawn, now.UTC()
+			p.History = append(p.History, OrderRevision{Version: p.Version, At: now.UTC(), By: actor.Name, Status: OrderWithdrawn})
+		}
+		if o.Group == "" {
+			return r.restoreSquadOrder(actor, mod, u, now)
+		}
 		return nil
 	}
 	return ErrNotFound
@@ -175,6 +206,11 @@ func (r *Room) ReviewOrder(actor *Member, id, action, note string, now time.Time
 		return ErrNotFound
 	}
 	u := r.Unit(o.Unit)
+	for _, peer := range r.sharedOrderPeers(o) {
+		if !r.CanReview(actor, r.Unit(peer.Unit)) {
+			return ErrForbidden
+		}
+	}
 	if !r.CanReview(actor, u) {
 		return ErrForbidden
 	}
@@ -200,6 +236,14 @@ func (r *Room) ReviewOrder(actor *Member, id, action, note string, now time.Time
 	}
 	o.ReviewedBy, o.Version = actor.Name, o.Version+1
 	o.History = append(o.History, OrderRevision{Version: o.Version, At: now.UTC(), By: actor.Name, Status: o.Status, Text: o.Text})
+	for _, peer := range r.sharedOrderPeers(o) {
+		if peer == o {
+			continue
+		}
+		peer.Review, peer.ReviewNote, peer.ReviewedBy, peer.Status, peer.CommittedAt = o.Review, o.ReviewNote, o.ReviewedBy, o.Status, o.CommittedAt
+		peer.Version++
+		peer.History = append(peer.History, OrderRevision{Version: peer.Version, At: now.UTC(), By: actor.Name, Status: peer.Status, Text: peer.Text})
+	}
 	return nil
 }
 
@@ -247,8 +291,15 @@ func (r *Room) OrderReadiness() (in, total int, waiting []string) {
 // LockedOrders are this turn's orders in the order units appear.
 func (r *Room) LockedOrders() []*Order {
 	var out []*Order
+	groups := map[string]bool{}
 	for _, u := range r.Units {
 		if o := r.CurrentOrder(u.ID); o != nil && o.Status == OrderLocked {
+			if o.Group != "" {
+				if groups[o.Group] {
+					continue
+				}
+				groups[o.Group] = true
+			}
 			out = append(out, o)
 		}
 	}

@@ -14,6 +14,9 @@ import (
 func (s *Server) SetAI(c *ai.Client) { s.ai = c }
 
 func (s *Server) aiView(v *game.View) {
+	if s.imageAI != nil && v.IsReferee {
+		v.ImageAI.Available, v.ImageAI.Provider, v.ImageAI.Model = true, s.imageAI.Provider(), s.imageAI.Model()
+	}
 	if s.ai == nil || !v.IsReferee {
 		return
 	}

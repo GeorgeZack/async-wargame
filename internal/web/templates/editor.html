@@ -1,7 +1,7 @@
 {{define "content"}}
 {{template "shell-top" .}}
 
-<main id="main" class="screen editor-screen setup-screen" data-base="{{.Base}}" data-version="{{.Version}}" data-editor>
+<main id="main" class="screen editor-screen setup-screen" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}" data-editor>
   <div class="next" id="edit-status" data-live role="status">
     {{if .Live}}
     <p><strong>The operation is live.</strong> Edits apply immediately. Players see changes to terrain, roads, rivers, and anything they already know about.</p>
@@ -18,6 +18,8 @@
     {{end}}
     <noscript><p class="alert">Map editing needs JavaScript. You can still edit the texts below.</p></noscript>
   </div>
+
+  <section class="panel" id="opening-vignette" data-live aria-label="Opening situation vignette">{{template "vignette" (pair . .BriefingArt)}}</section>
 
   <div class="setup-top">
   <section class="panel map-panel" aria-labelledby="map-h">
@@ -145,6 +147,7 @@
         <label>Campaign name <input name="campaign" value="{{.Name}}" maxlength="32" required></label>
         <label>Player briefing <span class="muted small">Blank lines separate paragraphs.</span>
           <textarea name="briefing" rows="9">{{.BriefingText}}</textarea></label>
+        <label>Objectives <span class="muted small">One per line; shown below the briefing.</span><textarea name="objectives" rows="4">{{.ObjectivesText}}</textarea></label>
         <label>Referee notes <span class="muted small">Only you see these.</span>
           <textarea name="notes" rows="5">{{.RefereeNotes}}</textarea></label>
         <button type="submit">Save texts</button>

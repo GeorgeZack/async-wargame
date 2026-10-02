@@ -22,6 +22,7 @@ import (
 
 	"asyncwargame/internal/ai"
 	"asyncwargame/internal/game"
+	"asyncwargame/internal/imageai"
 	"asyncwargame/internal/push"
 )
 
@@ -46,6 +47,7 @@ type Options struct {
 }
 
 type Server struct {
+	imageAI *imageai.Client
 	opts    Options
 	guard   *failGuard
 	pushSem chan struct{} // limits concurrent push sends
@@ -106,7 +108,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	}
 	for _, page := range []string{"home", "pending", "briefing", "holding", "editor", "message", "invite", "closed", "unit",
 		"screen-map", "screen-desk", "screen-people"} {
-		t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/map.html", "templates/shell.html", "templates/sections.html", "templates/"+page+".html")
+		t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/map.html", "templates/shell.html", "templates/sections.html", "templates/vignette.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, err
 		}
@@ -162,6 +164,9 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /turn/next", s.nextTurn)
 	seat("POST /turn/reopen", s.reopenTurn)
 	seat("POST /assistant", s.setAssistant)
+	seat("POST /vignettes/{op}/{turn}/generate", s.generateVignette)
+	seat("POST /vignettes/{op}/{turn}/decide", s.decideVignette)
+	seat("GET /vignettes/image/{name}", s.vignetteImage)
 	seat("POST /assistant/run", s.assistantRun)
 	seat("POST /assistant/cancel", s.assistantCancel)
 	seat("POST /assistant/draft", s.useDraft)
@@ -174,6 +179,11 @@ func New(store *game.Store, opts Options) (*Server, error) {
 
 	seat("POST /admin-mode", s.adminMode)
 	seat("POST /units/move", s.moveUnits)
+	seat("POST /plans", s.moveUnits)
+	seat("POST /plans/apply", s.applyPlans)
+	seat("POST /plans/clear", s.clearStagedMoves)
+	seat("POST /units/{id}/split", s.splitUnit)
+	seat("POST /units/{id}/rejoin", s.rejoinUnit)
 	seat("POST /units/{id}/edit", s.editUnit)
 	seat("POST /board", s.setBoard)
 	seat("POST /board/image", s.uploadMap)

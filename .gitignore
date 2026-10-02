@@ -1,3 +1,4 @@
 data/
 /async-wargame
-/async-wargame.conf
+*.conf
+!async-wargame.example.conf

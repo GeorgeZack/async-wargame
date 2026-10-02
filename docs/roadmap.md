@@ -3,6 +3,11 @@
 What's next, roughly in order. Playtesting comes first and will reorder
 everything after it.
 
+## First
+
+- **Playtest St. Ines** with a referee and four players, and change what
+  the table finds clumsy.
+
 ## Soon
 
 - **Email notifications.** Web push works on devices people have turned it
@@ -29,11 +34,17 @@ Several battles on different maps at once, inside one campaign.
 - Reports, messages, and facts can belong to an instance or to the whole
   campaign.
 
+## Two-sided play
+
+Built alongside instancing, since they share the plumbing: each side has its
+own players, orders, and fog, and the referee judges both on one desk. A
+Civil War module needs it.
+
 ## Later
 
-- **Two-sided play** with separate fog for each side (a Civil War module
-  needs it).
-- **AI-versus-AI test runs** through the normal order flow, for balance.
+- **AI-versus-AI test runs** through the normal order flow: an AI on each
+  side writing free-text orders, and the assistant judging, to see what
+  stories come out.
 - **Turn history browser:** what each side knew at any turn.
 - **Briefs:** AI images of resolved events, approved by the referee.
 - **Play-by-post view** over the same record.

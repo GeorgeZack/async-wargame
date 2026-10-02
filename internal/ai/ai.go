@@ -7,6 +7,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,15 +19,22 @@ import (
 
 // Presets for -ai. Anything else is taken as a base URL.
 var Presets = map[string]Preset{
-	"opencode": {BaseURL: "https://opencode.ai/zen/v1", Model: "big-pickle", Name: "OpenCode Zen", NeedsKey: true},
-	"ollama":   {BaseURL: "http://127.0.0.1:11434/v1", Model: "llama3.1", Name: "Ollama on this machine"},
+	// OpenCode Go: the subscription endpoint.
+	"opencode": {BaseURL: "https://opencode.ai/zen/go/v1", Model: "glm-5.2", Name: "OpenCode", NeedsKey: true, Session: true},
+	// OpenCode Zen: pay as you go, with some free models.
+	"opencode-zen": {BaseURL: "https://opencode.ai/zen/v1", Model: "big-pickle", Name: "OpenCode Zen", NeedsKey: true, Session: true},
+	"ollama":       {BaseURL: "http://127.0.0.1:11434/v1", Model: "llama3.1", Name: "Ollama on this machine"},
 }
 
 // Preset is a known provider.
 type Preset struct {
 	BaseURL, Model, Name string
 	NeedsKey             bool
+	Session              bool // send an x-opencode-session header
 }
+
+// UserAgent identifies the server to model providers.
+const UserAgent = "async-wargame/1.0"
 
 // Config says which model to use.
 type Config struct {
@@ -35,6 +43,29 @@ type Config struct {
 	Model   string
 	Name    string // shown to referees: where game data goes
 	Timeout time.Duration
+	// Session, if set, is sent as x-opencode-session: OpenCode groups a
+	// client's requests by it. One per server run.
+	Session string
+}
+
+// NewSessionID makes a random UUID (version 4) for Config.Session.
+func NewSessionID() string {
+	var b [16]byte
+	rand.Read(b[:])
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// header sets what every request carries.
+func (c *Client) header(req *http.Request) {
+	req.Header.Set("User-Agent", UserAgent)
+	if c.cfg.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+	}
+	if c.cfg.Session != "" {
+		req.Header.Set("x-opencode-session", c.cfg.Session)
+	}
 }
 
 // Client calls the model.
@@ -105,9 +136,7 @@ func (c *Client) once(ctx context.Context, body []byte) (string, Usage, bool, er
 		return "", Usage{}, false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	}
+	c.header(req)
 	res, err := c.http.Do(req)
 	if err != nil {
 		return "", Usage{}, ctx.Err() == nil, fmt.Errorf("%s: %w", c.cfg.Name, err)
@@ -184,9 +213,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	}
+	c.header(req)
 	res, err := c.http.Do(req)
 	if err != nil {
 		return nil, err

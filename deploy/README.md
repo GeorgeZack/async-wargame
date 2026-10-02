@@ -157,11 +157,11 @@ Add the flags to `ExecStart` in the service and the key to the env file:
 
 ```sh
 # /etc/async-wargame/env
-AW_AI_KEY=your-opencode-key
+OPENCODE_API_KEY=your-opencode-key
 ```
 
 ```ini
-ExecStart=/usr/local/bin/async-wargame -addr 127.0.0.1:8080 -proxy -data /var/lib/async-wargame/campaigns.json -ai opencode -ai-model big-pickle
+ExecStart=/usr/local/bin/async-wargame -addr 127.0.0.1:8080 -proxy -data /var/lib/async-wargame/campaigns.json -ai opencode
 ```
 
 For `-ai local`, put the GGUF file somewhere the service can read (say

@@ -40,8 +40,11 @@ The referee's assistant can use a language model through any
 OpenAI-compatible chat API. Pick one with `-ai`:
 
 ```sh
-# OpenCode Zen (an account and API key from opencode.ai; free models included)
-AW_AI_KEY=... ./async-wargame -ai opencode -ai-model big-pickle
+# OpenCode Go (an opencode.ai subscription and API key); defaults to glm-5.2
+OPENCODE_API_KEY=... ./async-wargame -ai opencode
+
+# OpenCode Zen (pay as you go, some free models)
+OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
 
 # Ollama running on the same machine
 ./async-wargame -ai ollama -ai-model llama3.1
@@ -53,10 +56,13 @@ AW_AI_KEY=... ./async-wargame -ai opencode -ai-model big-pickle
 ./async-wargame -ai http://127.0.0.1:1234/v1 -ai-model my-model
 ```
 
-- **OpenCode Zen** needs `AW_AI_KEY`: without one, it refuses with "free tier
-  can only be used from within OpenCode". At startup the server checks the
-  model exists and lists the free ones if it doesn't. Free models change,
-  and several log prompts or use them for training (see
+- **OpenCode** (`-ai opencode`, the Go endpoint `opencode.ai/zen/go/v1`, or
+  `-ai opencode-zen` for `opencode.ai/zen/v1`) needs a key in
+  `OPENCODE_API_KEY` or `AW_AI_KEY` (to load it from OpenCode's file:
+  `set -a; source ~/.config/opencode/api-key.env; set +a`). The server sends a session ID per run
+  (`x-opencode-session`) and its own user agent, and at startup checks the
+  model is on the provider's list, printing the list if it isn't. Some free
+  Zen models log prompts or use them for training (see
   [opencode.ai/docs/zen](https://opencode.ai/docs/zen/)).
 - **`-ai local`** starts `llama-server` (from [llama.cpp](https://github.com/ggml-org/llama.cpp);
   `-ai-llama-server` if it isn't on the `PATH`) on a private port with your

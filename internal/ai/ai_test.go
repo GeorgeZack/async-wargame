@@ -17,6 +17,9 @@ func TestCompleteRetriesAndAuthenticates(t *testing.T) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer sekrit" {
 			t.Errorf("request %s, auth %q", r.URL.Path, r.Header.Get("Authorization"))
 		}
+		if r.Header.Get("x-opencode-session") != "s-1" || r.Header.Get("User-Agent") != UserAgent {
+			t.Errorf("session %q, agent %q", r.Header.Get("x-opencode-session"), r.Header.Get("User-Agent"))
+		}
 		var req struct {
 			Model    string `json:"model"`
 			Messages []struct{ Role, Content string }
@@ -33,7 +36,7 @@ func TestCompleteRetriesAndAuthenticates(t *testing.T) {
 		w.Write([]byte(`{"choices":[{"message":{"content":"<think>hmm</think>\nAll quiet."}}],"usage":{"prompt_tokens":12,"completion_tokens":3}}`))
 	}))
 	defer srv.Close()
-	c := New(Config{BaseURL: srv.URL + "/v1/", APIKey: "sekrit", Model: "big-pickle", Name: "test"})
+	c := New(Config{BaseURL: srv.URL + "/v1/", APIKey: "sekrit", Model: "big-pickle", Name: "test", Session: "s-1"})
 	c.backoff = time.Millisecond
 	text, usage, err := c.Complete(context.Background(), "sys", "user", 100)
 	if err != nil || text != "All quiet." || usage.Prompt != 12 || calls != 2 {
@@ -61,5 +64,12 @@ func TestDecodeJSON(t *testing.T) {
 	}
 	if err := DecodeJSON("no json here", &v); err != ErrNoJSON {
 		t.Errorf("err %v", err)
+	}
+}
+
+func TestSessionIDsAreUUIDs(t *testing.T) {
+	a, b := NewSessionID(), NewSessionID()
+	if a == b || len(a) != 36 || a[14] != '4' || strings.Count(a, "-") != 4 {
+		t.Errorf("session ids %q %q", a, b)
 	}
 }

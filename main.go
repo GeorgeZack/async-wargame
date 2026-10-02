@@ -32,8 +32,8 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:8080", "listen address (use :8080 to accept LAN connections)")
 	dataPath := flag.String("data", "data/campaigns.json", "campaign state file")
 	modsDir := flag.String("modules", "", "extra directory with modules/*.json and scenarios/*.json to load alongside the built-in ones")
-	aiFlag := flag.String("ai", "", `AI model for the referee assistant: "opencode" (OpenCode Zen; key in AW_AI_KEY), "ollama", "local" (runs llama-server with -ai-local-model), or an OpenAI-compatible base URL ending in /v1. Empty: no AI`)
-	aiModel := flag.String("ai-model", "", "model ID (default: big-pickle for opencode, llama3.1 for ollama)")
+	aiFlag := flag.String("ai", "", `AI model for the referee assistant: "opencode" (OpenCode Go) or "opencode-zen" (key in AW_AI_KEY or OPENCODE_API_KEY), "ollama", "local" (runs llama-server with -ai-local-model), or an OpenAI-compatible base URL ending in /v1. Empty: no AI`)
+	aiModel := flag.String("ai-model", "", "model ID (default: glm-5.2 for opencode, big-pickle for opencode-zen, llama3.1 for ollama)")
 	aiLlama := flag.String("ai-llama-server", "llama-server", `llama.cpp server binary for -ai local`)
 	aiLocalModel := flag.String("ai-local-model", "", "GGUF model file for -ai local")
 	aiContext := flag.Int("ai-context", 8192, "context size for -ai local")
@@ -126,7 +126,11 @@ func main() {
 
 // startAI sets up the assistant's model from the -ai flags.
 func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int) (*ai.Client, *ai.Local, error) {
-	cfg := ai.Config{BaseURL: which, Model: model, APIKey: os.Getenv("AW_AI_KEY"), Name: which}
+	key := os.Getenv("AW_AI_KEY")
+	if key == "" {
+		key = os.Getenv("OPENCODE_API_KEY") // what OpenCode's own tools use
+	}
+	cfg := ai.Config{BaseURL: which, Model: model, APIKey: key, Name: which}
 	var local *ai.Local
 	switch p, ok := ai.Presets[which]; {
 	case ok:
@@ -135,7 +139,10 @@ func startAI(ctx context.Context, which, model, llama, localModel string, contex
 			cfg.Model = p.Model
 		}
 		if p.NeedsKey && cfg.APIKey == "" {
-			return nil, nil, fmt.Errorf("-ai %s needs an API key in AW_AI_KEY", which)
+			return nil, nil, fmt.Errorf("-ai %s needs an API key in AW_AI_KEY (or OPENCODE_API_KEY)", which)
+		}
+		if p.Session {
+			cfg.Session = ai.NewSessionID()
 		}
 	case which == "local":
 		if localModel == "" {
@@ -168,13 +175,7 @@ func startAI(ctx context.Context, which, model, llama, localModel string, contex
 	check, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if ids, err := client.Models(check); err == nil && len(ids) > 0 && !slices.Contains(ids, cfg.Model) {
-		var free []string
-		for _, id := range ids {
-			if strings.HasSuffix(id, "-free") || id == "big-pickle" {
-				free = append(free, id)
-			}
-		}
-		log.Printf("AI: warning: %s doesn't list a model called %q; free ones it lists: %s", cfg.Name, cfg.Model, strings.Join(free, ", "))
+		log.Printf("AI: warning: %s doesn't list a model called %q; it lists: %s", cfg.Name, cfg.Model, strings.Join(ids, ", "))
 	}
 	return client, local, nil
 }

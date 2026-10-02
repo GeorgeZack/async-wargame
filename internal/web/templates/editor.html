@@ -1,7 +1,7 @@
 {{define "content"}}
 {{template "shell-top" .}}
 
-<main id="main" class="screen editor-screen" data-base="{{.Base}}" data-version="{{.Version}}" data-editor>
+<main id="main" class="screen editor-screen setup-screen" data-base="{{.Base}}" data-version="{{.Version}}" data-editor>
   <div class="next" id="edit-status" data-live role="status">
     {{if .Live}}
     <p><strong>The operation is live.</strong> Edits apply immediately. Players see changes to terrain, roads, rivers, and anything they already know about.</p>
@@ -9,10 +9,10 @@
     <p><strong>Setup.</strong> Players can't see the map yet. Shape the scenario, check the event tables, then start the operation.</p>
     <div class="row">
       <form method="post" action="{{.Base}}/start" data-confirm="Start the operation? Players will see the map and turn 1 opens.">
-        <input type="hidden" name="back" value="edit"><button type="submit">Start the operation</button>
+        <input type="hidden" name="back" value="setup"><button type="submit">Start the operation</button>
       </form>
       <form method="post" action="{{.Base}}/reset" data-enhance data-confirm="Reset the map, places, units, and texts to the scenario template? Your edits will be lost.">
-        <input type="hidden" name="back" value="edit"><button type="submit" class="secondary">Reset to template</button>
+        <input type="hidden" name="back" value="setup"><button type="submit" class="secondary">Reset to template</button>
       </form>
     </div>
     {{end}}
@@ -22,18 +22,19 @@
   <section class="panel map-panel" aria-labelledby="map-h">
     <div class="panel-head">
       <h2 id="map-h">Map</h2>
+      <p class="scale-line" id="scale-line" data-live>{{.ScaleText}}</p>
       <div class="map-tools js-only" role="toolbar" aria-label="Map controls">
         <button type="button" class="secondary icon" data-zoom="in" aria-label="Zoom in">+</button>
         <button type="button" class="secondary icon" data-zoom="out" aria-label="Zoom out">−</button>
         <button type="button" class="secondary" data-zoom="reset">Fit</button>
-        <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Labels</label>
-        <label class="toggle"><input type="checkbox" id="sectors-toggle" checked> Sectors</label>
+        <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Names</label>
+        <label class="toggle"><input type="checkbox" id="grid-toggle" checked> Grid</label>
       </div>
     </div>
 
     <fieldset class="tools js-only">
       <legend class="sr-only">Editing tool</legend>
-      {{range $t := (list "inspect:Inspect" "terrain:Terrain" "edges:Rivers & ridges" "crossings:Crossings" "roads:Roads" "units:Add unit" "places:Add place" "sectors:Sectors")}}
+      {{range $t := (list "inspect:Select and drag" "units:Add unit" "places:Add place" "terrain:Terrain" "edges:Rivers & ridges" "crossings:Crossings" "roads:Roads")}}
       {{$parts := split $t ":"}}<label class="tool"><input type="radio" name="tool" value="{{index $parts 0}}"{{if eq (index $parts 0) "inspect"}} checked{{end}}><span>{{index $parts 1}}</span></label>
       {{end}}
     </fieldset>
@@ -63,40 +64,26 @@
         <select id="unit-class">{{range .Classes}}<option value="{{.ID}}" data-group="{{.Group}}">{{.SideName}} · {{.Name}}</option>{{end}}</select></label>
       <label class="inline">Strength <input id="unit-strength" type="number" min="1" max="100000" value="10"></label>
       <label class="toggle"><input type="checkbox" id="unit-known"> Known to players</label>
-      <span class="muted small">Click a hex to place it.</span>
+      <span class="muted small">Click the map to place it.</span>
     </div>
     <div class="tool-opts js-only row" data-tool-opts="places" hidden>
       <label class="inline">Kind
         <select id="place-kind">{{range .FeatureKinds}}<option>{{.}}</option>{{end}}</select></label>
       <label class="inline">Name <input id="place-name" maxlength="32" placeholder="New place"></label>
       <label class="toggle"><input type="checkbox" id="place-hidden"> Hidden from players</label>
-      <span class="muted small">Click a hex to place it.</span>
-    </div>
-    <div class="tool-opts js-only" data-tool-opts="sectors" hidden>
-      <div class="row">
-        <label class="inline">Name <input id="sector-name" maxlength="32" placeholder="e.g. Hospital Front"></label>
-        <span class="muted small">Click a hex to give its sector this name. Leave the name blank to clear it.</span>
-      </div>
-      <div class="row">
-        <label class="inline">Sector size
-          <select id="sector-cols" class="compact">{{range $n := (list "2" "3" "4" "5" "6" "8")}}<option{{if eq $n (printf "%d" $.SectorCols)}} selected{{end}}>{{$n}}</option>{{end}}</select></label>
-        <span class="small">×</span>
-        <select id="sector-rows" class="compact" aria-label="Sector rows">{{range $n := (list "2" "3" "4" "5" "6" "8")}}<option{{if eq $n (printf "%d" $.SectorRows)}} selected{{end}}>{{$n}}</option>{{end}}</select>
-        <span class="muted small">hexes</span>
-        <button type="button" class="secondary small-btn" data-sector-size>Apply size</button>
-      </div>
-      <p class="small" id="sector-named" data-live>{{if .SectorNames}}Named: {{range $i, $s := .SectorNames}}{{if $i}}, {{end}}<a href="#map" data-goto="{{$s.Hex}}"><strong>{{$s.ID}}</strong></a> {{$s.Name}}{{end}}{{end}}</p>
+      <span class="muted small">Click the map to place it.</span>
     </div>
     <p id="tool-hint" class="tool-hint" role="status" aria-live="polite"></p>
 
     {{template "map" .}}
     <div id="inspector" class="inspector" aria-live="polite">
-      <p class="muted js-only">Select a hex to see its terrain, sides, features, and units.</p>
+      <p class="muted small js-only">Select a counter or place; drag one to move it. The terrain, river, and road tools work on the drawn hex map.</p>
     </div>
-    {{template "legend" .}}
+    {{if eq .Map.Background "hex"}}{{template "legend" .}}{{end}}
   </section>
 
   <div class="side">
+    {{template "sec-board" .}}
     <section class="panel" id="edit-units" data-live aria-labelledby="eu-h">
       <h2 id="eu-h">Units <span class="muted small">{{len .Units}}</span></h2>
       {{$side := ""}}
@@ -109,7 +96,7 @@
             <input class="num" type="number" data-field="strength" value="{{.Strength}}" min="1" max="100000" aria-label="Strength of {{.Name}}">
           </div>
           <div class="row small">
-            <span class="muted">{{.ClassName}} · <a href="#map" data-goto="{{.Hex}}" class="mono">{{.Hex}}</a></span>
+            <span class="muted">{{.ClassName}} · <a href="#map" data-goto="{{.ID}}">{{.Where}}</a></span>
             {{if not .Playable}}<label class="toggle"><input type="checkbox" data-field="known"{{if .Known}} checked{{end}}> Known</label>
             {{else}}<label class="inline small" title="Operations survived">Ops <input type="number" class="num-xs" data-field="operations" value="{{.Operations}}" min="0" max="50" aria-label="Operations survived by {{.Name}}"></label>{{end}}
             <button type="button" class="link" data-move-unit="{{.ID}}" data-name="{{.Name}}">Move</button>
@@ -131,7 +118,7 @@
           </div>
           <input data-field="note" value="{{.Note}}" maxlength="300" placeholder="Note" aria-label="Note for {{.Name}}" class="small">
           <div class="row small">
-            <a href="#map" data-goto="{{.Hex}}" class="mono">{{.Hex}}</a>
+            <span class="muted">{{.Where}}</span>
             <label class="toggle"><input type="checkbox" data-field="hidden"{{if .Hidden}} checked{{end}}> Hidden</label>
             <button type="button" class="link" data-move-feature="{{.ID}}" data-name="{{.Name}}">Move</button>
             <button type="button" class="link danger" data-delete-feature="{{.ID}}" data-name="{{.Name}}">Delete</button>
@@ -144,7 +131,7 @@
     <section class="panel" aria-labelledby="txt-h">
       <h2 id="txt-h">Briefing and notes</h2>
       <form method="post" action="{{.Base}}/edit/text" class="stack" data-enhance>
-        <input type="hidden" name="back" value="edit">
+        <input type="hidden" name="back" value="setup">
         <label>Campaign name <input name="campaign" value="{{.Name}}" maxlength="32" required></label>
         <label>Player briefing <span class="muted small">Blank lines separate paragraphs.</span>
           <textarea name="briefing" rows="9">{{.BriefingText}}</textarea></label>
@@ -152,12 +139,17 @@
           <textarea name="notes" rows="5">{{.RefereeNotes}}</textarea></label>
         <button type="submit">Save texts</button>
       </form>
+      <p class="muted small">Each character's private brief is on its card: open it from the map or the People screen.</p>
     </section>
+    {{template "sec-assistant-settings" .}}
+    {{template "sec-clock" .}}
+    {{template "sec-notify" .}}
+    {{template "sec-danger" .}}
   </div>
 
   <section class="panel event-tables" id="event-tables" data-live aria-labelledby="et-h">
     <h2 id="et-h">Random event tables</h2>
-    <p class="muted small">Chance that a random roll picks each event at each threat level, given what is on the map now (for example, brood events need a nest). Current threat is {{.Threat}}; you can change it and roll events from the <a href="{{.Base}}">dashboard</a>.</p>
+    <p class="muted small">Chance that a random roll picks each event at each threat level, given what is on the map now (for example, brood events need a nest). Current threat is {{.Threat}}; you can change it and roll events from the <a href="{{.Base}}/desk">Desk</a>.</p>
     <div class="table-scroll">
       <table class="events">
         <thead><tr>

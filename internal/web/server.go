@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +81,12 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		"unitCtx":     func(base string, u game.UnitView) map[string]any { return map[string]any{"Base": base, "U": u} },
 		"zoneOptions": func() []game.ZoneOption { return game.ZoneOptions },
 		"signed":      func(n int) string { return fmt.Sprintf("%+d", n) },
+		"mul":         func(a, b float64) float64 { return a * b },
+		"num": func(f float64) string { // 50, 2.5
+			return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", f), "0"), ".")
+		},
+		"distanceUnits": func() []string { return game.DistanceUnits },
+		"timeUnits":     func() []string { return game.TimeUnits },
 		"dict": func(kv ...any) map[string]any {
 			m := map[string]any{}
 			for i := 0; i+1 < len(kv); i += 2 {
@@ -98,7 +105,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		},
 	}
 	for _, page := range []string{"home", "pending", "briefing", "holding", "editor", "message", "invite", "closed", "unit",
-		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-messages", "screen-room", "screen-orders", "screen-notes"} {
+		"screen-map", "screen-desk", "screen-people"} {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/map.html", "templates/shell.html", "templates/sections.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, err
@@ -122,10 +129,13 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	}
 	seat("GET ", s.room)
 	seat("GET /live", s.events)
-	for _, name := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders", "notes"} {
+	seat("GET /desk", s.screen("desk"))
+	seat("GET /people", s.screen("people"))
+	seat("GET /setup", s.editor)
+	// Screens from before the page was simplified lead to the table.
+	for _, name := range []string{"turn", "events", "forces", "messages", "reports", "activity", "room", "orders", "notes", "edit"} {
 		seat("GET /"+name, s.screen(name))
 	}
-	seat("GET /edit", s.editor)
 	seat("POST /messages", s.postMessage)
 	seat("POST /withdraw", s.withdraw)
 	seat("POST /leave", s.leave)
@@ -157,6 +167,9 @@ func New(store *game.Store, opts Options) (*Server, error) {
 
 	seat("POST /admin-mode", s.adminMode)
 	seat("POST /units/{id}/edit", s.editUnit)
+	seat("POST /board", s.setBoard)
+	seat("POST /board/image", s.uploadMap)
+	seat("GET /board/{name}", s.mapImage)
 	seat("POST /desk/contests", s.addContest)
 	seat("POST /desk/contests/{id}/roll", s.rollContest)
 	seat("POST /desk/contests/{id}/delete", s.deleteContest)
@@ -355,7 +368,7 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 			case !v.HasScreen(screen):
 				page = "redirect"
 			default:
-				if screen == "messages" {
+				if screen == "map" {
 					opened = v.OpenChannel(room, me, r.URL.Query().Get("c"))
 				}
 				v.SetScreen(screen)
@@ -532,8 +545,18 @@ func (s *Server) act(w http.ResponseWriter, r *http.Request, fn func(*game.Room,
 		return
 	}
 	back := s.base(r, code)
-	if r.FormValue("back") == "edit" {
-		back += "/edit"
+	switch r.FormValue("back") {
+	case "edit", "setup":
+		back += "/setup"
+	default:
+		// Without script, go back to the screen the form was on.
+		if ref, err := url.Parse(r.Referer()); err == nil && (ref.Host == "" || ref.Host == r.Host) &&
+			(ref.Path == back || strings.HasPrefix(ref.Path, back+"/")) && !strings.Contains(ref.Path[len(back):], "/units/") {
+			back = ref.Path
+			if ref.RawQuery != "" {
+				back += "?" + ref.RawQuery
+			}
+		}
 	}
 	http.Redirect(w, r, back, http.StatusSeeOther)
 }

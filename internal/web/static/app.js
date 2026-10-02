@@ -27,12 +27,9 @@
     return String(col + 1).padStart(2, "0") + String(row + 1).padStart(2, "0");
   }
 
-  function parseHex(id) {
-    return { col: parseInt(id.slice(0, 2), 10) - 1, row: parseInt(id.slice(2), 10) - 1 };
-  }
-
-  function hexCenter(col, row) {
-    return { x: HEX_W * (col + 0.5 * (row & 1)) + HEX_W / 2, y: 1.5 * HEX * row + HEX };
+  function hexCenter(col, row, w = HEX_W) {
+    const size = w / Math.sqrt(3);
+    return { x: w * (col + 0.5 * (row & 1)) + w / 2, y: 1.5 * size * row + size };
   }
 
   // Neighbor offsets for odd-row offset hexes; directions are
@@ -48,16 +45,18 @@
     return { col: col + d[0], row: row + d[1] };
   }
 
-  // hexAt finds the hex whose center is nearest an SVG point.
-  function hexAt(x, y, data) {
-    const r0 = Math.round((y - HEX) / (1.5 * HEX));
+  // hexAt finds the hex (w wide) whose center is nearest a board point.
+  // With limits, it stays on the drawn map.
+  function hexAt(x, y, data, w = HEX_W) {
+    const size = w / Math.sqrt(3);
+    const r0 = Math.round((y - size) / (1.5 * size));
     let best = null, bd = Infinity;
     for (let r = r0 - 1; r <= r0 + 1; r++) {
-      if (r < 0 || r >= data.rows) continue;
-      const c0 = Math.round((x - HEX_W / 2) / HEX_W - 0.5 * (r & 1));
+      if (r < 0 || (data && r >= data.rows)) continue;
+      const c0 = Math.round((x - w / 2) / w - 0.5 * (r & 1));
       for (let c = c0 - 1; c <= c0 + 1; c++) {
-        if (c < 0 || c >= data.cols) continue;
-        const p = hexCenter(c, r);
+        if (c < 0 || (data && c >= data.cols)) continue;
+        const p = hexCenter(c, r, w);
         const d = (p.x - x) ** 2 + (p.y - y) ** 2;
         if (d < bd) { bd = d; best = { col: c, row: r }; }
       }
@@ -65,7 +64,7 @@
     return best;
   }
 
-  // sideAt finds the hex side nearest an SVG point, and how far the point is from the hex center.
+  // sideAt finds the hex side nearest a point, and how far the point is from the hex center.
   function sideAt(x, y, data) {
     const h = hexAt(x, y, data);
     if (!h) return null;
@@ -84,36 +83,68 @@
   }
 
   const SVGNS = "http://www.w3.org/2000/svg";
-  function svgLine(cls, x1, y1, x2, y2) {
-    const l = document.createElementNS(SVGNS, "line");
-    l.setAttribute("class", cls);
-    [["x1", x1], ["y1", y1], ["x2", x2], ["y2", y2]].forEach(([k, v]) => l.setAttribute(k, v.toFixed(1)));
-    return l;
+  function svgEl(tag, attrs) {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, typeof v === "number" ? v.toFixed(1) : v);
+    return n;
   }
-
-  function sectorOf(id, data) {
-    const g = data?.sectors;
-    if (!g || !g.cols) return "";
-    const { col, row } = parseHex(id);
-    return String.fromCharCode(65 + Math.floor(col / g.cols)) + (Math.floor(row / g.rows) + 1);
-  }
-
-  function sectorLabel(id, data) {
-    const s = sectorOf(id, data);
-    const name = s && data.sectors.names?.[s];
-    return name ? `${s} · ${name}` : s;
-  }
+  function svgLine(cls, x1, y1, x2, y2) { return svgEl("line", { class: cls, x1, y1, x2, y2 }); }
 
   function mapData() {
     const node = document.getElementById("map-data");
     try { return node ? JSON.parse(node.textContent) : null; } catch { return null; }
   }
 
-  // ---------- map: pan, zoom, select ----------
+  // ---------- the board: where things are, how far ----------
+
+  function colLetters(n) {
+    let s = "";
+    for (; n >= 0; n = Math.floor(n / 26) - 1) s = String.fromCharCode(65 + (n % 26)) + s;
+    return s;
+  }
+
+  function gridRef(p, d) {
+    if (d.grid === "square") return colLetters(Math.floor(p.x / d.cell)) + (Math.floor(p.y / d.cell) + 1);
+    if (d.grid === "hex") { const h = hexAt(p.x, p.y, null, d.cell); return h ? hexId(h.col, h.row) : ""; }
+    return "";
+  }
+
+  function terrainAt(p, d) {
+    if (!d.hexes) return null;
+    const h = hexAt(p.x, p.y, d);
+    if (!h) return null;
+    const cell = document.getElementById("terrain-layer")?.children[h.row * d.cols + h.col];
+    return cell ? d.terrain[cell.dataset.t] : null;
+  }
+
+  function nearestPlace(p, d) {
+    let best = null, bd = Infinity;
+    for (const f of d.places || []) {
+      const c = Math.hypot(f.x - p.x, f.y - p.y) / d.cell;
+      if (c < bd && c <= 1.5) { bd = c; best = (c <= 0.6 ? "at " : "near ") + f.name; }
+    }
+    return best;
+  }
+
+  function fmtNum(n) {
+    return n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10);
+  }
+
+  function distance(a, b, d) {
+    const cells = Math.hypot(a.x - b.x, a.y - b.y) / d.cell;
+    if (d.distance && d.distance.amount) return `about ${fmtNum(cells * d.distance.amount)} ${d.distance.unit}`;
+    return `about ${fmtNum(cells)} ${d.cellName}${cells >= 1.05 || cells < 0.95 ? "s" : ""}`;
+  }
+
+  function whereText(p, d) {
+    return [gridRef(p, d), nearestPlace(p, d)].filter(Boolean).join(", ");
+  }
+
+  // ---------- map: pan, zoom, select, drag ----------
 
   const map = {
     svg: null, full: null, vb: null, selected: null,
-    pointers: new Map(), dragStart: null, moved: false, pinchDist: 0,
+    pointers: new Map(), dragStart: null, moved: false, pinchDist: 0, dragging: null,
 
     init() {
       this.svg = document.getElementById("map");
@@ -124,17 +155,18 @@
 
       let stored = null;
       try { stored = JSON.parse(sessionStorage.getItem("aw-map:" + location.pathname)); } catch {}
-      if (stored && stored.vb) this.vb = stored.vb;
+      if (stored && stored.vb && stored.full === this.svg.dataset.viewbox) this.vb = stored.vb;
       else if (this.svg.getBoundingClientRect().width < 700) this.focusStart();
       try {
-        if (localStorage.getItem("aw-sectors") === "off") {
-          this.svg.classList.add("no-sectors");
-          const t = document.getElementById("sectors-toggle");
+        if (localStorage.getItem("aw-grid") === "off") {
+          this.svg.classList.add("no-grid");
+          const t = document.getElementById("grid-toggle");
           if (t) t.checked = false;
         }
         if (localStorage.getItem("aw-labels") === "off") {
           this.svg.classList.add("no-labels");
-          document.getElementById("labels-toggle").checked = false;
+          const t = document.getElementById("labels-toggle");
+          if (t) t.checked = false;
         }
       } catch {}
       this.clamp();
@@ -149,26 +181,27 @@
       this.svg.addEventListener("pointerdown", (e) => this.down(e));
       this.svg.addEventListener("pointermove", (e) => this.move(e));
       this.svg.addEventListener("pointerup", (e) => this.up(e));
-      this.svg.addEventListener("pointercancel", (e) => { this.pointers.delete(e.pointerId); this.editing = false; });
+      this.svg.addEventListener("pointercancel", (e) => { this.pointers.delete(e.pointerId); this.editing = false; this.cancelDrag(); });
       this.svg.addEventListener("pointerleave", () => editor.hover(null));
       this.svg.addEventListener("keydown", (e) => this.key(e));
-      this.svg.addEventListener("focus", () => { if (!this.selected) this.select(hexId(4, 7)); });
     },
 
-    // Small screens open zoomed in on the viewer's own units, or the beachhead.
+    marker(id) { return id ? this.svg?.querySelector(`[data-unit="${CSS.escape(id)}"]`) : null; },
+    markerPos(m) { return { x: parseFloat(m.dataset.x), y: parseFloat(m.dataset.y) }; },
+
+    // Small screens open zoomed in on the viewer's own counters, or the middle.
     focusStart() {
-      const anchor = document.querySelector("#units-layer .mine, #features-layer .k-beachhead")?.closest("[data-h]");
-      const { col, row } = parseHex(anchor ? anchor.dataset.h : hexId(4, 7));
-      const c = hexCenter(col, row);
+      const m = this.svg.querySelector("#units-layer .mine")?.closest("[data-unit]");
+      const c = m ? this.markerPos(m) : { x: this.full.w / 2, y: this.full.h / 2 };
       this.vb.w = this.full.w / 2.2;
       this.clamp();
-      this.vb.x = c.x - this.vb.w / 3;
+      this.vb.x = c.x - this.vb.w / 2;
       this.vb.y = c.y - this.vb.h / 2;
       this.clamp();
     },
 
     // Height-to-width ratio of the map window; the view box follows it so
-    // hexes are never stretched and narrow screens aren't letterboxed.
+    // the map is never stretched and narrow screens aren't letterboxed.
     aspect() {
       const r = this.svg.getBoundingClientRect();
       return r.width > 0 && r.height > 0 ? r.height / r.width : this.full.h / this.full.w;
@@ -187,13 +220,13 @@
 
     save() {
       try {
-        sessionStorage.setItem("aw-map:" + location.pathname, JSON.stringify({ vb: this.vb, selected: this.selected }));
+        sessionStorage.setItem("aw-map:" + location.pathname, JSON.stringify({ vb: this.vb, selected: this.selected, full: this.svg.dataset.viewbox }));
       } catch {}
     },
 
     clamp() {
       const f = this.full, v = this.vb, a = this.aspect();
-      v.w = Math.min(f.w, f.h / a, Math.max(f.w / 6, v.w));
+      v.w = Math.min(f.w, f.h / a, Math.max(f.w / 8, v.w));
       v.h = v.w * a;
       v.x = Math.min(f.x + f.w - v.w, Math.max(f.x, v.x));
       v.y = Math.min(f.y + f.h - v.h, Math.max(f.y, v.y));
@@ -211,24 +244,28 @@
 
     zoom(dir) {
       if (dir === "reset") { this.vb = { ...this.full }; this.clamp(); this.apply(); return; }
-      // Zoom around the selected hex when there is one, so it stays in view.
       const v = this.vb;
-      let p = { x: v.x + v.w / 2, y: v.y + v.h / 2 };
-      if (this.selected) {
-        const { col, row } = parseHex(this.selected);
-        p = hexCenter(col, row);
-      }
+      const m = this.marker(this.selected);
+      const p = m ? this.markerPos(m) : { x: v.x + v.w / 2, y: v.y + v.h / 2 };
       this.zoomAt(p, dir === "in" ? 0.7 : 1 / 0.7);
     },
 
-    centerOn(col, row) {
-      const c = hexCenter(col, row), v = this.vb;
-      const margin = HEX * 1.5;
+    centerOn(c) {
+      const v = this.vb, margin = v.w * 0.08;
       if (c.x < v.x + margin || c.x > v.x + v.w - margin || c.y < v.y + margin || c.y > v.y + v.h - margin) {
         v.x = c.x - v.w / 2; v.y = c.y - v.h / 2;
         this.clamp();
         this.apply();
       }
+    },
+
+    // The referee can drag counters (and, in the editor, places).
+    draggable(target) {
+      if (main()?.dataset.referee !== "1" && !editor.active) return null;
+      if (editor.active && editor.tool !== "inspect") return null;
+      const m = target.closest?.("[data-unit], [data-place]");
+      if (!m || (m.dataset.place != null && !editor.active)) return null;
+      return m;
     },
 
     down(e) {
@@ -240,9 +277,10 @@
       }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (this.pointers.size === 1) {
-        this.dragStart = { x: e.clientX, y: e.clientY, vb: { ...this.vb }, target: e.target };
+        this.dragStart = { x: e.clientX, y: e.clientY, vb: { ...this.vb }, target: e.target, piece: this.draggable(e.target) };
         this.moved = false;
       } else if (this.pointers.size === 2) {
+        this.cancelDrag();
         const [a, b] = [...this.pointers.values()];
         this.pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
       }
@@ -250,7 +288,12 @@
 
     move(e) {
       if (this.editing) { editor.dragMove(this.toSvg(e.clientX, e.clientY)); return; }
-      if (this.pointers.size === 0) { editor.hover(this.toSvg(e.clientX, e.clientY)); return; }
+      if (this.pointers.size === 0) {
+        const p = this.toSvg(e.clientX, e.clientY);
+        editor.hover(p);
+        ruler.hover(p);
+        return;
+      }
       if (!this.pointers.has(e.pointerId)) return;
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (this.pointers.size === 2) {
@@ -268,12 +311,52 @@
       const dx = e.clientX - s.x, dy = e.clientY - s.y;
       if (!this.moved && Math.hypot(dx, dy) < 6) return;
       this.moved = true;
+      if (s.piece) { this.dragPiece(s.piece, this.toSvg(e.clientX, e.clientY)); return; }
       this.svg.classList.add("dragging");
       const scale = s.vb.w / this.svg.getBoundingClientRect().width;
       this.vb.x = s.vb.x - dx * scale;
       this.vb.y = s.vb.y - dy * scale;
       this.clamp();
       this.apply();
+    },
+
+    dragPiece(piece, p) {
+      if (!this.dragging) {
+        const t = piece.getAttribute("transform") || "";
+        this.dragging = { piece, scale: (t.match(/scale\(([^)]+)\)/) || [])[1] || "1", from: t };
+        piece.classList.add("lifted");
+      }
+      p.x = Math.min(this.full.w, Math.max(0, p.x));
+      p.y = Math.min(this.full.h, Math.max(0, p.y));
+      this.dragging.to = p;
+      piece.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${this.dragging.scale})`);
+      const d = mapData();
+      if (d) ruler.hint(`${piece.querySelector("title")?.textContent.split(",")[0] || ""} → ${whereText(p, d) || "here"}`);
+    },
+
+    cancelDrag() {
+      if (!this.dragging) return;
+      this.dragging.piece.setAttribute("transform", this.dragging.from);
+      this.dragging.piece.classList.remove("lifted");
+      this.dragging = null;
+    },
+
+    async dropPiece() {
+      const g = this.dragging;
+      this.dragging = null;
+      g.piece.classList.remove("lifted");
+      if (!g.to) return;
+      const x = g.to.x.toFixed(1), y = g.to.y.toFixed(1);
+      if (g.piece.dataset.unit) {
+        if (editor.active) { editor.send([{ op: "unit-move", unit: g.piece.dataset.unit, x: +x, y: +y }]); return; }
+        const body = new URLSearchParams({ x, y });
+        const res = await fetch(`${main().dataset.base}/units/${g.piece.dataset.unit}/edit`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
+        if (!res.ok) { alert((await res.text()) || "That didn't work."); g.piece.setAttribute("transform", g.from); }
+        await refresh();
+      } else {
+        const place = mapData()?.places?.[+g.piece.dataset.place];
+        if (place?.id) editor.send([{ op: "feature-move", feature: place.id, x: +x, y: +y }]);
+      }
     },
 
     up(e) {
@@ -283,42 +366,115 @@
       this.svg.classList.remove("dragging");
       if (this.pointers.size > 0) return;
       this.dragStart = null;
+      if (this.dragging) { this.dropPiece(); return; }
       if (s && !this.moved) {
-        if (editor.click(this.toSvg(e.clientX, e.clientY))) return;
-        if (mover.unit) { mover.click(this.toSvg(e.clientX, e.clientY)); return; }
-        if (orders.click(this.toSvg(e.clientX, e.clientY))) return;
-        const hit = s.target.closest && s.target.closest("[data-h]");
-        if (hit) this.select(hit.dataset.h, false);
+        const p = this.toSvg(e.clientX, e.clientY);
+        if (editor.click(p)) return;
+        if (orders.click(p)) return;
+        const hit = s.target.closest && s.target.closest("[data-unit], [data-place]");
+        if (hit && hit.dataset.unit) this.select(hit.dataset.unit, false);
+        else if (hit) this.showPlace(+hit.dataset.place);
+        else this.point(p);
       }
     },
 
     key(e) {
-      const data = mapData();
-      if (!data) return;
-      const cur = this.selected ? parseHex(this.selected) : { col: 4, row: 7 };
-      const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      const step = this.vb.w / 10;
+      const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
       if (moves[e.key]) {
         e.preventDefault();
-        const col = Math.min(data.cols - 1, Math.max(0, cur.col + moves[e.key][0]));
-        const row = Math.min(data.rows - 1, Math.max(0, cur.row + moves[e.key][1]));
-        this.select(hexId(col, row), true);
+        this.vb.x += moves[e.key][0]; this.vb.y += moves[e.key][1];
+        this.clamp(); this.apply();
       } else if (e.key === "+" || e.key === "=") { this.zoom("in"); }
       else if (e.key === "-") { this.zoom("out"); }
       else if (e.key === "0") { this.zoom("reset"); }
+      else if (e.key === "Escape") { this.cancelDrag(); this.clear(); }
+    },
+
+    cursorAt(p) {
+      const c = document.getElementById("cursor");
+      if (!c) return;
+      if (!p) { c.setAttribute("visibility", "hidden"); return; }
+      c.setAttribute("cx", p.x.toFixed(1));
+      c.setAttribute("cy", p.y.toFixed(1));
+      c.setAttribute("visibility", "visible");
+    },
+
+    clear() {
+      this.selected = null;
+      this.cursorAt(null);
+      ruler.clear();
+      this.save();
     },
 
     select(id, pan) {
       if (!this.svg) return;
+      const m = this.marker(id);
+      if (!m) { this.clear(); return; }
       this.selected = id;
-      const { col, row } = parseHex(id);
-      const c = hexCenter(col, row);
-      const cursor = document.getElementById("cursor");
-      cursor.setAttribute("x", c.x.toFixed(1));
-      cursor.setAttribute("y", c.y.toFixed(1));
-      cursor.setAttribute("visibility", "visible");
-      if (pan) this.centerOn(col, row);
+      const p = this.markerPos(m);
+      this.cursorAt(p);
+      if (pan) this.centerOn(p);
       this.save();
       inspect(id);
+    },
+
+    showPlace(i) {
+      const d = mapData(), f = d?.places?.[i];
+      const box = document.getElementById("inspector");
+      if (!f || !box) return;
+      const from = this.selectedUnit(d);
+      box.replaceChildren(...[el("h3", {}, f.name), el("p", { class: "muted small" }, [f.where, f.kind].filter(Boolean).join(" · ")),
+        f.note ? el("p", { class: "small" }, f.note) : null, f.hidden ? el("p", { class: "small" }, "Hidden from players.") : null,
+        from ? el("p", { class: "small" }, `${distance(from, f, d)} from ${from.name}.`) : null].filter(Boolean));
+    },
+
+    selectedUnit(d) {
+      const u = d?.units?.find((x) => x.id === this.selected);
+      const m = this.marker(this.selected);
+      return u && m ? { ...u, ...this.markerPos(m) } : null;
+    },
+
+    // A click on open ground: where it is, and how far from the selected counter.
+    point(p) {
+      const d = mapData();
+      const box = document.getElementById("inspector");
+      if (!d || !box) return;
+      const t = terrainAt(p, d);
+      const from = this.selectedUnit(d);
+      box.replaceChildren(...[el("h3", {}, whereText(p, d) || "This spot", t ? ` · ${t.name}` : ""),
+        t && t.note ? el("p", { class: "muted small" }, t.note) : null,
+        from ? el("p", {}, el("strong", {}, distance(from, p, d)), ` from ${from.name}.`) : el("p", { class: "muted small" }, "Select a counter first to measure from it.")].filter(Boolean));
+      if (from) ruler.draw(from, p, d); else ruler.clear();
+    },
+  };
+
+  // The ruler: a line from the selected counter to the pointer, with the distance.
+  const ruler = {
+    layer() { return document.getElementById("ruler-layer"); },
+    clear() { this.layer()?.replaceChildren(); this.hint(""); },
+    draw(a, b, d) {
+      const k = d.k || 1;
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const text = svgEl("text", { class: "ruler-text", x: mid.x, y: mid.y - 3 * k, "font-size": 7 * k });
+      text.textContent = distance(a, b, d);
+      this.layer()?.replaceChildren(svgEl("line", { class: "ruler", x1: a.x, y1: a.y, x2: b.x, y2: b.y }), text);
+    },
+    hover(p) {
+      if (!map.selected || orders.mode === "picking" || editor.active) return;
+      const d = mapData(), from = d && map.selectedUnit(d);
+      if (from && window.matchMedia("(hover: hover)").matches) this.draw(from, p, d);
+    },
+    hint(text) {
+      let h = document.getElementById("map-hint");
+      if (!h) {
+        const wrap = document.querySelector(".map-wrap");
+        if (!wrap) return;
+        h = el("p", { id: "map-hint", class: "map-hint", role: "status" });
+        wrap.append(h);
+      }
+      h.textContent = text || "";
+      h.hidden = !text;
     },
   };
 
@@ -326,51 +482,20 @@
     const box = document.getElementById("inspector");
     const data = mapData();
     if (!box || !data) return;
-    const terrainId = document.querySelector(`.terrain [data-h="${id}"]`)?.dataset.t;
-    const t = data.terrain[terrainId];
-    const features = data.features[id] || [];
-    const units = data.units[id] || [];
-
-    const body = [el("h3", {}, `Hex ${id}`, t ? ` · ${t.name}` : "")];
-    const sec = sectorLabel(id, data);
-    if (sec) body.push(el("p", { class: "small sector-tag" }, `Sector ${sec}`));
-    if (t && t.note) body.push(el("p", { class: "muted small" }, t.note));
-    const sides = data.sides[id] || [];
-    const edges = sides.filter((s) => s.edge);
-    if (edges.length) {
-      const ul = el("ul", { class: "plain small sides" });
-      for (const s of edges) {
-        ul.append(el("li", {}, el("strong", {}, `${s.dirName[0].toUpperCase()}${s.dirName.slice(1)} side: `),
-          s.edgeName, s.crossingName ? ` with a ${s.crossingName.toLowerCase()}` : "",
-          s.blocks ? " (no crossing)" : "", s.note ? ` · ${s.note}` : ""));
-      }
-      body.push(ul);
-    }
-    const roads = sides.filter((s) => s.road).map((s) => s.dirName);
-    if (roads.length) body.push(el("p", { class: "muted small" }, `Road leads ${roads.join(", ")}.`));
-    for (const f of features) {
-      body.push(el("p", {}, el("strong", {}, f.name), f.hidden ? " (hidden from players)" : "", f.note ? ` · ${f.note}` : ""));
-    }
-    if (units.length) {
-      const ul = el("ul", { class: "plain list" });
-      for (const u of units) {
-        ul.append(el("li", {},
-          el("div", {}, el("span", { class: `abbr side-${u.side}`, "aria-hidden": "true" }, u.abbr),
-            el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
-            u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.stale ? " (where they last called in)" : ""),
-          el("div", { class: "muted small" }, [u.class, u.strength, u.commander].filter(Boolean).join(" · ")),
-          u.status ? el("div", { class: "small unit-status" }, u.status) : null,
-          el("div", { class: "row tight" },
-            data.orders?.open && data.orders.units?.some((x) => x.id === u.id)
-              ? el("button", { type: "button", class: "link small", "data-order-unit": u.id }, data.orders.orders?.[u.id] ? "Edit order" : "Write order") : null,
-            document.getElementById("main")?.dataset.referee === "1" && !document.querySelector("[data-tool]")
-              ? el("button", { type: "button", class: "link small", "data-move-counter": u.id, "data-name": u.name }, "Move") : null)));
-      }
-      body.push(ul);
-    } else {
-      body.push(el("p", { class: "muted small" }, "No known units here."));
-    }
-    box.replaceChildren(...body);
+    const u = data.units?.find((x) => x.id === id);
+    if (!u) { box.replaceChildren(el("p", { class: "muted small" }, "Not on the map any more.")); return; }
+    const canOrder = data.orders?.open && data.orders.units?.some((x) => x.id === u.id);
+    const ref = data.referee;
+    box.replaceChildren(...[
+      el("div", {}, el("span", { class: `abbr side-${u.side}`, "aria-hidden": "true" }, u.abbr),
+        el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
+        u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.stale ? " (where they last called in)" : ""),
+      el("div", { class: "muted small" }, [u.class, u.strength, u.where, u.commander].filter(Boolean).join(" · ")),
+      u.status ? el("div", { class: "small unit-status" }, u.status) : null,
+      el("p", { class: "muted small" }, ref ? "Drag it to move it. Click anywhere to measure from it." : "Click anywhere on the map to measure from here."),
+      el("div", { class: "row tight" },
+        canOrder ? el("button", { type: "button", class: "link small", "data-order-unit": u.id }, data.orders.orders?.[u.id] ? "Edit order" : "Write order") : null,
+        el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "small", "data-card": "" }, "Open card"))].filter(Boolean));
   }
 
   // ---------- scenario editor ----------
@@ -405,12 +530,12 @@
     hint(text) {
       const h = document.getElementById("tool-hint");
       if (!h) return;
-      if (text == null && this.moving) text = `Click the new hex for ${this.moving.name}. Press Escape to cancel.`;
+      if (text == null && this.moving) text = `Click where ${this.moving.name} goes. Press Escape to cancel.`;
       h.textContent = text || "";
     },
 
     wantsDrag() {
-      return this.active && !this.moving && ["terrain", "edges", "roads"].includes(this.tool);
+      return this.active && !this.moving && ["terrain", "edges", "roads"].includes(this.tool) && !!this.data()?.hexes;
     },
 
     data() { return mapData(); },
@@ -499,19 +624,18 @@
       if (!this.active) return false;
       const data = this.data();
       if (!data) return false;
-      const h = hexAt(p.x, p.y, data);
-      if (!h) return false;
-      const hex = hexId(h.col, h.row);
+      const x = +p.x.toFixed(1), y = +p.y.toFixed(1);
       if (this.moving) {
         const m = this.moving;
         this.moving = null;
         map.svg.classList.remove("moving");
         this.hint();
-        this.send([m.kind === "unit" ? { op: "unit-move", unit: m.id, hex } : { op: "feature-move", feature: m.id, hex }]);
+        this.send([m.kind === "unit" ? { op: "unit-move", unit: m.id, x, y } : { op: "feature-move", feature: m.id, x, y }]);
         return true;
       }
       switch (this.tool) {
         case "crossings": {
+          if (!data.hexes) return true;
           const s = sideAt(p.x, p.y, data);
           if (s) this.send([{ op: "crossing", hex: hexId(s.col, s.row), dir: s.dir, crossing: document.getElementById("crossing-type").value }]);
           return true;
@@ -519,17 +643,13 @@
         case "units": {
           const known = document.getElementById("unit-known").checked;
           const strength = parseInt(document.getElementById("unit-strength").value, 10) || 1;
-          this.send([{ op: "unit-add", class: document.getElementById("unit-class").value, hex, strength, known }]);
-          return true;
-        }
-        case "sectors": {
-          this.send([{ op: "sector-name", hex, name: document.getElementById("sector-name").value.trim() }]);
+          this.send([{ op: "unit-add", class: document.getElementById("unit-class").value, x, y, strength, known }]);
           return true;
         }
         case "places": {
           const kind = document.getElementById("place-kind").value;
           const name = document.getElementById("place-name").value.trim() || `New ${kind}`;
-          this.send([{ op: "feature-add", kind, hex, name, hidden: document.getElementById("place-hidden").checked }]);
+          this.send([{ op: "feature-add", kind, x, y, name, hidden: document.getElementById("place-hidden").checked }]);
           return true;
         }
       }
@@ -541,7 +661,8 @@
       if (p) this.lastPoint = p;
       const cur = document.getElementById("side-cursor");
       if (!cur) return;
-      const data = p && this.active && ["edges", "crossings", "roads"].includes(this.tool) ? this.data() : null;
+      const d0 = p && this.active && ["edges", "crossings", "roads"].includes(this.tool) ? this.data() : null;
+      const data = d0 && d0.hexes ? d0 : null;
       const s = data && sideAt(p.x, p.y, data);
       if (!s) { cur.setAttribute("visibility", "hidden"); return; }
       const [x1, y1, x2, y2] = sideEnds(s.col, s.row, s.dir);
@@ -587,14 +708,6 @@
   });
 
   document.addEventListener("click", (e) => {
-    if (e.target.closest("[data-sector-size]")) {
-      const cols = parseInt(document.getElementById("sector-cols").value, 10);
-      const rows = parseInt(document.getElementById("sector-rows").value, 10);
-      if (confirm("Change the sector size? Existing sector names stay with their letters and numbers, so they may cover different ground.")) {
-        editor.send([{ op: "sector-size", cols, rows }]);
-      }
-      return;
-    }
     const t = e.target.closest("[data-move-unit], [data-move-feature], [data-delete-unit], [data-delete-feature]");
     if (!t) return;
     const d = t.dataset;
@@ -607,49 +720,29 @@
   // ---------- order entry ----------
   //
   // An order is what the player says their marine does, in their own words,
-  // plus an optional spot on the map. With script, the form opens in a
-  // lightbox, and the spot can be picked by clicking the map.
+  // plus an optional pin on the map. "Drop a pin" turns the next click on
+  // the map into the pin.
 
   const orders = {
-    box: null,
-    form: null,
-    dialog: null,
-    pickbar: null,
-    mode: "closed", // closed, dialog, or picking (choosing a hex on the map)
+    box: null, pickbar: null,
+    mode: "idle", // idle, or picking (choosing a spot on the map)
 
     init() {
       this.box = document.getElementById("order-box");
       if (!this.box) return;
-      this.form = document.getElementById("order-form");
-      const close = el("button", { type: "button", class: "secondary small-btn", "aria-label": "Close" }, "Close");
-      this.dialog = el("dialog", { id: "order-dialog", class: "order-dialog", "aria-labelledby": "od-title" },
-        el("div", { class: "od-head" }, el("h2", { id: "od-title" }, "Write an order"), close), this.form);
-      document.body.append(this.dialog);
-      close.addEventListener("click", () => this.dialog.close());
-      this.dialog.addEventListener("close", () => {
-        if (this.mode === "dialog") { this.mode = "closed"; this.drawMark(); }
-      });
-      const back = el("button", { type: "button", class: "small-btn" }, "Back to the order");
+      const cancel = el("button", { type: "button", class: "secondary small-btn" }, "Cancel");
       this.pickbar = el("div", { class: "pick-bar", role: "status", hidden: "" },
-        el("span", { id: "pick-hint" }, "Click the map to mark a spot."), back);
+        el("span", {}, "Tap the map where you want the pin."), cancel);
       document.body.append(this.pickbar);
-      back.addEventListener("click", () => this.backToDialog());
-      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && this.mode === "picking") this.backToDialog(); });
-      this.box.addEventListener("click", (e) => {
-        if (!e.target.closest("summary")) return;
-        e.preventDefault();
-        this.open(this.unit());
-      });
+      cancel.addEventListener("click", () => this.stopPicking());
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && this.mode === "picking") this.stopPicking(); });
       document.addEventListener("click", (e) => {
         if (e.target.closest("#of-pick")) this.pick();
-        if (e.target.closest("#of-unmark")) { this.$("of-mark").value = ""; this.drawMark(); }
+        if (e.target.closest("#of-unmark")) this.setMark(null);
         const b = e.target.closest("[data-order-unit]");
         if (b) { e.preventDefault(); this.open(b.dataset.orderUnit); }
       });
-      document.addEventListener("change", (e) => {
-        if (e.target.id === "of-unit") this.load();
-        else if (e.target.id === "of-mark") this.drawMark();
-      });
+      document.addEventListener("change", (e) => { if (e.target.id === "of-unit") this.load(); });
       this.load();
     },
 
@@ -667,9 +760,10 @@
       const keep = sel.value;
       const same = sel.options.length === units.length && units.every((u, i) => sel.options[i].value === u.id);
       if (!same) {
-        sel.replaceChildren(...units.map((u) => el("option", { value: u.id, "data-hex": u.hex }, u.label)));
+        sel.replaceChildren(...units.map((u) => el("option", { value: u.id }, u.label)));
         if (units.some((u) => u.id === keep)) sel.value = keep;
       }
+      sel.closest("label").hidden = units.length <= 1;
       this.box.hidden = !d.open || units.length === 0;
       return keep !== sel.value;
     },
@@ -678,36 +772,33 @@
       if (!this.box) return;
       this.syncUnits();
       if (unitId && [...this.$("of-unit").options].some((o) => o.value === unitId)) this.$("of-unit").value = unitId;
-      if (!this.unit()) return;
       this.load();
-      const hex = this.$("of-unit").selectedOptions[0]?.dataset.hex;
-      if (hex && map.svg) map.select(hex, true);
-      this.mode = "dialog";
-      this.pickbar.hidden = true;
-      if (!this.dialog.open) this.dialog.showModal();
-      this.$("of-text").focus();
+      this.box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      this.$("of-text").focus({ preventScroll: true });
     },
 
     pick() {
       this.mode = "picking";
-      this.dialog.close();
       this.pickbar.hidden = false;
-      map.svg?.scrollIntoView({ block: "center", behavior: "smooth" });
+      map.svg?.classList.add("picking");
+      map.svg?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     },
 
-    backToDialog() {
+    stopPicking() {
+      this.mode = "idle";
       this.pickbar.hidden = true;
-      this.mode = "dialog";
-      this.dialog.showModal();
+      map.svg?.classList.remove("picking");
+    },
+
+    setMark(p) {
+      this.$("of-mark-x").value = p ? p.x.toFixed(1) : "";
+      this.$("of-mark-y").value = p ? p.y.toFixed(1) : "";
       this.drawMark();
     },
 
-    // close is called after a commit goes through.
-    close() {
-      this.mode = "closed";
-      this.pickbar.hidden = true;
-      if (this.dialog.open) this.dialog.close();
-      this.drawMark();
+    mark() {
+      const x = parseFloat(this.$("of-mark-x")?.value), y = parseFloat(this.$("of-mark-y")?.value);
+      return Number.isNaN(x) || Number.isNaN(y) ? null : { x, y };
     },
 
     // load fills the form from the unit's saved order.
@@ -717,8 +808,8 @@
       this.syncUnits();
       const o = d.orders[this.unit()];
       this.$("of-text").value = o?.text || "";
-      this.$("of-mark").value = o?.mark || "";
-      this.$("od-title").textContent = `Orders: ${d.units.find((u) => u.id === this.unit())?.label || ""}`;
+      this.$("of-mark-x").value = o?.mark ? o.mark.x : "";
+      this.$("of-mark-y").value = o?.mark ? o.mark.y : "";
       this.status();
       this.drawMark();
     },
@@ -727,40 +818,36 @@
       const o = this.data()?.orders[this.unit()];
       const w = this.$("of-withdraw");
       this.$("of-status").textContent = !o ? "No order yet."
-        : `${o.status[0].toUpperCase()}${o.status.slice(1)} (version ${o.version}${o.author ? `, by ${o.author}` : ""}).`;
+        : o.status === "committed" ? `Sent${o.author ? ` by ${o.author}` : ""}. You can change it until the turn locks.`
+        : `${o.status[0].toUpperCase()}${o.status.slice(1)}${o.author ? `, by ${o.author}` : ""}.`;
       if (w) {
         w.hidden = !(o && o.editable);
         if (o) w.setAttribute("formaction", `${main().dataset.base}/orders/${o.id}/withdraw`);
       }
     },
 
-    // drawMark shows the spot being marked while the form is open.
+    // drawMark shows the pin being placed, and says where it is and how far.
     drawMark() {
-      const layer = this.$("reach-layer");
+      const layer = this.$("pin-layer");
+      const p = this.mark();
+      const d = mapData();
+      this.$("of-unmark").hidden = !p;
+      this.$("of-pick").textContent = p ? "Move the pin" : "Drop a pin";
+      const u = d?.units?.find((x) => x.id === this.unit());
+      this.$("of-mark-label").textContent = p && d ? `Pin: ${whereText(p, d) || "on the map"}${u ? `, ${distance(u, p, d)} from ${u.name}` : ""}` : "";
       if (!layer) return;
       layer.replaceChildren();
-      const hex = this.$("of-mark")?.value.trim();
-      if (this.mode === "closed" || !hex) return;
-      const { col, row } = parseHex(hex);
-      if (Number.isNaN(col)) return;
-      const c = hexCenter(col, row);
-      const use = document.createElementNS(SVGNS, "use");
-      use.setAttribute("href", "#hx");
-      use.setAttribute("x", c.x.toFixed(1));
-      use.setAttribute("y", c.y.toFixed(1));
-      use.setAttribute("class", "reach-start");
-      layer.append(use);
+      if (!p) return;
+      const g = svgEl("g", { class: "order-mark editing", transform: `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${d?.k || 1})` });
+      g.append(svgEl("path", { class: "pin", d: "M0 0C-1.5-3.5-5-5.5-5-9.5a5 5 0 0 1 10 0C5-5.5 1.5-3.5 0 0z" }), svgEl("circle", { class: "pin-dot", cy: -9.5, r: 1.8 }));
+      layer.append(g);
     },
 
     click(p) {
       if (this.mode !== "picking") return false;
-      const data = mapData();
-      const h = data && hexAt(p.x, p.y, data);
-      if (!h) return false;
-      const hex = hexId(h.col, h.row);
-      this.$("of-mark").value = hex;
-      map.select(hex, false);
-      this.backToDialog();
+      this.stopPicking();
+      this.setMark(p);
+      this.$("of-text")?.focus({ preventScroll: true });
       return true;
     },
 
@@ -769,55 +856,9 @@
       if (!this.box) return;
       if (this.syncUnits()) { this.load(); return; }
       this.status();
+      this.drawMark();
     },
   };
-
-  // ---------- referee: moving counters during play ----------
-  //
-  // From the hex inspector, Move picks a counter up; the next click on the
-  // map puts it down. During adjudication players don't see it move until
-  // the turn is published.
-
-  const mover = {
-    unit: null, name: "",
-    start(id, name) {
-      this.unit = id;
-      this.name = name;
-      orders.pickbar && (orders.pickbar.hidden = true);
-      let bar = document.getElementById("move-bar");
-      if (!bar) {
-        const cancel = el("button", { type: "button", class: "secondary small-btn" }, "Cancel");
-        cancel.addEventListener("click", () => this.stop());
-        bar = el("div", { class: "pick-bar", id: "move-bar", role: "status" }, el("span", { id: "move-hint" }), cancel);
-        document.body.append(bar);
-      }
-      bar.hidden = false;
-      document.getElementById("move-hint").textContent = `Click the hex to move ${name} to.`;
-    },
-    stop() {
-      this.unit = null;
-      const bar = document.getElementById("move-bar");
-      if (bar) bar.hidden = true;
-    },
-    async click(p) {
-      if (!this.unit) return false;
-      const data = mapData();
-      const h = data && hexAt(p.x, p.y, data);
-      if (!h) return false;
-      const id = this.unit;
-      this.stop();
-      const body = new URLSearchParams({ hex: hexId(h.col, h.row) });
-      const res = await fetch(`${main().dataset.base}/units/${id}/edit`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
-      if (!res.ok) alert((await res.text()) || "That didn't work.");
-      await refresh();
-      map.select(hexId(h.col, h.row), false);
-      return true;
-    },
-  };
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-move-counter]");
-    if (b) mover.start(b.dataset.moveCounter, b.dataset.name);
-  });
 
   // ---------- unit cards ----------
   // Links to a unit's card open it in a dialog over the map; without
@@ -882,7 +923,7 @@
       countdown();
       orders.afterRefresh();
       threadToEnd();
-      if (map.selected) inspect(map.selected);
+      if (map.selected) map.select(map.selected, false);
     } catch {
       // Offline or server restarting; the event stream will retry.
     } finally {
@@ -961,7 +1002,7 @@
       await refresh();
       if (res.ok && form.id === "order-form") {
         orders.load();
-        if (e.submitter?.value === "commit") orders.close();
+        if (e.submitter?.value === "commit") orders.stopPicking();
       }
     } catch {
       alert("Couldn't reach the server. Check your connection and try again.");
@@ -975,9 +1016,9 @@
       map.svg?.classList.toggle("show-fog", e.target.checked);
       return;
     }
-    if (e.target.id === "sectors-toggle") {
-      map.svg?.classList.toggle("no-sectors", !e.target.checked);
-      try { localStorage.setItem("aw-sectors", e.target.checked ? "on" : "off"); } catch {}
+    if (e.target.id === "grid-toggle") {
+      map.svg?.classList.toggle("no-grid", !e.target.checked);
+      try { localStorage.setItem("aw-grid", e.target.checked ? "on" : "off"); } catch {}
       return;
     }
     if (e.target.id === "labels-toggle") {
@@ -1116,7 +1157,6 @@
     setInterval(countdown, 30000);
     // Links from other screens: ?hex=0708 selects a hex, ?order=m1 opens the order form.
     const q = new URLSearchParams(location.search);
-    if (q.get("hex") && map.svg) map.select(q.get("hex"), true);
     if (q.get("order") && document.getElementById("order-box")) orders.open(q.get("order"));
     listen();
   });

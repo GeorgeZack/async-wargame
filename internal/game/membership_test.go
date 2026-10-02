@@ -10,7 +10,7 @@ func TestLeavingHandsUnitsOn(t *testing.T) {
 	r, mod, ref, cmd, hicks := orderRoom(t)
 	vasq := r.Member("v")
 	now := central(t, "2026-09-30 13:00")
-	o, err := r.SaveOrder(hicks, mod, "m1", "Dig in by the ambulance.", "", false, now)
+	o, err := r.SaveOrder(hicks, mod, "m1", "Dig in by the ambulance.", nil, false, now)
 	if err != nil {
 		t.Fatal(err)
 	}

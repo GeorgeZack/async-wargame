@@ -24,7 +24,6 @@ type Module struct {
 	Version   string     `json:"version"`
 	Name      string     `json:"name"`
 	Intro     string     `json:"intro,omitempty"`
-	Scale     Scale      `json:"scale"`
 	Factors   []Factor   `json:"factors"` // things that often count toward a roll's bonus
 	Sides     []Side     `json:"sides"`
 	Classes   []Class    `json:"classes"` // unit templates
@@ -36,12 +35,6 @@ type Module struct {
 	terrainByCode map[byte]*Terrain
 	classByID     map[string]*Class
 	sideByID      map[string]*Side
-}
-
-// Scale is what a hex and a turn mean in the fiction.
-type Scale struct {
-	Hex  string `json:"hex"`
-	Turn string `json:"turn"`
 }
 
 // Factor is something that often counts toward one side's bonus: "ambush

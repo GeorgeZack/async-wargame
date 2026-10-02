@@ -31,7 +31,7 @@ type Order struct {
 	Unit        string          `json:"unit"`
 	Author      string          `json:"author"` // member id
 	Text        string          `json:"text"`
-	Mark        *[2]int         `json:"mark,omitempty"` // a spot on the map, if the player marked one
+	Mark        *Pos            `json:"mark,omitempty"` // a spot on the map, if the player marked one
 	Status      OrderStatus     `json:"status"`
 	Version     int             `json:"version"`
 	CommittedAt *time.Time      `json:"committedAt,omitempty"`
@@ -78,9 +78,9 @@ func (r *Room) CurrentOrder(unitID string) *Order {
 	return nil
 }
 
-// SaveOrder writes or revises a unit's order for this turn. mark is a hex
-// ID or empty.
-func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text, mark string, commit bool, now time.Time) (*Order, error) {
+// SaveOrder writes or revises a unit's order for this turn. mark is a spot
+// on the board, or nil.
+func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text string, mark *Pos, commit bool, now time.Time) (*Order, error) {
 	if r.Phase != PhasePlanning {
 		return nil, bad("orders can only be written while a turn is in planning")
 	}
@@ -98,13 +98,10 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text, mark string, 
 	if len([]rune(text)) > maxOrderLen {
 		return nil, bad("keep an order under %d characters", maxOrderLen)
 	}
-	var at *[2]int
-	if mark = strings.TrimSpace(mark); mark != "" {
-		col, row, err := r.hex(mark)
-		if err != nil {
-			return nil, err
-		}
-		at = &[2]int{col, row}
+	var at *Pos
+	if mark != nil {
+		p := r.clampPos(*mark)
+		at = &p
 	}
 	o := r.CurrentOrder(u.ID)
 	if o == nil {

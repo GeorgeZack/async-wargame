@@ -10,25 +10,51 @@ import (
 
 // Scenario defines a map, features, starting forces, and briefing text.
 type Scenario struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Module       string         `json:"module"`
-	Summary      string         `json:"summary"`
-	Briefing     []string       `json:"briefing"`
-	RefereeNotes string         `json:"refereeNotes"`
-	Map          HexMap         `json:"map"`
-	Features     []Feature      `json:"features"`
-	Units        []ScenarioUnit `json:"units"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Module       string            `json:"module"`
+	Summary      string            `json:"summary"`
+	Briefing     []string          `json:"briefing"`
+	RefereeNotes string            `json:"refereeNotes"`
+	Map          HexMap            `json:"map"`
+	Board        Board             `json:"board"`
+	Features     []ScenarioFeature `json:"features"`
+	Units        []ScenarioUnit    `json:"units"`
+}
+
+// Spot is where something starts: a drawn hex (col, row, from 0), or an
+// exact point (x, y) on the board.
+type Spot struct {
+	Col int      `json:"col"`
+	Row int      `json:"row"`
+	X   *float64 `json:"x,omitempty"`
+	Y   *float64 `json:"y,omitempty"`
+}
+
+func (s Spot) Pos() Pos {
+	if s.X != nil && s.Y != nil {
+		return Pos{*s.X, *s.Y}
+	}
+	return center(s.Col, s.Row)
 }
 
 type ScenarioUnit struct {
-	ID       string `json:"id"`
+	ID string `json:"id"`
+	Spot
 	Name     string `json:"name"`
 	Class    string `json:"class"`
-	Col      int    `json:"col"`
-	Row      int    `json:"row"`
 	Strength int    `json:"strength"`
 	Known    bool   `json:"known"`
+	Brief    string `json:"brief,omitempty"` // private, for whoever plays it
+}
+
+type ScenarioFeature struct {
+	ID string `json:"id"`
+	Spot
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`
+	Hidden bool   `json:"hidden,omitempty"`
+	Note   string `json:"note,omitempty"`
 }
 
 // Catalog holds every module and scenario available to new campaigns.
@@ -113,7 +139,7 @@ func (s *Scenario) validate(m *Module) error {
 		return err
 	}
 	for _, f := range s.Features {
-		if !s.Map.InBounds(f.Col, f.Row) {
+		if f.X == nil && !s.Map.InBounds(f.Col, f.Row) {
 			return fmt.Errorf("feature %q is off the map", f.ID)
 		}
 	}
@@ -126,7 +152,7 @@ func (s *Scenario) validate(m *Module) error {
 		if m.Class(u.Class) == nil {
 			return fmt.Errorf("unit %q: unknown class %q", u.ID, u.Class)
 		}
-		if !s.Map.InBounds(u.Col, u.Row) {
+		if u.X == nil && !s.Map.InBounds(u.Col, u.Row) {
 			return fmt.Errorf("unit %q is off the map", u.ID)
 		}
 	}

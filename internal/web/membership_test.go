@@ -25,6 +25,6 @@ func TestLeaveOverHTTP(t *testing.T) {
 	}
 	_, body = hicks.get(base)
 	mustContain(t, body, "No longer a member")
-	_, body = ref.get(base + "/activity")
+	_, body = ref.get(base + "/desk")
 	mustContain(t, body, "Hicks left the operation", "now with the referee")
 }

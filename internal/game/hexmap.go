@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 )
 
@@ -11,11 +10,10 @@ import (
 // and roads join hex centers across sides (Roads). A scenario holds the
 // template map and each room keeps its own editable copy.
 type HexMap struct {
-	Cols    int         `json:"cols"`
-	Rows    []string    `json:"rows"`
-	Edges   []Edge      `json:"edges,omitempty"`
-	Roads   []HexSide   `json:"roads,omitempty"`
-	Sectors *SectorGrid `json:"sectors,omitempty"`
+	Cols  int       `json:"cols"`
+	Rows  []string  `json:"rows"`
+	Edges []Edge    `json:"edges,omitempty"`
+	Roads []HexSide `json:"roads,omitempty"`
 }
 
 // HexSide identifies one hex side: a hex and a direction (see Directions).
@@ -143,11 +141,6 @@ func (m *HexMap) SetRoad(s HexSide, on bool) error {
 
 func (m *HexMap) Clone() *HexMap {
 	c := &HexMap{Cols: m.Cols, Rows: slices.Clone(m.Rows), Edges: slices.Clone(m.Edges), Roads: slices.Clone(m.Roads)}
-	if m.Sectors != nil {
-		g := *m.Sectors
-		g.Names = maps.Clone(g.Names)
-		c.Sectors = &g
-	}
 	return c
 }
 
@@ -212,65 +205,4 @@ func ParseHexID(id string) (col, row int, ok bool) {
 		return 0, 0, false
 	}
 	return col - 1, row - 1, true
-}
-
-// SectorGrid divides the map into lettered, numbered blocks of hexes ("C3")
-// so players and commanders share a vocabulary for places and fronts. The
-// referee can name sectors ("Hospital Front").
-type SectorGrid struct {
-	Cols  int               `json:"cols"` // hexes per sector, across
-	Rows  int               `json:"rows"` // hexes per sector, down
-	Names map[string]string `json:"names,omitempty"`
-}
-
-func (m *HexMap) sectors() SectorGrid {
-	if m.Sectors == nil || m.Sectors.Cols < 1 || m.Sectors.Rows < 1 {
-		return SectorGrid{Cols: 4, Rows: 3}
-	}
-	return *m.Sectors
-}
-
-// SectorOf returns the sector id of a hex: column letter, then row number.
-func (m *HexMap) SectorOf(col, row int) string {
-	g := m.sectors()
-	return fmt.Sprintf("%c%d", 'A'+col/g.Cols, row/g.Rows+1)
-}
-
-// SectorLabel is a sector id with its name, if it has one: "C3 · Hospital".
-func (m *HexMap) SectorLabel(id string) string {
-	if n := m.sectors().Names[id]; n != "" {
-		return id + " · " + n
-	}
-	return id
-}
-
-// SectorAt labels the sector holding a hex.
-func (m *HexMap) SectorAt(col, row int) string { return m.SectorLabel(m.SectorOf(col, row)) }
-
-// SetSectorName names (or with "" unnames) the sector holding a hex.
-func (m *HexMap) SetSectorName(col, row int, name string) {
-	g := m.sectors()
-	names := map[string]string{}
-	for k, v := range g.Names {
-		names[k] = v
-	}
-	if id := m.SectorOf(col, row); name == "" {
-		delete(names, id)
-	} else {
-		names[id] = name
-	}
-	g.Names = names
-	m.Sectors = &g
-}
-
-// SetSectorSize changes the block size. Names are kept by sector id, so
-// they may land on different ground; the editor warns about that.
-func (m *HexMap) SetSectorSize(cols, rows int) error {
-	if cols < 2 || cols > 10 || rows < 2 || rows > 10 {
-		return bad("sectors must be 2 to 10 hexes on each side")
-	}
-	g := m.sectors()
-	g.Cols, g.Rows = cols, rows
-	m.Sectors = &g
-	return nil
 }

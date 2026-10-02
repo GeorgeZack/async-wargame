@@ -117,9 +117,9 @@ func (r *Room) intentionsPrompt(mod *Module, run *Run) (string, string, bool) {
 		// The enemy decides on what it could notice: anything within three
 		// hexes. It knows nothing of the players' orders.
 		for _, x := range r.Units {
-			if x != u && HexDistance(u.Col, u.Row, x.Col, x.Row) <= 3 {
+			if x != u && r.Cells(u.Pos(), x.Pos()) <= 3 {
 				p := r.promptUnit(mod, x)
-				p.Distance = HexDistance(u.Col, u.Row, x.Col, x.Row)
+				p.Distance = r.DistanceText(u.Pos(), x.Pos())
 				p.Kit, p.Notes, p.Facts, p.Hidden = "", "", nil, false
 				e.Senses = append(e.Senses, p)
 			}

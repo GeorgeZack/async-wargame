@@ -18,7 +18,7 @@ func (r *Room) RefreshComms(mod *Module) {
 		switch {
 		case in:
 			u.LastContact = r.Turn
-			u.Reported = &[2]int{u.Col, u.Row}
+			u.Reported = &Pos{u.X, u.Y}
 			if u.OutOfContact {
 				u.OutOfContact = false
 				if r.Phase != PhaseSetup {
@@ -49,15 +49,33 @@ func (r *Room) radioText(u *Unit) string {
 
 // reportedAt is where players other than its holder think u is: where it
 // last called in, if it's out of contact.
-func (r *Room) reportedAt(u *Unit, me *Member) ([2]int, bool) {
+func (r *Room) reportedAt(u *Unit, me *Member) (Pos, bool) {
 	if !u.OutOfContact || u.Reported == nil || me.Role == RoleReferee || u.AssignedTo == me.ID {
-		return [2]int{u.Col, u.Row}, false
+		return u.Pos(), false
 	}
-	return *u.Reported, *u.Reported != [2]int{u.Col, u.Row}
+	return *u.Reported, *u.Reported != u.Pos()
 }
 
-// VisibleToPlayers reports whether players know u is there. The referee
-// decides: friendly units always are, others once revealed.
+// VisibleToPlayers reports whether any player knows u is there.
 func (r *Room) VisibleToPlayers(mod *Module, u *Unit) bool {
-	return mod.Side(u.Side).Playable || u.Known
+	return mod.Side(u.Side).Playable || u.Known || len(u.KnownTo) > 0
+}
+
+// KnownBy reports whether member me knows u is there. The referee decides:
+// friendly units are always known; others once revealed, to everyone or to
+// particular players. A squad leader learns what their players learn.
+func (r *Room) KnownBy(mod *Module, u *Unit, me *Member) bool {
+	switch {
+	case me.Role == RoleReferee, mod.Side(u.Side).Playable, u.Known:
+		return true
+	}
+	for _, id := range u.KnownTo {
+		if id == me.ID {
+			return true
+		}
+		if m := r.memberOrNil(id); m != nil && me.Role == RoleCommander && m.ReportsTo == me.ID {
+			return true
+		}
+	}
+	return false
 }

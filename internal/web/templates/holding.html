@@ -14,6 +14,7 @@
     <h2>Your force</h2>
     <ul>{{range .MyUnits}}<li>{{.Name}} <span class="muted small">{{.ClassName}}</span></li>{{end}}</ul>
     {{end}}
+    {{range .MyCards}}{{if .Brief}}<section class="brief"><h2>For {{.Unit.Name}} only</h2><p class="pre">{{.Brief}}</p></section>{{end}}{{end}}
     <details>
       <summary>Read the briefing again</summary>
       {{range .Briefing}}<p>{{.}}</p>{{end}}

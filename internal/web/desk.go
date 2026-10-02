@@ -84,11 +84,15 @@ func (s *Server) editUnit(w http.ResponseWriter, r *http.Request) {
 		v := r.FormValue(name) == "on"
 		return &v
 	}
-	e := game.UnitEdit{Name: str("name"), Hex: str("hex"), Status: str("status"), Notes: str("notes"), Kit: str("kit"),
+	e := game.UnitEdit{Name: str("name"), At: formPos(r, "x", "y"), Brief: str("brief"), Status: str("status"), Notes: str("notes"), Kit: str("kit"),
 		Known: flag("known"), Identified: flag("identified"), RadioDown: flag("radio_down"), Remove: r.FormValue("remove") == "1"}
 	if v := r.FormValue("strength"); v != "" {
 		n := formInt(r, "strength")
 		e.Strength = &n
+	}
+	if _, ok := r.Form["known_to_set"]; ok {
+		ids := r.Form["known_to"]
+		e.KnownTo = &ids
 	}
 	if v := r.FormValue("quality"); v != "" {
 		n := formInt(r, "quality")

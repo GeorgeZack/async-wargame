@@ -30,5 +30,5 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, s.base(r, code)+"/messages?c="+url.QueryEscape(channel), http.StatusSeeOther)
+	http.Redirect(w, r, s.base(r, code)+"?c="+url.QueryEscape(channel)+"#talk", http.StatusSeeOther)
 }

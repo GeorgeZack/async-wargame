@@ -105,23 +105,29 @@ type promptUnit struct {
 	Notes    string   `json:"notes,omitempty"`
 	Facts    []string `json:"facts,omitempty"`
 	Hidden   bool     `json:"hiddenFromPlayers,omitempty"`
-	Intends  string   `json:"intends,omitempty"` // enemy units: the referee's intention for them this turn
-	Distance int      `json:"hexesAway,omitempty"`
+	Intends  string   `json:"intends,omitempty"`  // enemy units: the referee's intention for them this turn
+	Distance string   `json:"distance,omitempty"` // from the unit in question
 }
 
-func (r *Room) where(mod *Module, col, row int) string {
-	s := fmt.Sprintf("%s (%s, %s)", HexID(col, row), r.Map.SectorAt(col, row), mod.TerrainAt(r.Map.TerrainCode(col, row)).Name)
-	for _, f := range r.Features {
-		if f.Col == col && f.Row == row {
-			s += ", at " + f.Name
+// where describes a point for the model: grid reference, nearest place, and
+// terrain on the drawn map.
+func (r *Room) where(mod *Module, p Pos) string {
+	s := r.Where(p, true)
+	if t := r.TerrainAt(mod, p); t != nil {
+		if s != "" {
+			s += ", "
 		}
+		s += strings.ToLower(t.Name)
+	}
+	if s == "" {
+		s = fmt.Sprintf("(%.0f, %.0f)", p.X, p.Y)
 	}
 	return s
 }
 
 func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 	cl := mod.Class(u.Class)
-	p := promptUnit{ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Col, u.Row),
+	p := promptUnit{ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Pos()),
 		Bonus: bonusText(mod, u), Kit: KitOf(mod, u), Status: u.Status, Notes: u.Notes, Facts: r.acceptedFacts(u.ID),
 		Hidden: !r.VisibleToPlayers(mod, u)}
 	if cl.IsGroup() || u.Strength > 1 {
@@ -133,15 +139,16 @@ func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 	return p
 }
 
-func (r *Room) nearby(mod *Module, u *Unit, within int) []promptUnit {
+// nearby lists units within so many grid cells of u.
+func (r *Room) nearby(mod *Module, u *Unit, within float64) []promptUnit {
 	var out []promptUnit
 	for _, x := range r.Units {
 		if x == u {
 			continue
 		}
-		if d := HexDistance(u.Col, u.Row, x.Col, x.Row); d <= within {
+		if r.Cells(u.Pos(), x.Pos()) <= within {
 			p := r.promptUnit(mod, x)
-			p.Distance = d
+			p.Distance = r.DistanceText(u.Pos(), x.Pos())
 			out = append(out, p)
 		}
 	}
@@ -153,9 +160,9 @@ func (r *Room) settingText(mod *Module) string {
 	for _, f := range mod.Factors {
 		fs = append(fs, fmt.Sprintf("%s %+d", f.Name, f.Value))
 	}
-	return fmt.Sprintf(`The game: %s. %s Each map hex is %s; each turn is %s.
+	return fmt.Sprintf(`The game: %s. %s %s.
 Rolls: when a situation is in doubt, each side rolls a d10 and adds one bonus: everything that matters summed into a single number (how good the unit is, veterancy, the situation, surprise, the weather). The result is just the two totals, like "Okafor 5, the horde 9". There's no rule for what totals mean: the referee compares them, considers what each side was trying to do, and decides. A side can also roll alone, against the situation.
-Each unit's usual bonus (quality plus veterancy) is given. Factors that often count: %s.`, mod.Name, mod.Intro, mod.Scale.Hex, mod.Scale.Turn, strings.Join(fs, ", "))
+Each unit's usual bonus (quality plus veterancy) is given. Factors that often count: %s.`, mod.Name, mod.Intro, r.scaleForAI(), strings.Join(fs, ", "))
 }
 
 // PromptFor builds a run's prompts. It reports false if there's nothing to do.
@@ -194,7 +201,7 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 		}
 		it := item{Order: o.ID, Text: o.Text, Unit: r.promptUnit(mod, u), Nearby: r.nearby(mod, u, 3)}
 		if o.Mark != nil {
-			it.Mark = r.where(mod, o.Mark[0], o.Mark[1])
+			it.Mark = r.where(mod, *o.Mark)
 		}
 		items = append(items, it)
 	}
@@ -262,7 +269,7 @@ func (r *Room) narrativePrompt(mod *Module, run *Run) (string, string, bool) {
 		return "", "", false
 	}
 	system := fmt.Sprintf(`You write the short situation report that opens each turn's report in a wargame (%s). Each turn is %s.
-Write 60 to 120 words in the voice of a terse radio operator summing up the turn for the squad. Use only the facts in the lines you're given: don't add units, casualties, places, or anything the squad wasn't told. Plain prose; no headings, lists, or sign-off.`, mod.Name, mod.Scale.Turn)
+Write 60 to 120 words in the voice of a terse radio operator summing up the turn for the squad. Use only the facts in the lines you're given: don't add units, casualties, places, or anything the squad wasn't told. Plain prose; no headings, lists, or sign-off.`, mod.Name, r.Board.Turn.String())
 	return system, fmt.Sprintf("Turn %d:\n- %s", rep.Turn, strings.Join(lines, "\n- ")), true
 }
 
@@ -646,4 +653,11 @@ func assistantView(r *Room) AIView {
 		}
 	}
 	return v
+}
+
+func (r *Room) scaleForAI() string {
+	if t := r.Board.ScaleText(); t != "" {
+		return "Scale: " + t
+	}
+	return "No scale is set"
 }

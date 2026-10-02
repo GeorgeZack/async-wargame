@@ -75,7 +75,7 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 		if err := r.StartOperation(ref, mod, now); err != nil {
 			return err
 		}
-		o, err := r.SaveOrder(ref, mod, "m2", "Okafor tosses a grenade into the lobby.", "", true, now)
+		o, err := r.SaveOrder(ref, mod, "m2", "Okafor tosses a grenade into the lobby.", nil, true, now)
 		if err != nil {
 			return err
 		}

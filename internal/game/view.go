@@ -22,7 +22,9 @@ type View struct {
 	RefereeNotes string
 	ModuleName   string
 	ModuleVer    string
-	Scale        Scale
+	ScaleText    string // "1 hex = 50 m · 1 turn = 10 minutes"
+	Board        Board
+	MyCards      []*UnitCard // a player's own characters, with their briefs
 	Turn         int
 	Operation    int
 	Phase        Phase
@@ -162,40 +164,41 @@ type ForceGroup struct {
 }
 
 type UnitView struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	ClassName    string `json:"class"`
-	Kind         string `json:"kind"` // group, soldier, special, monster
-	Abbr         string `json:"abbr"`
-	Symbol       string `json:"-"` // counter symbol; empty for an unidentified contact (drawn face down)
-	Factors      string `json:"-"` // printed on the counter: a headcount
-	Side         string `json:"side"`
-	Role         string `json:"-"` // the side's role: player, enemy, or neutral
-	Hex          string `json:"hex"`
-	Strength     string `json:"strength"`
-	Status       string `json:"status,omitempty"`
-	Bonus        string `json:"bonus,omitempty"` // what its rolls start from
-	Kit          string `json:"kit,omitempty"`
-	Description  string `json:"description,omitempty"`
-	Hidden       bool   `json:"hidden,omitempty"`  // referee view: players don't know about it
-	Contact      bool   `json:"contact,omitempty"` // player view: seen but not identified
-	Stale        bool   `json:"stale,omitempty"`   // out of contact: shown where it last called in
-	SeenTurn     int    `json:"seenTurn,omitempty"`
-	AssignedTo   string `json:"-"`
-	AssignedName string `json:"commander,omitempty"`
-	Mine         bool   `json:"mine,omitempty"`
-	Sector       string `json:"-"`
-	OrderStatus  string `json:"-"`               // this turn's order, if the viewer may see it
-	Assignable   bool   `json:"-"`               // the viewer may reassign it
-	Radio        string `json:"radio,omitempty"` // friendly units: "up" or "down"
-	RadioText    string `json:"radioText,omitempty"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	ClassName    string  `json:"class"`
+	Kind         string  `json:"kind"` // group, soldier, special, monster
+	Abbr         string  `json:"abbr"`
+	Symbol       string  `json:"-"` // counter symbol; empty for an unidentified contact (drawn face down)
+	Factors      string  `json:"-"` // printed on the counter: a headcount
+	Side         string  `json:"side"`
+	Role         string  `json:"-"` // the side's role: player, enemy, or neutral
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	Where        string  `json:"where,omitempty"` // grid reference and nearest place
+	Strength     string  `json:"strength"`
+	Status       string  `json:"status,omitempty"`
+	Bonus        string  `json:"bonus,omitempty"` // what its rolls start from
+	Kit          string  `json:"kit,omitempty"`
+	Description  string  `json:"description,omitempty"`
+	Hidden       bool    `json:"hidden,omitempty"`  // referee view: players don't know about it
+	Contact      bool    `json:"contact,omitempty"` // player view: seen but not identified
+	Stale        bool    `json:"stale,omitempty"`   // out of contact: shown where it last called in
+	SeenTurn     int     `json:"seenTurn,omitempty"`
+	AssignedTo   string  `json:"-"`
+	AssignedName string  `json:"commander,omitempty"`
+	Mine         bool    `json:"mine,omitempty"`
+	OrderStatus  string  `json:"-"`               // this turn's order, if the viewer may see it
+	Assignable   bool    `json:"-"`               // the viewer may reassign it
+	Radio        string  `json:"radio,omitempty"` // friendly units: "up" or "down"
+	RadioText    string  `json:"radioText,omitempty"`
 }
 
 type FeatureView struct {
 	ID     string `json:"id,omitempty"` // referee only, for editing
 	Name   string `json:"name"`
 	Kind   string `json:"kind"`
-	Hex    string `json:"hex"`
+	Where  string `json:"where,omitempty"`
 	Note   string `json:"note,omitempty"`
 	Hidden bool   `json:"hidden,omitempty"`
 }
@@ -206,7 +209,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	v := &View{
 		Code: r.Code, CodeDisplay: DisplayCode(r.Code), Name: r.Name,
 		ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing,
-		ModuleName: mod.Name, ModuleVer: r.ModuleVersion, Scale: mod.Scale,
+		ModuleName: mod.Name, ModuleVer: r.ModuleVersion, ScaleText: r.Board.ScaleText(), Board: r.Board,
 		Turn: r.Turn, Operation: max(r.Operation, 1), Phase: r.Phase, Version: r.Version, IsReferee: ref,
 		Me: memberView(r, me, me),
 	}
@@ -269,17 +272,16 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	}
 	for _, u := range units {
 		side := mod.Side(u.Side)
-		if side == nil || mod.Class(u.Class) == nil || !ref && !r.VisibleToPlayers(mod, u) {
+		if side == nil || mod.Class(u.Class) == nil || !r.KnownBy(mod, u, me) {
 			continue
 		}
 		uv := unitView(r, u, mod, me)
 		uv.AssignedName = names[u.AssignedTo]
 		uv.Mine = u.AssignedTo != "" && u.AssignedTo == me.ID
-		at, stale := r.reportedAt(u, me)
-		if stale {
-			uv.Hex, uv.Stale, uv.SeenTurn = HexID(at[0], at[1]), true, u.LastContact
+		if at, stale := r.reportedAt(u, me); stale {
+			uv.X, uv.Y, uv.Stale, uv.SeenTurn = at.X, at.Y, true, u.LastContact
+			uv.Where = r.Where(at, ref)
 		}
-		uv.Sector = r.Map.SectorAt(at[0], at[1])
 		if side.Playable {
 			uv.Radio, uv.RadioText = "up", r.radioText(u)
 			if u.OutOfContact {
@@ -344,6 +346,13 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 		v.Watched = true
 	}
 	v.NextAction = nextAction(v)
+	if !ref {
+		for _, uv := range v.MyUnits {
+			if c, err := BuildUnitCard(r, mod, me, uv.ID); err == nil {
+				v.MyCards = append(v.MyCards, c)
+			}
+		}
+	}
 	if ref {
 		v.EventTable = eventTable(r, mod)
 		for t := MinThreat; t <= MaxThreat; t++ {
@@ -387,7 +396,7 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 	}
 	uv := UnitView{
 		ID: u.ID, Name: u.Name, ClassName: cl.Name, Abbr: cl.Abbr, Side: u.Side, Role: sideRole(side), Kind: kind, Symbol: cl.Symbol,
-		Hex: HexID(u.Col, u.Row), AssignedTo: u.AssignedTo, Hidden: ref && !u.Known && !side.Playable, Status: u.Status,
+		X: u.X, Y: u.Y, Where: r.Where(u.Pos(), ref), AssignedTo: u.AssignedTo, Hidden: ref && !u.Known && !side.Playable, Status: u.Status,
 		Description: cl.Description,
 	}
 	headcount := func(noun string) string {
@@ -419,7 +428,10 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 	default:
 		// Players see a contact: its signature, not its identity.
 		uv.ID, uv.Contact, uv.Symbol = contactID(r, u), true, ""
-		uv.Name = "Contact at " + uv.Hex
+		uv.Name = "Contact"
+		if uv.Where != "" {
+			uv.Name += " " + strings.TrimPrefix(strings.TrimPrefix(uv.Where, "at "), "near ")
+		}
 		uv.ClassName, uv.Abbr, uv.Description, uv.Status = "Unidentified contact", "?", "", ""
 		if cl.Contact != nil {
 			uv.ClassName, uv.Abbr = cl.Contact.Label, cl.Contact.Abbr
@@ -562,13 +574,11 @@ func addRefereeEvents(v *View, r *Room, mod *Module) {
 			if !ef.located() {
 				continue
 			}
-			col, row := ef.Col, ef.Row
+			x, y := ef.X, ef.Y
 			if ef.Op == "drift" {
-				col, row = ef.ToCol, ef.ToRow
+				x, y = ef.ToX, ef.ToY
 			}
-			x, y := HexCenter(col, row)
-			v.Map.Proposed = append(v.Map.Proposed, ProposedMark{X: x, Y: y, Hex: HexID(col, row),
-				Label: e.Title + ": " + ef.Text})
+			v.Map.Proposed = append(v.Map.Proposed, ProposedMark{X: x, Y: y, Label: e.Title + ": " + ef.Text})
 		}
 	}
 }
@@ -614,13 +624,13 @@ type Tab struct {
 }
 
 // screenOrder lists the screens each kind of member gets, in tab order.
+// Players have one page; the referee has four.
 var screenOrder = map[bool][]string{
-	true:  {"map", "turn", "notes", "events", "forces", "people", "messages", "reports", "activity", "room"},
-	false: {"map", "orders", "forces", "messages", "reports", "people"},
+	true:  {"map", "desk", "people", "setup"},
+	false: {"map"},
 }
 
-var screenLabels = map[string]string{"map": "Map", "turn": "Turn", "events": "Random events", "forces": "Forces",
-	"people": "People", "reports": "Reports", "activity": "Activity", "messages": "Messages", "notes": "Notes", "room": "Room", "orders": "Orders"}
+var screenLabels = map[string]string{"map": "Table", "desk": "Desk", "people": "People", "setup": "Setup"}
 
 // HasScreen reports whether the viewer has a screen by this name.
 func (v *View) HasScreen(screen string) bool {
@@ -644,37 +654,25 @@ func (v *View) SetScreen(screen string) {
 			t.Href = v.Base
 		}
 		switch id {
-		case "turn":
+		case "desk":
 			switch {
 			case v.Phase == PhaseResolving && v.Clock.Unwritten > 0:
 				t.Badge = fmt.Sprint(v.Clock.Unwritten)
-			case v.Phase == PhaseResolving, v.Clock.AllIn:
+			case v.OpenFacts+len(v.Proposals) > 0:
+				t.Badge = n(v.OpenFacts + len(v.Proposals))
+			case v.Phase == PhaseResolving:
 				t.Badge, t.Calm = "✓", true
 			}
-		case "events":
-			t.Badge = n(len(v.Proposals))
 		case "people":
 			t.Badge = n(len(v.Pending))
-		case "notes":
-			t.Badge = n(v.OpenFacts)
-		case "messages":
+		case "map":
 			unread := 0
 			for _, c := range v.Channels {
-				if !(screen == "messages" && c.ID == v.Channel.ID) {
+				if !(screen == "map" && c.ID == v.Channel.ID) {
 					unread += c.Unread
 				}
 			}
 			t.Badge = n(unread)
-		case "orders":
-			if v.Phase == PhasePlanning {
-				reachable := 0
-				for _, o := range v.MyOrders {
-					if !o.NoContact {
-						reachable++
-					}
-				}
-				t.Badge = n(reachable - v.CommittedCount + v.AwaitingReview)
-			}
 		}
 		v.Tabs = append(v.Tabs, t)
 	}

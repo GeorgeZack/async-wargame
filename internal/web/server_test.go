@@ -68,7 +68,7 @@ func (b *browser) post(path string, form url.Values) (*http.Response, string) {
 func (b *browser) room(base string) (*http.Response, string) {
 	b.t.Helper()
 	res, body := b.get(base)
-	for _, screen := range []string{"turn", "notes", "events", "forces", "people", "messages", "reports", "activity", "room", "orders"} {
+	for _, screen := range []string{"desk", "people", "setup"} {
 		_, more := b.get(base + "/" + screen)
 		body += more
 	}
@@ -115,8 +115,10 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 	}
 	code := strings.TrimPrefix(res.Request.URL.Path, "/r/")
 	mustContain(t, body, "Shamblers by the canal", "Duarte")
-	_, body = ref.room("/r/" + code)
-	mustContain(t, body, "Access requests", "Scenario notes")
+	_, body = ref.get("/r/" + code + "/people")
+	mustContain(t, body, "Access requests")
+	_, body = ref.get("/r/" + code + "/setup")
+	mustContain(t, body, "Referee notes", "Map and scale", "1 hex is")
 
 	// Lowercase code with a dash is accepted.
 	lower := strings.ToLower(code[:3] + "-" + code[3:])
@@ -156,7 +158,7 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 	_, body = player.post("/r/"+code+"/briefed", nil)
 	mustContain(t, body, "Standing by")
 	mustNotContain(t, body, "map-data", "Contact at")
-	res, _ = player.get("/r/" + code + "/edit")
+	res, _ = player.get("/r/" + code + "/setup")
 	if res.StatusCode != 403 {
 		t.Errorf("player opened the editor: %d", res.StatusCode)
 	}
@@ -341,7 +343,7 @@ func TestEditorOps(t *testing.T) {
 	code := createRoom(t, ref)
 	path := "/r/" + code + "/edit/ops"
 
-	_, body := ref.get("/r/" + code + "/edit")
+	_, body := ref.get("/r/" + code + "/setup")
 	mustContain(t, body, "Random event tables", "Stragglers drift in", "The brute", "Rivers &amp; ridges")
 
 	ok := func(ops string) {
@@ -610,7 +612,7 @@ func TestTurnClockRoutes(t *testing.T) {
 	store.Tick(deadline.Add(72 * time.Hour))
 	_, body = player.room(base)
 	mustContain(t, body, "Turn 1 is locked")
-	_, body = ref.room(base)
+	_, body = ref.get(base + "/desk")
 	mustContain(t, body, "Turn 1: what happens", "Publish turn 1 and open turn 2")
 	ref.post(base+"/turn/next", nil)
 	store.Read(code, func(r *game.Room) {
@@ -634,7 +636,7 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 	ref.post(base+"/start", nil)
 
 	order := "Okafor goes up the stairwell slow and tosses a grenade into the lobby, then lays down suppressing fire."
-	res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {order}, "mark": {"0905"}, "submit": {"commit"}})
+	res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {order}, "mark_x": {"265"}, "mark_y": {"126"}, "submit": {"commit"}})
 	if res.StatusCode != 200 {
 		t.Fatalf("commit order: %d", res.StatusCode)
 	}
@@ -642,16 +644,17 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 		t.Errorf("ordered someone else's marine: %d", res.StatusCode)
 	}
 	_, body := hicks.room(base)
-	mustContain(t, body, "committed", "tosses a grenade", `class="order-mark s-committed mine"`)
+	mustContain(t, body, "committed", "tosses a grenade", `class="order-mark s-committed mine"`, "0905, near St. Ines Hospital")
 	// The referee is blind to it until the lock.
 	_, body = ref.room(base)
 	mustNotContain(t, body, "tosses a grenade")
+	_, body = ref.get(base + "/desk")
 	mustContain(t, body, "Orders in: 1 of 1")
 
 	ref.post(base+"/turn/lock", nil)
 	var orderID string
 	store.Read(code, func(r *game.Room) { orderID = r.LockedOrders()[0].ID })
-	_, body = ref.get(base + "/turn")
+	_, body = ref.get(base + "/desk")
 	mustContain(t, body, "Turn 1: what happens", "tosses a grenade", "Add a roll", "What happened")
 
 	// A grenade into the lobby: Okafor, with surprise, against the crawler.
@@ -687,17 +690,17 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 		"text": {"The grenade goes off in the lobby. Something small shrieks and goes still."}})
 	ref.post(base+"/desk/outcome", url.Values{"title": {"Behind the lines"}, "seen": {"referee"},
 		"text": {"The runners stir."}})
-	_, body = hicks.get(base + "/forces")
+	_, body = hicks.get(base)
 	mustContain(t, body, "0405") // where Okafor stood at the lock
 	mustNotContain(t, body, "ears ringing")
 
 	ref.post(base+"/turn/next", nil)
-	_, body = hicks.get(base + "/reports")
+	_, body = hicks.get(base)
 	mustContain(t, body, "Something small shrieks", "The grenade: LCpl. Okafor 9 (rolled 4", "Basement crawler 11 (rolled 9")
 	mustNotContain(t, body, "Do the runners hear it", "The runners stir")
-	_, body = ref.get(base + "/reports")
+	_, body = ref.get(base)
 	mustContain(t, body, "Do the runners hear it", "The runners stir", "secret")
-	_, body = hicks.get(base + "/forces")
+	_, body = hicks.get(base)
 	mustContain(t, body, "0905", "ears ringing")
 }
 
@@ -732,7 +735,7 @@ func TestOrdersOverHTTPAndClosing(t *testing.T) {
 	}
 	ref.post(base+"/reopen", nil)
 	_, body = hicks.room(base)
-	mustContain(t, body, "Orders, turn 1")
+	mustContain(t, body, "Your order, turn 1")
 
 	// Deleting needs the room closed and the code typed.
 	if res, _ := ref.post(base+"/delete", url.Values{"confirm": {code}}); res.StatusCode != 400 {
@@ -771,14 +774,14 @@ func TestRulesCardsAndFacts(t *testing.T) {
 	hicks.post(base+"/facts", url.Values{"unit": {"m2"}, "text": {"Okafor carries a breaching charge"}})
 	var id string
 	store.Read(code, func(r *game.Room) { id = r.Facts[0].ID })
-	_, body = ref.get(base + "/notes")
+	_, body = ref.get(base + "/desk")
 	mustContain(t, body, "Okafor carries a breaching charge", "Accept", "Turn down")
 	ref.post(base+"/facts/"+id, url.Values{"action": {"accept"}, "text": {"Okafor carries one breaching charge"}, "reply": {"Just the one."}})
 	_, body = hicks.get(base + "/units/m2")
 	mustContain(t, body, "Okafor carries one breaching charge", "Just the one.")
 	_, body = hicks.get(base)
 	mustContain(t, body, "What we know", "Okafor carries one breaching charge")
-	_, body = ref.get(base + "/notes")
+	_, body = ref.get(base + "/desk")
 	mustContain(t, body, "originally: “Okafor carries a breaching charge”")
 	if res, _ := hicks.get(base + "/notes"); res.Request.URL.Path != base {
 		t.Errorf("a player opened Notes: %s", res.Request.URL.Path)
@@ -809,7 +812,7 @@ func TestRefereeSeesWhenAllOrdersAreIn(t *testing.T) {
 		}
 	}
 	order("m2")
-	_, body := ref.room(base)
+	_, body := ref.get(base + "/desk")
 	mustContain(t, body, "Orders in: 1 of 2", "Waiting on Hicks (1 unit)")
 	mustNotContain(t, body, "Every player has committed")
 	order("m3")
@@ -837,25 +840,26 @@ func TestScreensByRole(t *testing.T) {
 	ref.post(base+"/start", nil)
 
 	noRedirect := &http.Client{Jar: hicks.c.Jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	for _, screen := range []string{"turn", "events", "room"} {
+	for _, screen := range []string{"desk", "people", "setup", "turn", "room"} {
 		res, err := noRedirect.Get(ts.URL + base + "/" + screen)
 		if err != nil {
 			t.Fatal(err)
 		}
 		res.Body.Close()
-		if res.StatusCode != http.StatusSeeOther {
+		if res.StatusCode != http.StatusSeeOther && res.StatusCode != http.StatusForbidden {
 			t.Errorf("player opened the referee's %s screen: %d", screen, res.StatusCode)
 		}
 	}
-	for _, screen := range []string{"turn", "events", "forces", "people", "reports", "room"} {
+	for _, screen := range []string{"desk", "people", "setup"} {
 		res, body := ref.get(base + "/" + screen)
 		if res.StatusCode != 200 || !strings.Contains(body, `aria-current="page"`) || !strings.Contains(body, `id="status-cells"`) {
 			t.Errorf("referee %s screen: %d", screen, res.StatusCode)
 		}
 	}
-	_, body := hicks.get(base + "/orders")
-	mustContain(t, body, "Orders, turn 1", ">Orders", ">Forces", ">Reports")
-	mustNotContain(t, body, ">Events<", ">Room<", "Editor")
+	// A player has one page: situation, map, character, order, talk.
+	_, body := hicks.get(base)
+	mustContain(t, body, "Situation", "Your character", "Your order, turn 1", "Talk", `id="map"`)
+	mustNotContain(t, body, `id="screen-tabs"`, ">Desk<", ">Setup<")
 }
 
 func TestLiveStreamIsNotCompressed(t *testing.T) {

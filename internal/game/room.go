@@ -60,7 +60,8 @@ type Room struct {
 	Members       []*Member         `json:"members"`
 	Units         []*Unit           `json:"units"`
 	Features      []Feature         `json:"features"`
-	Map           *HexMap           `json:"map"`
+	Map           *HexMap           `json:"map"`   // the drawn hex map (the background when Board.Background is hex)
+	Board         Board             `json:"board"` // background, grid, scale
 	Briefing      []string          `json:"briefing"`
 	RefereeNotes  string            `json:"refereeNotes"`
 	Events        []*GameEvent      `json:"events,omitempty"`
@@ -122,34 +123,36 @@ type Unit struct {
 	Name       string   `json:"name"`
 	Class      string   `json:"class"`
 	Side       string   `json:"side"`
-	Col        int      `json:"col"`
-	Row        int      `json:"row"`
+	X          float64  `json:"x"` // position on the board
+	Y          float64  `json:"y"`
 	Strength   int      `json:"strength"`             // headcount
 	Quality    *int     `json:"quality,omitempty"`    // overrides the class's quality
 	Kit        *string  `json:"kit,omitempty"`        // overrides the class's kit
 	Notes      string   `json:"notes,omitempty"`      // the referee's notes, shown on the card
 	Status     string   `json:"status,omitempty"`     // "pinned", "wounded: left arm"
-	Known      bool     `json:"known"`                // players know it's there
-	Identified bool     `json:"identified,omitempty"` // players know what it is
+	Brief      string   `json:"brief,omitempty"`      // private: only its holder and the referee read it
+	Known      bool     `json:"known"`                // every player knows it's there
+	KnownTo    []string `json:"knownTo,omitempty"`    // members who know it's there, when not everyone does
+	Identified bool     `json:"identified,omitempty"` // those who know it's there know what it is
 	AssignedTo string   `json:"assignedTo,omitempty"`
 	Operations int      `json:"operations,omitempty"` // operations survived in this campaign
 	Record     []string `json:"record,omitempty"`     // service record
 	// Radio contact, set by the referee and by events.
-	RadioDown    bool    `json:"radioDown,omitempty"`
-	OutOfContact bool    `json:"outOfContact,omitempty"` // worked out by RefreshComms
-	LastContact  int     `json:"lastContact,omitempty"`  // last turn it was in contact
-	JammedUntil  int     `json:"jammedUntil,omitempty"`  // radio jammed through this turn
-	Reported     *[2]int `json:"reported,omitempty"`     // where it was when last in contact
+	RadioDown    bool `json:"radioDown,omitempty"`
+	OutOfContact bool `json:"outOfContact,omitempty"` // worked out by RefreshComms
+	LastContact  int  `json:"lastContact,omitempty"`  // last turn it was in contact
+	JammedUntil  int  `json:"jammedUntil,omitempty"`  // radio jammed through this turn
+	Reported     *Pos `json:"reported,omitempty"`     // where it was when last in contact
 }
 
 type Feature struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Kind   string `json:"kind"`
-	Col    int    `json:"col"`
-	Row    int    `json:"row"`
-	Hidden bool   `json:"hidden,omitempty"`
-	Note   string `json:"note,omitempty"`
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Kind   string  `json:"kind"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Hidden bool    `json:"hidden,omitempty"`
+	Note   string  `json:"note,omitempty"`
 }
 
 type Visibility string
@@ -305,8 +308,11 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 	r := &Room{
 		Code: code, Name: name, ScenarioID: sc.ID, ModuleID: mod.ID, ModuleVersion: mod.Version,
 		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Members: []*Member{ref},
-		Features: append([]Feature(nil), sc.Features...),
-		Map:      sc.Map.Clone(), Briefing: slices.Clone(sc.Briefing), RefereeNotes: sc.RefereeNotes,
+		Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), RefereeNotes: sc.RefereeNotes,
+	}
+	for _, f := range sc.Features {
+		p := f.Pos()
+		r.Features = append(r.Features, Feature{ID: f.ID, Name: f.Name, Kind: f.Kind, X: p.X, Y: p.Y, Hidden: f.Hidden, Note: f.Note})
 	}
 	for _, su := range sc.Units {
 		cl := mod.Class(su.Class)
@@ -315,9 +321,10 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		if str == 0 {
 			str = max(1, cl.Strength)
 		}
+		p := su.Pos()
 		r.Units = append(r.Units, &Unit{
 			ID: su.ID, Name: su.Name, Class: su.Class, Side: cl.Side,
-			Col: su.Col, Row: su.Row, Strength: str,
+			X: p.X, Y: p.Y, Strength: str, Brief: su.Brief,
 			Known: su.Known || side.Playable, Identified: su.Known || side.Playable,
 		})
 	}

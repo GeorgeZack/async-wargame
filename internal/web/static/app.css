@@ -177,7 +177,7 @@ details.panel > summary h2 { display: inline; }
   #map { aspect-ratio: 1 / 1; max-height: 70vh; }
 }
 #map.dragging { cursor: grabbing; }
-.cursor { fill: none; stroke: var(--focus); stroke-width: 2.2; pointer-events: none; }
+.cursor { fill: none; stroke: var(--focus); stroke-width: 2.2; vector-effect: non-scaling-stroke; pointer-events: none; }
 
 .proposed {
   fill: none; stroke: var(--infected); stroke-width: 2; stroke-dasharray: 3 2; pointer-events: none;
@@ -469,13 +469,6 @@ select.compact { width: auto; min-height: 34px; padding: 0.2rem 0.4rem; font-siz
 
 .danger-btn { background: var(--danger); border-color: var(--danger); color: #fff; }
 .danger-zone summary, .danger-zone summary h2 { display: inline; cursor: pointer; }
-
-/* ---- Sectors: a printed overlay grid ---- */
-.sector-line { fill: none; stroke: #5b2a6e; stroke-width: 1.1; stroke-dasharray: 4 2.2; opacity: 0.6; pointer-events: none; }
-.sector-id { font: 800 7px var(--counter-font); fill: #5b2a6e; opacity: 0.55; pointer-events: none; }
-.sector-name { font: 700 3.4px var(--counter-font); fill: #5b2a6e; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.2px;
-  stroke: var(--paper); stroke-width: 1px; paint-order: stroke; pointer-events: none; }
-#map.no-sectors .sectors { display: none; }
 
 /* ---- Fog of war ---- */
 .pt-fogwash { fill: #ddd3b8; opacity: 0.62; }
@@ -790,8 +783,6 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
 .order-dialog form { padding: 0.9rem; overflow-y: auto; }
 .order-dialog #of-dest-row { display: grid; grid-template-columns: auto auto 1fr; align-items: end; gap: 0.25rem 0.6rem; }
 .order-dialog #of-dest-row .dest-hint { grid-column: 1 / -1; }
-html.js #order-box > form { display: none; }
-html.js #order-box > summary { list-style: none; }
 .pick-bar { position: fixed; left: 50%; bottom: 3rem; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
   max-width: calc(100vw - 24px); padding: 0.55rem 0.8rem; border-radius: 8px; background: var(--chrome); color: var(--chrome-text);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); font-weight: 600; font-size: 0.9rem; }
@@ -890,9 +881,11 @@ html.js #order-box > summary { list-style: none; }
 .unit-status { color: var(--danger); font-style: italic; }
 .num-s { width: 4.5rem; }
 .mark-row { display: flex; flex-wrap: wrap; align-items: end; gap: .25rem .6rem; }
-.order-mark circle { fill: rgb(255 255 255 / .55); stroke: var(--road-ink); stroke-width: 1.3; stroke-dasharray: 2 1.4; }
-.order-mark path { stroke: var(--road-ink); stroke-width: 1.2; }
-.order-mark.mine circle { stroke: #e0a100; stroke-width: 1.8; }
+.order-mark .pin { fill: #f4efe2; stroke: var(--road-ink); stroke-width: .9; }
+.order-mark .pin-dot { fill: var(--road-ink); }
+.order-mark.mine .pin { fill: #f2c94c; stroke: #6b4b00; }
+.order-mark.editing .pin { fill: #e0a100; stroke: #3d2a00; stroke-width: 1.1; }
+.order-mark.s-draft .pin { stroke-dasharray: 1.4 .9; }
 
 .desk-head { display: grid; gap: .35rem; margin-bottom: .5rem; }
 .desk-item { border: 1px solid var(--border); border-left: 4px solid var(--marines); padding: .6rem .8rem; margin: .8rem 0; background: var(--surface); }
@@ -959,3 +952,65 @@ html.js #order-box > summary { list-style: none; }
 .intent-row label > * { width: auto; }
 .ask-player { margin-top: .4rem; }
 .ask-player summary { cursor: pointer; color: var(--accent); }
+
+/* ---- The board: free placement over a drawn map or an image ---- */
+.grid-lines { fill: none; stroke: #2b2a24; stroke-opacity: .32; stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.bg-hex .grid-lines { stroke-opacity: .22; }
+#map.no-grid .grid-lines, #map.no-grid .hexnums { display: none; }
+.board-image { image-rendering: auto; }
+.scalebar .sb-back { fill: rgb(255 255 255 / .82); stroke: #2b2a24; stroke-opacity: .4; vector-effect: non-scaling-stroke; }
+.scalebar .sb-bar { stroke: #1c1b17; stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; }
+.scalebar .sb-text { font-family: var(--counter-font); font-weight: 800; text-anchor: middle; fill: #1c1b17; }
+.feature { cursor: pointer; }
+.feature .fdot { fill: var(--ink); stroke: var(--paper); stroke-width: .6; }
+.marker { cursor: pointer; }
+.as-referee .marker, .setup-screen .marker, .setup-screen .feature { cursor: grab; }
+.marker.lifted { opacity: .85; filter: drop-shadow(1px 3px 2px rgb(0 0 0 / .45)); cursor: grabbing; }
+.ctr-name { font: 700 3.6px var(--counter-font); text-anchor: middle; fill: var(--ink); stroke: var(--paper);
+  stroke-width: 1.4px; paint-order: stroke; pointer-events: none; }
+#map.no-labels .ctr-name { display: none; }
+#map.picking { cursor: crosshair; }
+.ruler { stroke: #1d4f91; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.ruler-text { font-family: var(--counter-font); font-weight: 800; text-anchor: middle; fill: #1d4f91;
+  stroke: #fff; stroke-width: 2.5px; paint-order: stroke; pointer-events: none; }
+.proposed { vector-effect: non-scaling-stroke; }
+.map-wrap { position: relative; }
+.map-hint { position: absolute; left: .5rem; bottom: .5rem; margin: 0; padding: .2rem .5rem; border-radius: 4px;
+  background: rgb(0 0 0 / .7); color: #fff; font-size: .85rem; pointer-events: none; }
+.map-hint[hidden] { display: none; }
+.scale-line { margin: 0; font-weight: 700; font-size: .9rem; }
+.panel-head { display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline; }
+
+/* One table: the board on the left, everything you need beside it. */
+.table-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.board-col, .side-col { display: grid; gap: 1rem; align-content: start; min-width: 0; }
+@media (min-width: 1000px) {
+  .table-layout { grid-template-columns: minmax(0, 1fr) 26rem; }
+  .board-col { position: sticky; top: 6.5rem; }
+}
+.selected-panel { padding-top: .6rem !important; }
+.selected-panel .inspector h3 { margin: 0 0 .2rem; font-size: 1rem; }
+.situation .sit-turn { margin: .3rem 0; font-size: 1rem; }
+.situation .entry-h { font-size: .95rem; margin: .6rem 0 .1rem; }
+.scale-note { color: var(--muted); margin: 0 0 .3rem; }
+.briefing-again, .history { margin-top: .6rem; }
+.brief { border-left: 3px solid #a87b00; background: rgb(242 201 76 / .14); padding: .3rem .7rem; margin: .5rem 0; }
+.brief summary { font-weight: 700; cursor: pointer; }
+.brief h2 { font-size: 1rem; margin: .2rem 0; }
+.char { border-top: 1px solid var(--border); padding-top: .5rem; margin-top: .5rem; }
+.char:first-of-type { border-top: 0; margin-top: 0; }
+.char-head { display: flex; gap: .7rem; align-items: center; }
+.char-head h3 { margin: 0; font-size: 1.1rem; }
+.char-head p { margin: 0; }
+.char-head .card-counter { width: 2.6rem; height: 2.6rem; flex: none; }
+.char-facts li { margin: .15rem 0; }
+.order-box { border: 2px solid var(--accent) !important; }
+.order-box textarea { width: 100%; }
+.channel-pills { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .4rem; }
+.channel-pills .pill { padding: .15rem .55rem; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; font-size: .85rem; }
+.channel-pills .pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.talk .thread { max-height: 22rem; overflow-y: auto; }
+.you h3 { font-size: .95rem; margin: .6rem 0 .2rem; }
+.you .panel { border: 0 !important; padding: 0 !important; }
+.board-settings .num-s { width: 5.5rem; }
+.upload-form { margin-top: .8rem; padding-top: .6rem; border-top: 1px solid var(--border); }

@@ -6,7 +6,6 @@ import "asyncwargame/internal/rules"
 // code readable.
 type (
 	Module    = rules.Module
-	Scale     = rules.Scale
 	Side      = rules.Side
 	Terrain   = rules.Terrain
 	Class     = rules.Class

@@ -1,13 +1,29 @@
 {{define "content"}}{{template "shell-top" .}}
-<main id="main" class="screen screen-map" data-base="{{.Base}}" data-version="{{.Version}}"{{if .IsReferee}} data-referee="1"{{end}}>
+<main id="main" class="screen screen-map{{if .IsReferee}} as-referee{{else}} as-player{{end}}" data-base="{{.Base}}" data-version="{{.Version}}"{{if .IsReferee}} data-referee="1"{{end}}>
   {{template "sec-next" .}}
-  <div class="map-layout">
-    {{template "map-window" .}}
-    <aside class="info-col" aria-label="Selection">
-      <section class="panel"><h2>Selected</h2>{{template "sec-inspector" .}}</section>
-      {{if ne .Me.Status "pending"}}{{template "sec-order-box" .}}{{end}}
-      {{if not .IsReferee}}{{template "sec-known" .}}{{end}}
-      <section class="panel"><h2>Key and places</h2>{{template "legend" .}}{{template "sec-places" .}}</section>
+  <div class="table-layout">
+    <div class="board-col">
+      {{template "map-window" .}}
+      <section class="panel selected-panel" aria-labelledby="sel-h"><h2 id="sel-h" class="sr-only">Selected</h2>{{template "sec-inspector" .}}</section>
+      {{if .IsReferee}}{{template "sec-steps" .}}{{end}}
+    </div>
+    <aside class="side-col" aria-label="{{if .IsReferee}}The table{{else}}You{{end}}">
+      {{if .IsReferee}}
+        {{template "sec-orders" .}}
+        {{template "sec-talk" .}}
+        {{template "sec-situation" .}}
+        {{template "sec-known" .}}
+      {{else}}
+        {{template "sec-situation" .}}
+        {{template "sec-character" .}}
+        {{template "sec-order-box" .}}
+        {{if or .IsCommander (gt (len .MyOrders) 1)}}{{template "sec-orders" .}}{{end}}
+        {{template "sec-talk" .}}
+        {{template "sec-known" .}}
+        {{if .IsCommander}}{{template "sec-command" .}}{{end}}
+        <details class="panel"><summary><h2>Places and map key</h2></summary>{{template "sec-places" .}}{{if eq .Map.Background "hex"}}{{template "legend" .}}{{end}}</details>
+        {{template "sec-you" .}}
+      {{end}}
     </aside>
   </div>
 </main>

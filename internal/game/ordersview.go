@@ -8,8 +8,8 @@ type OrderView struct {
 	UnitID     string      `json:"unit"`
 	UnitName   string      `json:"unitName"`
 	Text       string      `json:"text"`
-	Mark       string      `json:"mark,omitempty"`
-	MarkLabel  string      `json:"markLabel,omitempty"`
+	Mark       *Pos        `json:"mark,omitempty"`
+	MarkLabel  string      `json:"markLabel,omitempty"` // where the mark is, in words
 	Status     OrderStatus `json:"status"`
 	Version    int         `json:"version"`
 	Author     string      `json:"author"`
@@ -38,9 +38,10 @@ type OrderData struct {
 }
 
 type OrderUnit struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Hex   string `json:"hex"`
+	ID    string  `json:"id"`
+	Label string  `json:"label"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
 }
 
 func (r *Room) orderView(o *Order, editable bool) OrderView {
@@ -53,7 +54,8 @@ func (r *Room) orderView(o *Order, editable bool) OrderView {
 		ov.Author = m.Name
 	}
 	if o.Mark != nil {
-		ov.Mark, ov.MarkLabel = HexID(o.Mark[0], o.Mark[1]), r.Map.SectorAt(o.Mark[0], o.Mark[1])
+		p := *o.Mark
+		ov.Mark, ov.MarkLabel = &p, r.Where(p, false)
 	}
 	return ov
 }
@@ -76,7 +78,7 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 		if !r.seesOrder(me, u) {
 			// A commander's marine who's out of contact: shown, but out of reach.
 			if at, stale := r.reportedAt(u, me); stale {
-				uv.Hex, uv.Stale, uv.SeenTurn = HexID(at[0], at[1]), true, u.LastContact
+				uv.X, uv.Y, uv.Where, uv.Stale, uv.SeenTurn = at.X, at.Y, r.Where(at, false), true, u.LastContact
 			}
 			slot := OrderSlot{Unit: uv, NoContact: true}
 			if m := r.memberOrNil(u.AssignedTo); m != nil {
@@ -104,7 +106,7 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 			}
 		}
 		v.MyOrders = append(v.MyOrders, slot)
-		v.Data.Orders.Units = append(v.Data.Orders.Units, OrderUnit{ID: u.ID, Label: u.Name, Hex: HexID(u.Col, u.Row)})
+		v.Data.Orders.Units = append(v.Data.Orders.Units, OrderUnit{ID: u.ID, Label: u.Name, X: u.X, Y: u.Y})
 	}
 	// Other friendly orders the viewer may read: committed and in contact.
 	for _, o := range r.Orders {
@@ -122,13 +124,11 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 	}
 	// Marks on the map: the viewer's own orders and the others they can read.
 	mark := func(o OrderView, own bool) {
-		if o.Mark == "" {
+		if o.Mark == nil {
 			return
 		}
-		col, row, _ := ParseHexID(o.Mark)
-		x, y := HexCenter(col, row)
-		v.Map.OrderMarks = append(v.Map.OrderMarks, OrderMark{X: x, Y: y, Hex: o.Mark, Mine: own, Status: string(o.Status),
-			Label: o.UnitName + ": " + clip(o.Text, 120)})
+		v.Map.OrderMarks = append(v.Map.OrderMarks, OrderMark{X: o.Mark.X, Y: o.Mark.Y, Mine: own, Status: string(o.Status),
+			Label: o.UnitName + " (" + o.MarkLabel + "): " + clip(o.Text, 120)})
 	}
 	for _, o := range v.Data.Orders.Orders {
 		mark(o, true)

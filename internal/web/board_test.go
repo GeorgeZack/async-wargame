@@ -1,0 +1,107 @@
+package web
+
+import (
+	"bytes"
+	"image"
+	"image/png"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+
+	"asyncwargame/internal/game"
+)
+
+func upload(t *testing.T, b *browser, path string, data []byte) *http.Response {
+	t.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	f, _ := w.CreateFormFile("image", "map.png")
+	f.Write(data)
+	w.Close()
+	res, err := b.c.Post(b.ts.URL+path, w.FormDataContentType(), &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	return res
+}
+
+func TestMapImageAndScaleOverHTTP(t *testing.T) {
+	ts, store, ref, hicks, code, _ := setupSquad(t)
+	base := "/r/" + code
+	var pic bytes.Buffer
+	png.Encode(&pic, image.NewRGBA(image.Rect(0, 0, 800, 600)))
+
+	if res := upload(t, hicks, base+"/board/image", pic.Bytes()); res.StatusCode != 403 {
+		t.Errorf("a player uploaded a map: %d", res.StatusCode)
+	}
+	if res := upload(t, ref, base+"/board/image", []byte("not a picture")); res.StatusCode != 400 {
+		t.Errorf("accepted a non-image: %d", res.StatusCode)
+	}
+	if res := upload(t, ref, base+"/board/image", pic.Bytes()); res.StatusCode != 200 {
+		t.Fatalf("upload: %d", res.StatusCode)
+	}
+	res, _ := ref.post(base+"/board", url.Values{"background": {"image"}, "grid": {"square"}, "cell": {"40"},
+		"distance": {"5"}, "distance_unit": {"ft"}, "turn": {"1"}, "turn_unit": {"minutes"}})
+	if res.StatusCode != 200 {
+		t.Fatalf("board: %d", res.StatusCode)
+	}
+	var name string
+	store.Read(code, func(r *game.Room) { name = r.Board.Image })
+	if !strings.HasPrefix(name, code+"-") || hicksGet(hicks, base+"/board/"+name) != 200 {
+		t.Errorf("a member can't see the map image %q", name)
+	}
+	if res, _ := newBrowser(t, ts).get(base + "/board/" + name); res.StatusCode != 404 {
+		t.Errorf("a stranger saw the map image: %d", res.StatusCode)
+	}
+	ref.post(base+"/start", nil)
+	_, body := hicks.get(base)
+	mustContain(t, body, "1 square = 5 ft · 1 turn = 1 minute", `class="board-image"`, `class="grid-lines"`)
+}
+
+func hicksGet(b *browser, path string) int {
+	res, _ := b.get(path)
+	return res.StatusCode
+}
+
+func TestBriefsAndRevealsOverHTTP(t *testing.T) {
+	ts, store, ref, hicks, code, h := setupSquad(t)
+	base := "/r/" + code
+	vasq := newBrowser(t, ts)
+	vasq.post("/join", url.Values{"code": {code}, "name": {"Vasquez"}})
+	ref.post(base+"/members/"+memberByName(store, code, "Vasquez").ID+"/approve", nil)
+	vasq.post(base+"/briefed", nil)
+	ref.post(base+"/start", nil)
+
+	ref.post(base+"/units/m2/edit", url.Values{"brief": {"Your sister's girlfriend works at the hospital."}})
+	_, body := hicks.get(base)
+	mustContain(t, body, "Private brief", "sister&#39;s girlfriend")
+	_, body = vasq.get(base)
+	mustNotContain(t, body, "sister&#39;s girlfriend")
+	if res, _ := vasq.get(base + "/units/m2"); res.StatusCode == 200 {
+		_, body = vasq.get(base + "/units/m2")
+		mustNotContain(t, body, "sister&#39;s girlfriend")
+	}
+
+	// The crawler is shown to Hicks alone.
+	ref.post(base+"/units/z3/edit", url.Values{"known_to_set": {"1"}, "known_to": {h.ID}})
+	_, body = hicks.get(base)
+	mustContain(t, body, `data-unit="`)
+	if !strings.Contains(body, "Crawler") && !strings.Contains(body, "Contact") {
+		t.Error("Hicks can't see what was shown to him")
+	}
+	_, body = vasq.get(base)
+	mustNotContain(t, body, "Basement crawler", "Crawler")
+	// Players move markers only through orders; the referee drags them.
+	if res, _ := hicks.post(base+"/units/m2/edit", url.Values{"x": {"10"}, "y": {"10"}}); res.StatusCode != 403 {
+		t.Errorf("a player moved a counter: %d", res.StatusCode)
+	}
+	ref.post(base+"/units/m2/edit", url.Values{"x": {"200.5"}, "y": {"150"}})
+	store.Read(code, func(r *game.Room) {
+		if u := r.Unit("m2"); u.X != 200.5 || u.Y != 150 {
+			t.Errorf("the referee's drag: %v,%v", u.X, u.Y)
+		}
+	})
+}

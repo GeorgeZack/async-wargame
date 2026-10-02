@@ -23,7 +23,6 @@ the problem. A module or scenario can't reuse a built-in id.
 | Section | What it is |
 |---|---|
 | `id`, `version`, `name`, `intro` | Campaigns lock to the version they started with. `intro` is a line describing the setting. |
-| `scale` | What a `hex` and a `turn` mean in the fiction, in words. |
 | `factors` | `{name, value}`. Things that often count toward a roll's bonus ("Ambush or surprise" +3, "Night" -1). They're offered at the desk and to the AI; the referee can type anything. |
 | `sides` | `playable` sides are the players'; `enemy` sides are the referee's opposition; anything else is neutral (civilians). |
 | `classes` | Unit templates: `side`, `name`, `abbr`, `kind` (`group` for crowds, where strength is a headcount, or a single `soldier`, `special`, `monster`, ...), `symbol` (counter art), `strength` (the usual headcount), `quality` (a bonus to its rolls: 0 ordinary, +2 trained, more for the exceptional), `description`, `kit` (one sentence), and `contact` (`{abbr, label}`: how players see it before it's identified). |
@@ -52,10 +51,10 @@ and `unique` (classes), text for the referee and a `report` for players
 
 | `op` | Does |
 |---|---|
-| `spawn` | Places `count` units of `class` (`strength`, `scale`d by threat, `known` to players or hidden) at hexes chosen by `where`: `edge`, `terrain`, `nearFeature`, `nearClass`, `awayFromMarines`. |
+| `spawn` | Places `count` units of `class` (`strength`, `scale`d by threat, `known` to players or hidden) at spots chosen by `where`: `edge`, `terrain`, `nearFeature`, `nearClass`, `awayFromMarines`. |
 | `grow` | Raises `count` units of `classes` by `percent`. |
-| `drift` | Moves `count` units of `classes` up to `steps` hexes `toward` `players` or a feature kind. |
-| `reveal` | Makes `count` hidden units of `side` known, optionally `within` hexes of players. |
+| `drift` | Moves `count` units of `classes` up to `steps` grid cells `toward` `players` or a feature kind. |
+| `reveal` | Makes `count` hidden units of `side` known, optionally `within` grid cells of players. |
 | `threat` | Changes the threat level by `amount`. |
 | `jam` | Knocks out the radios of `count` friendly units for `turns` turns. |
 
@@ -63,10 +62,32 @@ Rolled events are proposals: nothing changes until the referee applies one.
 
 ## Scenarios
 
-`map` (`cols`, `rows` of terrain codes, `edges`, `roads`, `sectors`),
+`board`, `map` (`cols`, `rows` of terrain codes, `edges`, `roads`),
 `features` (places: `kind` is one of beachhead, hospital, port, utility,
 police, shelter, relay, hive; `hidden` ones only the referee sees), `units`
-(`class`, position, optional `strength` and `known`), `briefing` paragraphs,
-and `refereeNotes`. Hex sides are written from the hex that owns them
+(`class`, position, optional `strength`, `known`, and `brief`), `briefing`
+paragraphs, and `refereeNotes`.
+
+`board` says what the map is and what it measures:
+
+```json
+"board": {
+  "background": "hex",
+  "grid": "hex",
+  "distance": {"amount": 50, "unit": "m"},
+  "turn": {"amount": 10, "unit": "minutes"}
+}
+```
+
+`background` is `hex` (the drawn map below) or `image` (the referee uploads
+one in the room). `grid` is `hex`, `square`, or `none`, laid over either;
+`cell` is its size in board units (one drawn hex is 31.2). Distance units
+are ft, yd, m, km, mi; turn units are seconds, minutes, hours, days, weeks.
+Players see it as "1 hex = 50 m · 1 turn = 10 minutes", with a scale bar.
+
+Units and places sit anywhere: give a hex as `col` and `row` (zero-based;
+they're put at its center) or an exact point as `x` and `y`. A unit's
+`brief` is private to whoever plays it (and the referee): secrets, orders
+from above, what they know that the others don't. Hex sides are written from the hex that owns them
 (directions 0 east, 4 south-west, 5 south-east); the loader says which side
 to flip if one isn't.

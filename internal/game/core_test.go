@@ -11,17 +11,18 @@ func TestFreeTextOrders(t *testing.T) {
 	vasq := r.Member("v")
 	now := central(t, "2026-09-30 13:00")
 
-	if _, err := r.SaveOrder(hicks, mod, "m1", "  ", "", true, now); err == nil {
+	if _, err := r.SaveOrder(hicks, mod, "m1", "  ", nil, true, now); err == nil {
 		t.Error("committed an empty order")
 	}
-	if _, err := r.SaveOrder(hicks, mod, "m2", "Okafor dances.", "", true, now); err != ErrForbidden {
+	if _, err := r.SaveOrder(hicks, mod, "m2", "Okafor dances.", nil, true, now); err != ErrForbidden {
 		t.Errorf("Hicks ordered Vasquez's marine: %v", err)
 	}
-	if _, err := r.SaveOrder(hicks, mod, "m1", "Reyes waves.", "9999", true, now); err == nil {
-		t.Error("marked a hex off the map")
+	if o, err := r.SaveOrder(hicks, mod, "m1", "Reyes waves.", &Pos{-50, 99999}, true, now); err != nil || o.Mark.X != 0 || o.Mark.Y >= 99999 {
+		t.Errorf("a pin off the map stays on it: %+v, %v", o.Mark, err)
 	}
-	o, err := r.SaveOrder(hicks, mod, "m1", "Reyes takes point to the bridge.", "0605", true, now)
-	if err != nil || o.Status != OrderCommitted || o.Mark == nil || *o.Mark != [2]int{5, 4} {
+	bridge := center(5, 4)
+	o, err := r.SaveOrder(hicks, mod, "m1", "Reyes takes point to the bridge.", &bridge, true, now)
+	if err != nil || o.Status != OrderCommitted || o.Mark == nil || *o.Mark != bridge {
 		t.Fatalf("order %+v, %v", o, err)
 	}
 	// The commander can review and send it back.
@@ -41,7 +42,7 @@ func TestFreeTextOrders(t *testing.T) {
 			t.Error("the blind referee sees Hicks's marine in their orders list")
 		}
 	}
-	if _, err := r.SaveOrder(ref, mod, "m1", "Referee says hi.", "", true, now); err != ErrForbidden {
+	if _, err := r.SaveOrder(ref, mod, "m1", "Referee says hi.", nil, true, now); err != ErrForbidden {
 		t.Errorf("blind referee overwrote a player's order: %v", err)
 	}
 	if !slices.ContainsFunc(BuildView(r, testScenario(t), mod, cmd).MyOrders, func(s OrderSlot) bool { return s.Order != nil && s.Order.ID == o.ID }) {
@@ -56,7 +57,7 @@ func TestFreeTextOrders(t *testing.T) {
 	r.Unit("m1").RadioDown = false
 	r.RefreshComms(mod)
 	// At the lock, the draft lapses; Vasquez's committed order locks.
-	r.SaveOrder(vasq, mod, "m2", "Okafor covers the street.", "", true, now)
+	r.SaveOrder(vasq, mod, "m2", "Okafor covers the street.", nil, true, now)
 	r.Tick(mod, r.Deadline)
 	if o.Status != OrderLapsed || r.CurrentOrder("m2").Status != OrderLocked || len(r.LockedOrders()) != 1 {
 		t.Errorf("after lock: m1 %s, m2 %s", o.Status, r.CurrentOrder("m2").Status)
@@ -67,7 +68,7 @@ func TestDeskContestsOutcomesAndPublish(t *testing.T) {
 	r, mod, ref, cmd, hicks := orderRoom(t)
 	vasq := r.Member("v")
 	now := central(t, "2026-09-30 13:00")
-	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes throws a grenade into the lobby.", "", true, now)
+	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes throws a grenade into the lobby.", nil, true, now)
 	r.Tick(mod, r.Deadline)
 	if r.Phase != PhaseResolving || r.Desk == nil || r.Unwritten() != 1 {
 		t.Fatalf("phase %s, desk %v, unwritten %d", r.Phase, r.Desk, r.Unwritten())
@@ -97,9 +98,9 @@ func TestDeskContestsOutcomesAndPublish(t *testing.T) {
 	}
 	r.SetOutcome(ref, "", "", "Behind the lines", "The runners stir.", SeenByReferee)
 	// The referee moves Reyes; players still see the board as at the lock.
-	before := HexID(r.Unit("m1").Col, r.Unit("m1").Row)
-	hex := "0905"
-	if err := r.EditUnit(ref, mod, "m1", UnitEdit{Hex: &hex, Status: ptr("ears ringing")}); err != nil {
+	before := r.Unit("m1").Pos()
+	to := center(8, 4)
+	if err := r.EditUnit(ref, mod, "m1", UnitEdit{At: &to, Status: ptr("ears ringing")}); err != nil {
 		t.Fatal(err)
 	}
 	find := func(v *View, id string) *UnitView {
@@ -112,10 +113,10 @@ func TestDeskContestsOutcomesAndPublish(t *testing.T) {
 		}
 		return nil
 	}
-	if u := find(BuildView(r, testScenario(t), mod, vasq), "m1"); u.Hex != before || u.Status != "" {
+	if u := find(BuildView(r, testScenario(t), mod, vasq), "m1"); (Pos{u.X, u.Y} != before) || u.Status != "" {
 		t.Errorf("players saw the move before publishing: %+v", u)
 	}
-	if u := find(BuildView(r, testScenario(t), mod, ref), "m1"); u.Hex != hex {
+	if u := find(BuildView(r, testScenario(t), mod, ref), "m1"); (Pos{u.X, u.Y} != to) {
 		t.Errorf("the referee's board: %+v", u)
 	}
 	if r.Unwritten() != 0 {
@@ -133,7 +134,7 @@ func TestDeskContestsOutcomesAndPublish(t *testing.T) {
 	if len(BuildView(r, testScenario(t), mod, ref).Reports[0].Entries) != 2 {
 		t.Error("the referee doesn't see their own notes")
 	}
-	if u := find(BuildView(r, testScenario(t), mod, cmd), "m1"); u.Hex != hex || u.Status != "ears ringing" {
+	if u := find(BuildView(r, testScenario(t), mod, cmd), "m1"); (Pos{u.X, u.Y} != to) || u.Status != "ears ringing" {
 		t.Errorf("after publishing: %+v", u)
 	}
 	if r.Turn != 2 || r.Phase != PhasePlanning || r.LockedUnits != nil {
@@ -148,12 +149,12 @@ func TestOutOfContactMarinesAndHolderOnlyOutcomes(t *testing.T) {
 	vasq := r.Member("v")
 	now := central(t, "2026-09-30 13:00")
 	u := r.Unit("m1")
-	home := HexID(u.Col, u.Row)
+	home := u.Pos()
 	r.RefreshComms(mod) // the store does this after every change: Reyes calls in from home
 	r.EditUnit(ref, mod, "m1", UnitEdit{RadioDown: ptr(true)})
 	r.RefreshComms(mod)
-	u.Col, u.Row = 9, 4
-	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes searches the basement alone.", "", true, now)
+	u.X, u.Y = center(9, 4).X, center(9, 4).Y
+	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes searches the basement alone.", nil, true, now)
 	r.Tick(mod, r.Deadline)
 	r.SetOutcome(ref, o.ID, "", "", "Something grabs his ankle.", SeenByHolder)
 	publishTurn(t, r, mod, ref, now)
@@ -168,8 +169,8 @@ func TestOutOfContactMarinesAndHolderOnlyOutcomes(t *testing.T) {
 	// Others see Reyes where he last called in.
 	for _, g := range BuildView(r, testScenario(t), mod, vasq).Forces {
 		for _, x := range g.Units {
-			if x.ID == "m1" && (x.Hex != home || !x.Stale) {
-				t.Errorf("Vasquez sees Reyes at %s (stale %v)", x.Hex, x.Stale)
+			if x.ID == "m1" && (Pos{x.X, x.Y} != home || !x.Stale) {
+				t.Errorf("Vasquez sees Reyes at %v,%v (stale %v)", x.X, x.Y, x.Stale)
 			}
 		}
 	}
@@ -222,13 +223,13 @@ func TestFactsAreCoCreated(t *testing.T) {
 func TestReopenAndCorrectATurn(t *testing.T) {
 	r, mod, ref, _, hicks := orderRoom(t)
 	now := central(t, "2026-09-30 13:00")
-	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes crosses the bridge.", "", true, now)
+	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes crosses the bridge.", nil, true, now)
 	r.Tick(mod, r.Deadline)
-	hex := "0705"
-	r.EditUnit(ref, mod, "m1", UnitEdit{Hex: &hex})
+	to := center(6, 4)
+	r.EditUnit(ref, mod, "m1", UnitEdit{At: &to})
 	r.SetOutcome(ref, o.ID, "", "", "Across, no trouble.", SeenByAll)
 	publishTurn(t, r, mod, ref, now)
-	r.SaveOrder(hicks, mod, "m1", "Reyes keeps going.", "", true, now)
+	r.SaveOrder(hicks, mod, "m1", "Reyes keeps going.", nil, true, now)
 	r.Post(hicks, "all", "Over the bridge.", now)
 	if err := r.ReopenTurn(ref, "Reyes should have met the shamblers", now); err != nil {
 		t.Fatal(err)
@@ -236,7 +237,7 @@ func TestReopenAndCorrectATurn(t *testing.T) {
 	if r.Turn != 1 || r.Phase != PhaseResolving || len(r.Reports) != 0 || r.Desk == nil || len(r.Desk.Outcomes) != 1 || len(r.Messages) != 1 {
 		t.Fatalf("after reopening: turn %d %s, %d reports", r.Turn, r.Phase, len(r.Reports))
 	}
-	if HexID(r.Unit("m1").Col, r.Unit("m1").Row) != hex {
+	if r.Unit("m1").Pos() != to {
 		t.Error("the referee's move during adjudication was lost")
 	}
 	r.SetOutcome(ref, o.ID, "", "", "Halfway over, the shamblers come out of the fog.", SeenByAll)
@@ -258,10 +259,11 @@ func TestEveryEventProposesValidEffects(t *testing.T) {
 			}
 			for _, e := range ev.Effects {
 				if e.Op == "spawn" {
-					if mod.TerrainAt(r.Map.TerrainCode(e.Col, e.Row)).Water() {
-						t.Errorf("%s: spawn in water at %s", def.ID, HexID(e.Col, e.Row))
+					at := Pos{e.X, e.Y}
+					if tr := r.TerrainAt(mod, at); tr != nil && tr.Water() {
+						t.Errorf("%s: spawn in water at %s", def.ID, r.GridRef(at))
 					}
-					if _, d := nearest(e.Col, e.Row, marines); d < 1 {
+					if _, d := r.nearest(at, marines); d < 1 {
 						t.Errorf("%s: spawn on top of marines", def.ID)
 					}
 				}

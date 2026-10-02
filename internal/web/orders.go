@@ -12,7 +12,7 @@ import (
 func (s *Server) saveOrder(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
 		_, err := room.SaveOrder(me, s.store.Cat.Modules[room.ModuleID], r.FormValue("unit"), r.FormValue("text"),
-			r.FormValue("mark"), r.FormValue("submit") == "commit", time.Now())
+			formPos(r, "mark_x", "mark_y"), r.FormValue("submit") == "commit", time.Now())
 		return err
 	})
 }

@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"regexp"
 	"slices"
@@ -56,18 +57,20 @@ type GameEvent struct {
 
 // Effect is one concrete state change in a proposal.
 type Effect struct {
-	Op       string `json:"op"`
-	UnitID   string `json:"unit,omitempty"`
-	Class    string `json:"class,omitempty"`
-	Col      int    `json:"col"`
-	Row      int    `json:"row"`
-	ToCol    int    `json:"toCol,omitempty"`
-	ToRow    int    `json:"toRow,omitempty"`
-	Strength int    `json:"strength,omitempty"`
-	Delta    int    `json:"delta,omitempty"`
-	Known    bool   `json:"known,omitempty"`
-	Text     string `json:"text"`
+	Op       string  `json:"op"`
+	UnitID   string  `json:"unit,omitempty"`
+	Class    string  `json:"class,omitempty"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	ToX      float64 `json:"toX,omitempty"`
+	ToY      float64 `json:"toY,omitempty"`
+	Strength int     `json:"strength,omitempty"`
+	Delta    int     `json:"delta,omitempty"`
+	Known    bool    `json:"known,omitempty"`
+	Text     string  `json:"text"`
 }
+
+func (e Effect) at() Pos { return Pos{e.X, e.Y} }
 
 // countPattern matches report placeholders {n} and {n:noun}, which become
 // the number of affected hexes, with the noun pluralized to match.
@@ -162,7 +165,7 @@ func (r *Room) propose(def *EventDef, rng *rand.Rand, mod *Module) *GameEvent {
 		Threat: r.Threat, Turn: r.Turn, At: time.Now().UTC(), Summary: def.Referee,
 	}
 	marines := r.marinePositions(mod)
-	taken := map[[2]int]bool{}
+	taken := map[Pos]bool{}
 	for _, fd := range def.Effects {
 		switch fd.Op {
 		case "spawn":
@@ -197,8 +200,7 @@ func (r *Room) propose(def *EventDef, rng *rand.Rand, mod *Module) *GameEvent {
 	case def.Report != "":
 		dir := "inland"
 		if first != nil {
-			c, rw := centroid(marines, r.Map)
-			dir = Compass(c, rw, first.Col, first.Row)
+			dir = compass(r.centroid(marines), first.at())
 		}
 		report := strings.ReplaceAll(def.Report, "{dir}", dir)
 		ev.Report = countPattern.ReplaceAllStringFunc(report, func(m string) string {
@@ -211,78 +213,112 @@ func (r *Room) propose(def *EventDef, rng *rand.Rand, mod *Module) *GameEvent {
 	return ev
 }
 
-func (r *Room) marinePositions(mod *Module) [][2]int {
-	var out [][2]int
+func (r *Room) marinePositions(mod *Module) []Pos {
+	var out []Pos
 	for _, u := range r.Units {
 		if s := mod.Side(u.Side); s != nil && s.Playable {
-			out = append(out, [2]int{u.Col, u.Row})
+			out = append(out, u.Pos())
 		}
 	}
 	return out
 }
 
-func centroid(pts [][2]int, m *HexMap) (int, int) {
+func (r *Room) centroid(pts []Pos) Pos {
 	if len(pts) == 0 {
-		return m.Cols / 2, m.NumRows() / 2
+		w, h := r.Size()
+		return Pos{w / 2, h / 2}
 	}
-	var c, r int
+	var c Pos
 	for _, p := range pts {
-		c += p[0]
-		r += p[1]
+		c.X += p.X
+		c.Y += p.Y
 	}
-	return c / len(pts), r / len(pts)
+	return Pos{c.X / float64(len(pts)), c.Y / float64(len(pts))}
 }
 
-func nearest(col, row int, pts [][2]int) (best [2]int, dist int) {
-	dist = 1 << 30
-	for _, p := range pts {
-		if d := HexDistance(col, row, p[0], p[1]); d < dist {
-			best, dist = p, d
+// nearest is the closest of pts to p, and how many grid cells away it is.
+func (r *Room) nearest(p Pos, pts []Pos) (best Pos, cells float64) {
+	cells = math.Inf(1)
+	for _, q := range pts {
+		if d := r.Cells(p, q); d < cells {
+			best, cells = q, d
 		}
 	}
 	return
 }
 
-func (r *Room) proposeSpawn(fd EffectDef, rng *rand.Rand, mod *Module, marines [][2]int, taken map[[2]int]bool) []Effect {
-	m := r.Map
+// compass names the direction from a to b: "north-east".
+func compass(a, b Pos) string {
+	if a == b {
+		return "center"
+	}
+	ang := math.Atan2(a.Y-b.Y, b.X-a.X) * 180 / math.Pi // screen y grows downward
+	names := []string{"east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"}
+	return names[int(math.Round(ang/45)+8)%8]
+}
+
+// candidates are points events can put things at: the drawn hexes' centers,
+// or a lattice of grid cells over an image.
+func (r *Room) candidates(mod *Module) []Pos {
+	var out []Pos
+	if r.Board.Background == BackgroundHex {
+		for row := range r.Map.NumRows() {
+			for col := 0; col < r.Map.Cols; col++ {
+				if !mod.TerrainAt(r.Map.TerrainCode(col, row)).Water() {
+					out = append(out, center(col, row))
+				}
+			}
+		}
+		return out
+	}
+	w, h := r.Size()
+	c := r.Board.Cell
+	for y := c / 2; y < h; y += c {
+		for x := c / 2; x < w; x += c {
+			out = append(out, Pos{x, y})
+		}
+	}
+	return out
+}
+
+func (r *Room) proposeSpawn(fd EffectDef, rng *rand.Rand, mod *Module, marines []Pos, taken map[Pos]bool) []Effect {
 	cl := mod.Class(fd.Class)
 	w := fd.Where
-	var cands [][2]int
-	for row := range m.Rows {
-		for col := 0; col < m.Cols; col++ {
-			t := mod.TerrainAt(m.TerrainCode(col, row))
-			if t.Water() || taken[[2]int{col, row}] {
-				continue
-			}
-			if _, d := nearest(col, row, marines); len(marines) > 0 && d < max(1, w.AwayFromMarines) {
-				continue
-			}
-			if w.Edge != "" && !onEdge(w.Edge, col, row, m) {
-				continue
-			}
-			if len(w.Terrain) > 0 && !slices.Contains(w.Terrain, t.ID) {
-				continue
-			}
-			if w.NearFeature != "" && !slices.ContainsFunc(r.Features, func(f Feature) bool {
-				return f.Kind == w.NearFeature && HexDistance(col, row, f.Col, f.Row) <= 1
-			}) {
-				continue
-			}
-			if w.NearClass != "" && !slices.ContainsFunc(r.Units, func(u *Unit) bool {
-				return u.Class == w.NearClass && HexDistance(col, row, u.Col, u.Row) <= 1
-			}) {
-				continue
-			}
-			cands = append(cands, [2]int{col, row})
+	var cands []Pos
+	for _, p := range r.candidates(mod) {
+		if taken[p] {
+			continue
 		}
+		if _, d := r.nearest(p, marines); len(marines) > 0 && d < float64(max(1, w.AwayFromMarines)) {
+			continue
+		}
+		if w.Edge != "" && !r.onEdge(w.Edge, p) {
+			continue
+		}
+		if len(w.Terrain) > 0 {
+			if t := r.TerrainAt(mod, p); t != nil && !slices.Contains(w.Terrain, t.ID) {
+				continue // on an image there's no terrain to check
+			}
+		}
+		if w.NearFeature != "" && !slices.ContainsFunc(r.Features, func(f Feature) bool {
+			return f.Kind == w.NearFeature && r.Cells(p, f.Pos()) <= 1.5
+		}) {
+			continue
+		}
+		if w.NearClass != "" && !slices.ContainsFunc(r.Units, func(u *Unit) bool {
+			return u.Class == w.NearClass && r.Cells(p, u.Pos()) <= 1.5
+		}) {
+			continue
+		}
+		cands = append(cands, p)
 	}
 	n := fd.Count.Draw(rng)
 	var out []Effect
 	for i := 0; i < n && len(cands) > 0; i++ {
 		k := rng.IntN(len(cands))
-		h := cands[k]
+		p := cands[k]
 		cands = slices.Delete(cands, k, k+1)
-		taken[h] = true
+		taken[p] = true
 		str := max(1, fd.Strength.Draw(rng))
 		if fd.Scale {
 			str = max(1, int(float64(str)*threatFactor(r.Threat)+0.5))
@@ -295,15 +331,27 @@ func (r *Room) proposeSpawn(fd EffectDef, rng *rand.Rand, mod *Module, marines [
 		if fd.Known {
 			vis = "seen by players"
 		}
-		out = append(out, Effect{Op: "spawn", Class: cl.ID, Col: h[0], Row: h[1], Strength: str, Known: fd.Known,
-			Text: fmt.Sprintf("New %s%s at %s, %s", cl.Name, size, HexID(h[0], h[1]), vis)})
+		out = append(out, Effect{Op: "spawn", Class: cl.ID, X: p.X, Y: p.Y, Strength: str, Known: fd.Known,
+			Text: fmt.Sprintf("New %s%s %s, %s", cl.Name, size, r.whereText(p), vis)})
 	}
 	return out
 }
 
-func onEdge(edge string, col, row int, m *HexMap) bool {
-	north, south := row <= 1, row >= m.NumRows()-2
-	west, east := col <= 1, col >= m.Cols-2
+// whereText is a point for event text: "at 1102, near the hospital".
+func (r *Room) whereText(p Pos) string {
+	if w := r.Where(p, true); w != "" {
+		return "at " + w
+	}
+	return fmt.Sprintf("at (%.0f, %.0f)", p.X, p.Y)
+}
+
+// onEdge reports whether a point is within a cell and a half of the board's
+// edge on that side ("inland": any edge but the west, where the sea is on
+// the starter map).
+func (r *Room) onEdge(edge string, p Pos) bool {
+	w, h := r.Size()
+	m := r.Board.Cell * 1.5
+	north, south, west, east := p.Y <= m, p.Y >= h-m, p.X <= m, p.X >= w-m
 	switch edge {
 	case "north":
 		return north
@@ -313,7 +361,7 @@ func onEdge(edge string, col, row int, m *HexMap) bool {
 		return east
 	case "west":
 		return west
-	case "inland": // the sea is west on this map; any other edge
+	case "inland":
 		return north || south || east
 	}
 	return false
@@ -347,80 +395,61 @@ func (r *Room) proposeGrow(fd EffectDef, rng *rand.Rand) []Effect {
 			pct *= threatFactor(r.Threat)
 		}
 		d := max(1, int(float64(u.Strength)*pct/100+0.5))
-		out = append(out, Effect{Op: "grow", UnitID: u.ID, Col: u.Col, Row: u.Row, Delta: d,
+		out = append(out, Effect{Op: "grow", UnitID: u.ID, X: u.X, Y: u.Y, Delta: d,
 			Text: fmt.Sprintf("%s grows %d → %d", u.Name, u.Strength, u.Strength+d)})
 	}
 	return out
 }
 
-func (r *Room) proposeDrift(fd EffectDef, rng *rand.Rand, mod *Module, marines [][2]int) []Effect {
-	var targets [][2]int
+// proposeDrift moves units a few grid cells straight toward their target,
+// stopping a cell short of it.
+func (r *Room) proposeDrift(fd EffectDef, rng *rand.Rand, mod *Module, marines []Pos) []Effect {
+	var targets []Pos
 	if fd.Toward == "players" {
 		targets = marines
 	} else {
 		for _, f := range r.Features {
 			if f.Kind == fd.Toward {
-				targets = append(targets, [2]int{f.Col, f.Row})
+				targets = append(targets, f.Pos())
 			}
 		}
 	}
 	if len(targets) == 0 {
 		return nil
 	}
-	occupied := map[[2]int]bool{}
-	for _, m := range marines {
-		occupied[m] = true
-	}
-	var movers []*Unit
-	for _, u := range r.unitsOf(fd.Classes) {
-		movers = append(movers, u)
-	}
 	var out []Effect
-	for _, u := range pick(rng, movers, fd.Count) {
-		col, row := u.Col, u.Row
-		goal, dist := nearest(col, row, targets)
-		for s := fd.Steps.Draw(rng); s > 0; s-- {
-			best, bestD := [2]int{-1, -1}, dist
-			for dir := range 6 { // rivers, ridges, and cliffs channel the dead to crossings
-				nc, nr, _ := r.Map.Neighbor(col, row, dir)
-				n := [2]int{nc, nr}
-				if !r.Map.GroundPassable(mod, col, row, dir) || occupied[n] {
-					continue
-				}
-				if d := HexDistance(n[0], n[1], goal[0], goal[1]); d < bestD {
-					best, bestD = n, d
-				}
-			}
-			if best[0] < 0 {
-				break
-			}
-			col, row, dist = best[0], best[1], bestD
-		}
-		if col == u.Col && row == u.Row {
+	for _, u := range pick(rng, r.unitsOf(fd.Classes), fd.Count) {
+		goal, d := r.nearest(u.Pos(), targets)
+		step := math.Min(float64(fd.Steps.Draw(rng)), d-1)
+		if step <= 0 {
 			continue
 		}
-		out = append(out, Effect{Op: "drift", UnitID: u.ID, Col: u.Col, Row: u.Row, ToCol: col, ToRow: row,
-			Text: fmt.Sprintf("%s moves %s → %s", u.Name, HexID(u.Col, u.Row), HexID(col, row))})
+		f := step / d
+		to := r.clampPos(Pos{u.X + (goal.X-u.X)*f, u.Y + (goal.Y-u.Y)*f})
+		out = append(out, Effect{Op: "drift", UnitID: u.ID, X: u.X, Y: u.Y, ToX: to.X, ToY: to.Y,
+			Text: fmt.Sprintf("%s moves %s toward %s", u.Name, r.DistanceText(u.Pos(), to), compassWord(u.Pos(), goal))})
 	}
 	return out
 }
 
-func (r *Room) proposeReveal(fd EffectDef, rng *rand.Rand, marines [][2]int) []Effect {
+func compassWord(a, b Pos) string { return "the " + compass(a, b) }
+
+func (r *Room) proposeReveal(fd EffectDef, rng *rand.Rand, marines []Pos) []Effect {
 	var hidden []*Unit
 	for _, u := range r.Units {
 		if u.Side != fd.Side || u.Known {
 			continue
 		}
-		if _, d := nearest(u.Col, u.Row, marines); fd.Within > 0 && d > fd.Within {
+		if _, d := r.nearest(u.Pos(), marines); fd.Within > 0 && d > float64(fd.Within) {
 			continue
 		}
 		hidden = append(hidden, u)
 	}
 	if fd.Within > 0 { // closest first
 		slices.SortStableFunc(hidden, func(a, b *Unit) int {
-			_, da := nearest(a.Col, a.Row, marines)
-			_, db := nearest(b.Col, b.Row, marines)
-			return da - db
+			_, da := r.nearest(a.Pos(), marines)
+			_, db := r.nearest(b.Pos(), marines)
+			return int(da*100) - int(db*100)
 		})
 		if n := fd.Count.Draw(rng); n < len(hidden) {
 			hidden = hidden[:n]
@@ -430,8 +459,8 @@ func (r *Room) proposeReveal(fd EffectDef, rng *rand.Rand, marines [][2]int) []E
 	}
 	var out []Effect
 	for _, u := range hidden {
-		out = append(out, Effect{Op: "reveal", UnitID: u.ID, Col: u.Col, Row: u.Row,
-			Text: fmt.Sprintf("Players learn of %s at %s", u.Name, HexID(u.Col, u.Row))})
+		out = append(out, Effect{Op: "reveal", UnitID: u.ID, X: u.X, Y: u.Y,
+			Text: fmt.Sprintf("Players learn of %s %s", u.Name, r.whereText(u.Pos()))})
 	}
 	return out
 }
@@ -471,7 +500,7 @@ func (r *Room) applyEvent(mod *Module, ev *GameEvent, now time.Time) {
 			cl := mod.Class(e.Class)
 			r.Seq++
 			n := &Unit{ID: fmt.Sprintf("s%d", r.Seq), Name: fmt.Sprintf("%s %d", cl.Name, r.Seq), Class: cl.ID,
-				Side: cl.Side, Col: e.Col, Row: e.Row, Strength: e.Strength, Known: e.Known}
+				Side: cl.Side, X: e.X, Y: e.Y, Strength: e.Strength, Known: e.Known, Identified: e.Known}
 			r.Units = append(r.Units, n)
 			done = append(done, strings.Replace(e.Text, "New "+cl.Name, n.Name, 1))
 			continue
@@ -480,8 +509,8 @@ func (r *Room) applyEvent(mod *Module, ev *GameEvent, now time.Time) {
 				u.Strength += e.Delta
 			}
 		case "drift":
-			if u != nil && u.Col == e.Col && u.Row == e.Row {
-				u.Col, u.Row = e.ToCol, e.ToRow
+			if u != nil && u.X == e.X && u.Y == e.Y {
+				u.X, u.Y = e.ToX, e.ToY
 			} else {
 				u = nil
 			}
@@ -557,7 +586,7 @@ func (r *Room) proposeJam(fd EffectDef, rng *rand.Rand, mod *Module) []Effect {
 	var out []Effect
 	for _, u := range pick(rng, friendly, fd.Count) {
 		turns := max(1, fd.Turns.Draw(rng))
-		out = append(out, Effect{Op: "jam", UnitID: u.ID, Col: u.Col, Row: u.Row, Delta: turns,
+		out = append(out, Effect{Op: "jam", UnitID: u.ID, X: u.X, Y: u.Y, Delta: turns,
 			Text: fmt.Sprintf("%s's radio is jammed for %s", u.Name, plural(turns, "turn", "turns"))})
 	}
 	return out

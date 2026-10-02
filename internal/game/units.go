@@ -50,14 +50,16 @@ func KitOf(mod *Module, u *Unit) string {
 // UnitEdit is the referee changing a unit during play.
 type UnitEdit struct {
 	Name       *string
-	Hex        *string
+	At         *Pos
 	Strength   *int
 	Status     *string
 	Notes      *string
 	Kit        *string
 	Quality    *int
 	Known      *bool
+	KnownTo    *[]string // members who know it's there (when Known is false)
 	Identified *bool
+	Brief      *string
 	RadioDown  *bool
 	Remove     bool
 }
@@ -85,12 +87,9 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 		}
 		u.Name = name
 	}
-	if e.Hex != nil {
-		col, row, err := r.hex(*e.Hex)
-		if err != nil {
-			return err
-		}
-		u.Col, u.Row = col, row
+	if e.At != nil {
+		p := r.clampPos(*e.At)
+		u.X, u.Y = p.X, p.Y
 	}
 	if e.Strength != nil {
 		if *e.Strength < 0 || *e.Strength > 100000 {
@@ -134,9 +133,25 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 	}
 	if e.Known != nil && !playable {
 		u.Known = *e.Known
-		if !u.Known {
-			u.Identified = false
+	}
+	if e.KnownTo != nil && !playable {
+		var ids []string
+		for _, id := range *e.KnownTo {
+			if m := r.memberOrNil(id); m != nil && m.Role != RoleReferee && !slices.Contains(ids, id) {
+				ids = append(ids, id)
+			}
 		}
+		u.KnownTo = ids
+	}
+	if !playable && !u.Known && len(u.KnownTo) == 0 {
+		u.Identified = false // nobody can know what it is if nobody knows it's there
+	}
+	if e.Brief != nil {
+		t, err := cleanText(*e.Brief, 3000)
+		if err != nil {
+			return err
+		}
+		u.Brief = t
 	}
 	if e.Identified != nil && !playable {
 		u.Identified = *e.Identified

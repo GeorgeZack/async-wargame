@@ -17,11 +17,9 @@
     {{end}}
     <span class="who">{{.Me.Name}} <span class="tag tag-{{.Me.Role}}">{{.Me.Role}}</span></span>
   </div>
-  <nav class="screen-tabs" id="screen-tabs" data-live aria-label="Screens">
+  {{if gt (len .Tabs) 1}}<nav class="screen-tabs" id="screen-tabs" data-live aria-label="Screens">
     {{range .Tabs}}<a class="screen-tab{{if .Active}} active{{end}}" href="{{.Href}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}{{if .Badge}} <span class="count{{if .Calm}} calm{{end}}">{{.Badge}}</span>{{end}}</a>{{end}}
-    <span class="spacer"></span>
-    {{if .IsReferee}}<a class="screen-tab tool{{if eq .Screen "edit"}} active{{end}}" href="{{.Base}}/edit"{{if eq .Screen "edit"}} aria-current="page"{{end}}>Editor</a>{{end}}
-  </nav>
+  </nav>{{end}}
 </header>
 {{end}}
 
@@ -43,7 +41,8 @@
 {{define "map-window"}}
 <section class="panel map-panel" aria-labelledby="map-h">
   <div class="panel-head">
-    <h2 id="map-h">Map <span class="muted small">{{.ScenarioName}} · one hex is {{.Scale.Hex}}</span></h2>
+    <h2 id="map-h">{{.ScenarioName}}</h2>
+    <p class="scale-line" id="scale-line" data-live>{{with .ScaleText}}{{.}}{{else}}{{if .IsReferee}}<a href="{{$.Base}}/setup#board">Set the scale</a>{{end}}{{end}}</p>
     {{template "sec-map-tools" .}}
   </div>
   {{template "map" .}}

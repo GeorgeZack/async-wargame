@@ -65,7 +65,7 @@ AW_AI_KEY=... ./async-wargame -ai opencode -ai-model big-pickle
   quantization needs about 6 GB of RAM and is slow without a GPU, but the
   assistant works in the background, so slow is fine.
 - Nothing is sent until the referee switches the assistant on for their
-  room (Room screen). What's sent: unit names and stats, orders and their
+  room (Setup screen). What's sent: unit names and stats, orders and their
   intent, positions, and report lines. Not messages, and not anyone's name.
 
 ## How it plays
@@ -79,30 +79,41 @@ cross the canal, reach the hospital, and bring the survivors out.
 
 - **Orders are free text.** "Okafor crosses the bridge low and fast, stacks up
   on the side door, and if the shamblers turn, tosses a grenade and pulls
-  back." A spot on the map can be marked, but nothing else is required.
+  back." The player can drop a pin on the map, but nothing else is required.
   Orders are drafted, committed, and frozen at the lock; the squad leader can
   approve one or send it back with a note.
+- **One page for players:** the situation (latest report, briefing,
+  history), the map, their character with a **private brief** only they and
+  the referee can read, the order box, and talk. The referee has four
+  screens: Table (map, orders, talk), Desk (judging, the other side, events,
+  facts), People, and Setup (map and scale, scenario, schedule, settings).
+- **The map** is the drawn hex map or an image the referee uploads (a
+  sketch, a scan, a city plan), with a hex grid, a square grid, or none laid
+  over it. Counters and pins go anywhere; the grid is for saying where and
+  how far. The scale is on the map: "1 hex = 50 m · 1 turn = 10 minutes".
+  Select a counter and tap anywhere to measure; the referee drags counters
+  to move them.
 - **Unit cards** show a marine's usual bonus (quality, plus veterancy),
   kit, status, notes, and established facts. The card doesn't list
   everything, and doesn't need to: the referee interprets.
 - **Facts are co-created.** Players propose something true about their
   marine or the world from a card ("the hospital has a loading dock on the
   canal side"); the referee accepts it, changes it, or turns it down on the
-  Notes screen. Accepted facts show on the cards and in "What we know" on
-  the map screen (or stay private between one player and the referee).
+  Desk. Accepted facts show on the cards and in "What we know" (or stay
+  private between one player and the referee).
 - **The dice:** when a situation is in doubt, each side rolls a d10 plus one
   bonus, everything that matters summed (quality, veterancy, cover, ambush,
   weather). The result is just the totals, "Okafor 5, the horde 9", and the
   referee reads them against what each side wanted, like an old Braunstein
   game. The server rolls, or the referee enters dice from the table.
-- **The desk.** At the lock, every order lands on the referee's Turn screen.
+- **The desk.** At the lock, every order lands on the referee's Desk.
   For each, the referee rolls where needed, writes what happened, and
   chooses who hears about it (the whole squad, only that player, or nobody
   yet). They move counters and change units (status, skills, kit, notes,
   radio) as they go; players keep seeing the board as it stood at the lock
   until the turn is published. Secret rolls stay on the referee's side of
   the report.
-- **The other side.** On the Turn screen the referee notes what each enemy
+- **The other side.** On the Desk the referee notes what each enemy
   unit intends this turn, ideally before reading the players' orders.
   Players never see it; it guides the judging (and the AI's suggestions).
 - **Asking about an order.** At the desk, the referee can send a player a
@@ -113,7 +124,9 @@ cross the canal, reach the hospital, and bring the survivors out.
   intends, and draft questions about unclear orders. Suggestions sit unrolled until
   the referee rolls them; drafts until the referee keeps or rewrites them.
 - **Fog and radios, by hand.** The referee decides what players know about:
-  revealing a unit shows it as a contact, identifying it says what it is. A
+  revealing a unit shows it as a contact, identifying it says what it is,
+  and either can be done for everyone or only for chosen players (what one
+  marine sees through a window, the others don't). A
   marine whose radio is out keeps their orders to themselves, and the rest
   of the squad sees them where they last called in.
 - **Random events** (stragglers, runners, a screamer, the brute, a drone

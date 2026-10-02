@@ -1,9 +1,0 @@
-{{define "content"}}{{template "shell-top" .}}
-<main id="main" class="screen screen-messages" data-base="{{.Base}}" data-version="{{.Version}}">
-  {{template "sec-next" .}}
-  <div class="cols cols-messages">
-    <div class="col">{{template "sec-channels" .}}</div>
-    <div class="col">{{template "sec-thread" .}}</div>
-  </div>
-</main>
-{{template "shell-bottom" .}}{{end}}

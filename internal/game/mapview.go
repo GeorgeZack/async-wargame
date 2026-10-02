@@ -3,35 +3,46 @@ package game
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 )
 
-// MapView is precomputed SVG geometry for a pointy-top, odd-row-offset hex grid.
+// MapView is the board as SVG geometry: the background (the drawn hex map,
+// or an image), a grid overlay, places, and markers at their exact points.
 type MapView struct {
-	ViewBox      string
-	Width        float64
-	Height       float64
-	HexPoints    string
-	Cols         int
-	Rows         int
-	Cells        []Cell
-	Coast        string     // path data along every sea/land hex side
-	EdgePaths    []EdgePath // one path per edge type (river, ridge, ...)
-	Crossings    []CrossingMark
-	Roads        string // path data joining hex centers
-	SectorLines  string // path data along sector boundaries
-	SectorLabels []SectorLabel
-	Features     []FeatureMark
-	Stacks       []Stack
-	Proposed     []ProposedMark // referee only: hexes a pending event would change
-	OrderMarks   []OrderMark    // spots players marked in their orders
+	ViewBox    string
+	Width      float64
+	Height     float64
+	Background string // BackgroundHex or BackgroundImage
+	Image      string // the uploaded image's file name, for the web layer to link
+	HexPoints  string
+	Cols       int
+	Rows       int
+	Cells      []Cell
+	Coast      string     // path data along every sea/land hex side
+	EdgePaths  []EdgePath // one path per edge type (river, ridge, ...)
+	Crossings  []CrossingMark
+	Roads      string // path data joining hex centers
+	Grid       string // GridNone, GridHex, GridSquare
+	GridPath   string // the grid overlay
+	Scale      ScaleBar
+	K          float64 // how much to scale counters and labels: one grid cell to one drawn hex
+	Features   []FeatureMark
+	Stacks     []Stack        // one per visible unit, at its point
+	Proposed   []ProposedMark // referee only: where a pending event would act
+	OrderMarks []OrderMark    // spots players marked in their orders
+}
+
+// ScaleBar is drawn in a corner: so many board units are so far in the world.
+type ScaleBar struct {
+	X, Y, Length float64
+	Label        string
 }
 
 // OrderMark is a spot a player marked in an order.
 type OrderMark struct {
 	X, Y   float64
-	Hex    string
 	Label  string
 	Status string
 	Mine   bool
@@ -42,11 +53,6 @@ type Cell struct {
 	T     string // terrain id
 	Hex   string
 	Depth int // water only: distance to the nearest land, capped at 3
-}
-
-type SectorLabel struct {
-	X, Y     float64
-	ID, Name string
 }
 
 type EdgePath struct {
@@ -63,34 +69,45 @@ type CrossingMark struct {
 
 type ProposedMark struct {
 	X, Y  float64
-	Hex   string
 	Label string
 }
 
 type FeatureMark struct {
-	X, Y  float64
-	Glyph string
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Glyph string  `json:"-"`
 	FeatureView
 }
 
+// Stack is a counter on the board: one unit, at its point (nudged a little
+// when several sit on the same spot).
 type Stack struct {
 	X, Y  float64
-	Hex   string
 	Top   UnitView
 	Count int
-	Label string // accessible description of the stack
+	Label string // accessible description
 }
 
-// InspectorData is the JSON the client uses to describe a selected hex.
+// InspectorData is the JSON the client uses: the board's measures, orders,
+// and (for the editor) the drawn map's terrain and hex sides.
 type InspectorData struct {
-	Cols     int                      `json:"cols"`
-	Rows     int                      `json:"rows"`
-	Terrain  map[string]Terrain       `json:"terrain"`
-	Units    map[string][]UnitView    `json:"units"`
-	Features map[string][]FeatureView `json:"features"`
-	Sides    map[string][]SideInfo    `json:"sides"` // edges and roads, listed from each hex's point of view
-	Sectors  SectorGrid               `json:"sectors"`
-	Orders   OrderData                `json:"orders"`
+	Width   float64               `json:"width"`
+	Height  float64               `json:"height"`
+	Cell    float64               `json:"cell"`
+	Grid    string                `json:"grid"`
+	Hexes   bool                  `json:"hexes"` // the background is the drawn hex map
+	Cols    int                   `json:"cols"`
+	Rows    int                   `json:"rows"`
+	Terrain map[string]Terrain    `json:"terrain"`
+	Sides   map[string][]SideInfo `json:"sides"` // edges and roads, listed from each hex's point of view
+	Orders  OrderData             `json:"orders"`
+	// The board, for the pointer: what's where, and how far is how far.
+	K        float64       `json:"k"`
+	Distance Measure       `json:"distance"`
+	CellName string        `json:"cellName"`
+	Units    []UnitView    `json:"units"`
+	Places   []FeatureMark `json:"places"`
+	Referee  bool          `json:"referee,omitempty"`
 }
 
 type SideInfo struct {
@@ -143,16 +160,75 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 	ref := me.Role == RoleReferee
 	m := r.Map
 	rows := m.NumRows()
-	w := hexW * (float64(m.Cols) + 0.5)
-	h := 1.5*hexSize*float64(rows-1) + 2*hexSize
+	w, h := r.Size()
+	b := r.Board
 	mv := MapView{
 		ViewBox: fmt.Sprintf("0 0 %.1f %.1f", w, h), Width: w, Height: h, Cols: m.Cols, Rows: rows,
+		Background: b.Background, Image: b.Image, Grid: b.Grid,
 		HexPoints: fmt.Sprintf("0,%.1f %.2f,%.1f %.2f,%.1f 0,%.1f %.2f,%.1f %.2f,%.1f",
 			-hexSize, hexW/2, -hexSize/2, hexW/2, hexSize/2, hexSize, -hexW/2, hexSize/2, -hexW/2, -hexSize/2),
 	}
-	data := InspectorData{Cols: m.Cols, Rows: rows, Terrain: map[string]Terrain{},
-		Units: map[string][]UnitView{}, Features: map[string][]FeatureView{}, Sides: map[string][]SideInfo{}}
+	data := InspectorData{Width: w, Height: h, Cell: b.Cell, Grid: b.Grid, Hexes: b.Background == BackgroundHex,
+		Cols: m.Cols, Rows: rows, Terrain: map[string]Terrain{}, Sides: map[string][]SideInfo{}}
+	var legend []Terrain
+	if b.Background == BackgroundHex {
+		legend = drawHexMap(r, mod, &mv, &data)
+	}
+	mv.K = math.Max(0.4, math.Min(40, b.Cell/hexW))
+	data.K, data.Distance, data.CellName, data.Referee = mv.K, b.Distance, b.CellName(), ref
+	mv.GridPath = gridPath(b, w, h)
+	mv.Scale = scaleBar(b, w, h)
 
+	for _, f := range r.Features {
+		if f.Hidden && !ref {
+			continue
+		}
+		fv := FeatureView{Name: f.Name, Kind: f.Kind, Where: r.GridRef(f.Pos()), Note: f.Note, Hidden: f.Hidden}
+		if ref {
+			fv.ID = f.ID
+		}
+		mv.Features = append(mv.Features, FeatureMark{X: f.X, Y: f.Y, Glyph: featureGlyphs[f.Kind], FeatureView: fv})
+	}
+	data.Places = mv.Features
+
+	// Counters: the viewer's own on top, then friendly, then the rest. Ones
+	// on the same spot fan out a little so each can be seen and clicked.
+	us := slices.Clone(units)
+	sort.SliceStable(us, func(i, j int) bool { return stackRank(us[i]) > stackRank(us[j]) })
+	var placed []Pos
+	nudge := 22 * mv.K
+	for _, u := range us {
+		// Spread counters that share a spot around it, in widening rings.
+		at := Pos{u.X, u.Y}
+		p := at
+		taken := func(p Pos) bool {
+			return slices.ContainsFunc(placed, func(q Pos) bool { return math.Hypot(q.X-p.X, q.Y-p.Y) < nudge*0.9 })
+		}
+		for i := 0; i < 24 && taken(p); i++ {
+			ring := float64(i/6 + 1)
+			a := float64(i%6)*math.Pi/3 + ring*0.5
+			p = Pos{at.X + ring*nudge*math.Cos(a), at.Y + ring*nudge*math.Sin(a)}
+		}
+		placed = append(placed, p)
+		label := u.Name
+		if u.Where != "" {
+			label += ", " + u.Where
+		}
+		if u.Stale {
+			label += fmt.Sprintf(" (out of contact: where they last called in, turn %d)", u.SeenTurn)
+		}
+		mv.Stacks = append(mv.Stacks, Stack{X: p.X, Y: p.Y, Top: u, Count: 1, Label: label})
+		u.X, u.Y = p.X, p.Y
+		data.Units = append(data.Units, u)
+	}
+	return mv, legend, data
+}
+
+// drawHexMap fills in the drawn hex map: terrain, coast, edges, crossings,
+// and roads. It returns the terrain used, for the key.
+func drawHexMap(r *Room, mod *Module, mv *MapView, data *InspectorData) []Terrain {
+	m := r.Map
+	rows := m.NumRows()
 	water := func(c, r int) bool { return mod.TerrainAt(m.TerrainCode(c, r)).Water() }
 	depth := waterDepth(m, water)
 	used := map[string]bool{}
@@ -163,7 +239,6 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 			x, y := HexCenter(col, row)
 			mv.Cells = append(mv.Cells, Cell{X: x, Y: y, T: t.ID, Hex: HexID(col, row), Depth: depth[row][col]})
 			used[t.ID] = true
-			// Coastline: owned sides between water and land.
 			for _, dir := range []int{0, 4, 5} {
 				if nc, nr, ok := m.Neighbor(col, row, dir); ok && water(col, row) != water(nc, nr) {
 					x1, y1, x2, y2 := sideEnds(col, row, dir)
@@ -173,30 +248,6 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 		}
 	}
 	mv.Coast = coast.String()
-
-	// Sector boundaries run along hex sides between blocks.
-	var sectors strings.Builder
-	for row := range rows {
-		for col := 0; col < m.Cols; col++ {
-			for _, dir := range []int{0, 4, 5} {
-				if nc, nr, ok := m.Neighbor(col, row, dir); ok && m.SectorOf(col, row) != m.SectorOf(nc, nr) {
-					x1, y1, x2, y2 := sideEnds(col, row, dir)
-					fmt.Fprintf(&sectors, "M%.1f %.1fL%.1f %.1f", x1, y1, x2, y2)
-				}
-			}
-		}
-	}
-	mv.SectorLines = sectors.String()
-	g := m.sectors()
-	data.Sectors = g
-	for row := 0; row < rows; row += g.Rows {
-		for col := 0; col < m.Cols; col += g.Cols {
-			x, y := HexCenter(col, row)
-			id := m.SectorOf(col, row)
-			mv.SectorLabels = append(mv.SectorLabels, SectorLabel{X: x - hexW/2 + 2, Y: y - 4, ID: id, Name: g.Names[id]})
-		}
-	}
-
 	var legend []Terrain
 	for _, t := range mod.Terrain {
 		data.Terrain[t.ID] = t
@@ -204,7 +255,6 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 			legend = append(legend, t)
 		}
 	}
-
 	// Edges, drawn in module order so rivers sit under ridges consistently.
 	paths := map[string]*strings.Builder{}
 	sides := map[string]map[int]*SideInfo{}
@@ -271,45 +321,54 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 		}
 	}
 
-	for _, f := range r.Features {
-		if f.Hidden && !ref {
-			continue
-		}
-		x, y := HexCenter(f.Col, f.Row)
-		fv := FeatureView{Name: f.Name, Kind: f.Kind, Hex: HexID(f.Col, f.Row), Note: f.Note, Hidden: f.Hidden}
-		if ref {
-			fv.ID = f.ID
-		}
-		mv.Features = append(mv.Features, FeatureMark{X: x, Y: y, Glyph: featureGlyphs[f.Kind], FeatureView: fv})
-		data.Features[fv.Hex] = append(data.Features[fv.Hex], fv)
-	}
+	return legend
+}
 
-	// Stack order: the viewer's own units on top, then friendly, then the rest.
-	byHex := map[string][]UnitView{}
-	var order []string
-	for _, u := range units {
-		if byHex[u.Hex] == nil {
-			order = append(order, u.Hex)
+// gridPath draws the grid overlay: square lines, or hex outlines laid out
+// like the drawn map's hexes (so with the drawn map's cell they line up).
+func gridPath(b Board, w, h float64) string {
+	var p strings.Builder
+	c := b.Cell
+	switch b.Grid {
+	case GridSquare:
+		for x := c; x < w; x += c {
+			fmt.Fprintf(&p, "M%.1f 0V%.1f", x, h)
 		}
-		byHex[u.Hex] = append(byHex[u.Hex], u)
-	}
-	for _, hx := range order {
-		us := byHex[hx]
-		sort.SliceStable(us, func(i, j int) bool { return stackRank(us[i]) < stackRank(us[j]) })
-		data.Units[hx] = us
-		col, row, _ := ParseHexID(hx)
-		x, y := HexCenter(col, row)
-		names := make([]string, len(us))
-		for i, u := range us {
-			names[i] = u.Name
-			if u.Stale {
-				names[i] += fmt.Sprintf(" (out of contact: last called in from here, turn %d)", u.SeenTurn)
+		for y := c; y < h; y += c {
+			fmt.Fprintf(&p, "M0 %.1fH%.1f", y, w)
+		}
+	case GridHex:
+		size := c / math.Sqrt(3)
+		n := 0
+		for row := 0; 1.5*size*float64(row) < h+size && n < 12000; row++ {
+			for col := 0; c*float64(col) < w+c && n < 12000; col++ {
+				x := c*(float64(col)+0.5*float64(row&1)) + c/2
+				y := 1.5*size*float64(row) + size
+				fmt.Fprintf(&p, "M%.1f %.1fl%.2f %.2fv%.2fl%.2f %.2fl%.2f %.2fv%.2fz",
+					x, y-size, c/2, size/2, size, -c/2, size/2, -c/2, -size/2, -size)
+				n++
 			}
 		}
-		mv.Stacks = append(mv.Stacks, Stack{X: x, Y: y, Hex: hx, Top: us[0], Count: len(us),
-			Label: fmt.Sprintf("Hex %s: %s", hx, strings.Join(names, ", "))})
 	}
-	return mv, legend, data
+	return p.String()
+}
+
+// scaleBar picks a round length near a fifth of the board's width.
+func scaleBar(b Board, w, h float64) ScaleBar {
+	if b.Distance.Amount == 0 || b.Cell <= 0 {
+		return ScaleBar{}
+	}
+	target := w / 5 / b.Cell * b.Distance.Amount // in world units
+	nice := 1.0
+	for _, step := range []float64{1, 2, 5} {
+		for mag := 1e-3; mag <= 1e6; mag *= 10 {
+			if v := step * mag; math.Abs(v-target) < math.Abs(nice-target) {
+				nice = v
+			}
+		}
+	}
+	length := nice / b.Distance.Amount * b.Cell
+	return ScaleBar{X: b.Cell * 0.5, Y: h - b.Cell*0.6, Length: length, Label: Measure{Amount: nice, Unit: b.Distance.Unit}.String()}
 }
 
 // waterDepth gives each water hex its distance to land (1 = shore), capped at 3.

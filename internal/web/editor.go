@@ -28,8 +28,12 @@ func (s *Server) editor(w http.ResponseWriter, r *http.Request) {
 		default:
 			e := game.BuildEditor(room, s.store.Cat.Scenarios[room.ScenarioID], s.store.Cat.Modules[room.ModuleID], me)
 			s.seatLinks(r, e.View, me)
-			e.View.SetScreen("edit")
-			data = &editorData{Title: "Editor · " + room.Name, Editor: e}
+			if s.opts.Push != nil {
+				e.View.PushKey = s.opts.Push.PublicKey()
+			}
+			s.aiView(e.View)
+			e.View.SetScreen("setup")
+			data = &editorData{Title: "Setup · " + room.Name, Editor: e}
 		}
 	})
 	if err != nil {

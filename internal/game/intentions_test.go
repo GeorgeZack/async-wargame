@@ -30,7 +30,7 @@ func TestEnemyIntentions(t *testing.T) {
 		t.Errorf("referee intentions: %+v", v.Intentions)
 	}
 	// They reach the assistant's prompts, and survive into judging.
-	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes crosses the bridge.", "", true, now)
+	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes crosses the bridge.", nil, true, now)
 	r.Tick(mod, r.Deadline)
 	_, user, ok := r.PromptFor(mod, &Run{Kind: RunOutcome, Target: o.ID, Turn: r.Turn})
 	if ok && !strings.Contains(user, "Drift toward the radio noise") && strings.Contains(user, `"id": "z1"`) {
@@ -57,7 +57,7 @@ func TestEnemyIntentions(t *testing.T) {
 func TestAskingAPlayerAboutAnOrder(t *testing.T) {
 	r, mod, ref, _, hicks := orderRoom(t)
 	now := central(t, "2026-09-30 13:00")
-	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes goes in and deals with it.", "", true, now)
+	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes goes in and deals with it.", nil, true, now)
 	if err := r.AskAboutOrder(ref, o.ID, "Deal with what?", now); err == nil {
 		t.Error("asked before the lock")
 	}

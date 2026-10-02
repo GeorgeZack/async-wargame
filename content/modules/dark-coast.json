@@ -3,10 +3,6 @@
   "version": "3.0.0",
   "name": "Dark Coast",
   "intro": "Colonial marines in a dead city. Say what your marines do; the referee says what happens.",
-  "scale": {
-    "hex": "about 50 metres: a city block",
-    "turn": "about ten minutes"
-  },
   "factors": [
     {
       "name": "Veteran",

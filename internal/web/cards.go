@@ -31,7 +31,7 @@ func (s *Server) unitCard(w http.ResponseWriter, r *http.Request) {
 		}
 		v := game.BuildView(room, s.store.Cat.Scenarios[room.ScenarioID], s.store.Cat.Modules[room.ModuleID], me)
 		s.seatLinks(r, v, me)
-		v.SetScreen("forces")
+		v.SetScreen("map")
 		d = &cardData{Title: card.Unit.Name + " · " + room.Name, View: v, Card: card}
 	})
 	if d == nil {

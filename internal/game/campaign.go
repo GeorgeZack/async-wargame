@@ -57,7 +57,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 			continue
 		}
 		if s := survivors[tu.ID]; s != nil {
-			s.Col, s.Row = tu.Col, tu.Row // survivors redeploy at the start positions
+			s.X, s.Y = tu.X, tu.Y // survivors redeploy at the start positions
 			units = append(units, s)
 			delete(survivors, tu.ID)
 			continue

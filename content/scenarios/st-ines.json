@@ -9,21 +9,15 @@
     "Get across the canal, get into the hospital, find whoever set off that beacon, and get them to the beach. Nobody knows what's in the streets. Assume the worst and move like it.",
     "Squad leader, you have the radio. Everyone else: if you lose sight of your sergeant, you're on your own until you find them again."
   ],
-  "refereeNotes": "Nine survivors are barricaded on the hospital's second floor with a wounded nurse; a crawler is in the basement and will take anyone who goes looking for the generator. Three more people are holed up in the pharmacy, with shamblers pressing at the shutters. One group of shamblers is in the open across the canal at the start and can be seen from the beach. Runners are lying up in the old town to the northeast; they come at noise. Raise the threat when the squad is loud, or slow. The bridge is the only way over the canal for anyone carrying a stretcher.",
+  "refereeNotes": "Nine survivors are barricaded on the hospital's second floor with a wounded nurse, Ana Reis, who set off the beacon. She was bitten on the forearm yesterday and is hiding it (Okafor knows her; Lin's antiviral is too late for her, though nobody can be sure); a crawler is in the basement and will take anyone who goes looking for the generator. Three more people are holed up in the pharmacy, with shamblers pressing at the shutters. One group of shamblers is in the open across the canal at the start and can be seen from the beach. Runners are lying up in the old town to the northeast; they come at noise. Raise the threat when the squad is loud, or slow. The bridge is the only way over the canal for anyone carrying a stretcher.",
+  "board": {
+    "background": "hex",
+    "grid": "hex",
+    "distance": {"amount": 50, "unit": "m"},
+    "turn": {"amount": 10, "unit": "minutes"}
+  },
   "map": {
     "cols": 14,
-    "sectors": {
-      "cols": 4,
-      "rows": 4,
-      "names": {
-        "A2": "Red Beach",
-        "B2": "The Canal",
-        "C2": "Hospital",
-        "C1": "Old Town",
-        "B3": "Warehouses",
-        "D2": "Hill Road"
-      }
-    },
     "rows": [
       "~~b..ffuuuuu.f",
       "~~b...uuuUUu.f",
@@ -234,6 +228,7 @@
   "units": [
     {
       "id": "m1",
+      "brief": "You have the squad and the radio. Halyard's pilot, Lt. Marsh, will hold for three hours and not a minute longer: after that the tide turns and the dropship has to lift. Company wants the beacon's source found. You have not told the squad that the beacon uses a staff code: whoever set it off works at the hospital, and Company wants them out above anyone else.",
       "name": "Sgt. Reyes",
       "class": "sergeant",
       "col": 3,
@@ -242,6 +237,7 @@
     },
     {
       "id": "m2",
+      "brief": "Your sister's girlfriend, Ana, is a nurse at St. Ines. You haven't heard from her in two days. Nobody in the squad knows, and you'd like it to stay that way. You know the old city a little from shore leave: the pharmacy on Calle Duarte has steel shutters and a back way through the alley.",
       "name": "LCpl. Okafor",
       "class": "rifleman",
       "col": 3,
@@ -250,6 +246,7 @@
     },
     {
       "id": "m3",
+      "brief": "You carry the gun and four belts. Belt-fed fire carries a long way in empty streets, and you've heard what the infected do when they hear it. You also carry the breaching charge: two of them, actually. The second one isn't on the manifest.",
       "name": "PFC Doyle",
       "class": "gunner",
       "col": 3,
@@ -258,6 +255,7 @@
     },
     {
       "id": "m4",
+      "brief": "You carry the squad's only medical kit and four doses of the antiviral the brass swear works if given within the hour of a bite. They've never told anyone it works after that. Company earmarked three of them for whoever set off the beacon. Who gets the fourth is up to you.",
       "name": "HM3 Lin",
       "class": "corpsman",
       "col": 3,

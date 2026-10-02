@@ -8,7 +8,7 @@
       <div>
         <p class="eyebrow">{{.SideName}} · {{.Unit.ClassName}}</p>
         <h1 id="card-h">{{.Unit.Name}}</h1>
-        <p class="muted small">Hex {{.Unit.Hex}} · sector {{.Sector}}{{if .Unit.Stale}} · last called in from here{{end}}{{with .Commander}} · played by {{.}}{{end}}</p>
+        <p class="muted small">{{.Unit.Where}}{{if .Unit.Stale}} · last called in from here{{end}}{{with .Commander}} · played by {{.}}{{end}}</p>
         {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $.Card.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}
       </div>
     </div>
@@ -20,6 +20,8 @@
     {{with .Unit.Description}}<p>{{.}}</p>{{end}}
     {{if or .Unit.Strength .Unit.Status}}<p>{{with .Unit.Strength}}<strong>{{.}}</strong>{{end}}{{if and .Unit.Strength .Unit.Status}} · {{end}}{{with .Unit.Status}}<span class="unit-status">{{.}}</span>{{end}}</p>{{end}}
     <p class="bonus-line"><strong>Usual bonus {{.Bonus}}</strong> <span class="muted small">When it's in doubt, each side rolls a d10 and adds what counts: this, plus the situation. The referee reads the totals.</span></p>
+    {{with .Brief}}<section class="brief"><h2>Private brief</h2><p class="pre">{{.}}</p>
+      <p class="muted small">{{if $.IsReferee}}Only you and the player holding this character can read it.{{else}}Only you and the referee can read this.{{end}}</p></section>{{end}}
     {{with .Kit}}<section><h2>Kit</h2><p>{{.}}</p>
       <p class="muted small">Not everything is listed. Need something that isn't here? Propose it as a fact below.</p></section>{{end}}
     {{with .Notes}}<section><h2>Notes</h2><p class="pre">{{.}}</p></section>{{end}}
@@ -49,17 +51,21 @@
       <form method="post" action="{{$.Base}}/units/{{.RawID}}/edit" class="stack" data-enhance>
         <div class="row tight">
           <label class="inline">Name <input name="name" value="{{.Unit.Name}}" maxlength="32" class="compact-input"></label>
-          <label class="inline">Hex <input name="hex" value="{{.Unit.Hex}}" maxlength="4" class="mono num-s"></label>
           <label class="inline">Strength <input type="number" name="strength" value="{{.Strength}}" min="0" max="100000" class="num-s"></label>
         </div>
         <label>Status <input name="status" value="{{.Status}}" maxlength="200" placeholder="pinned, wounded: left arm, carrying a child"></label>
         <label class="inline">Quality <input type="number" name="quality" value="{{.Quality}}" min="-5" max="10" class="num-s"> <span class="muted small">0 ordinary, +2 trained; veterancy ({{signed .Veteran}}) is added on top</span></label>
         <label>Kit <textarea name="kit" rows="2" maxlength="500">{{.Kit}}</textarea></label>
         <label>Notes <span class="muted small">everyone who can see this card reads them</span><textarea name="notes" rows="3" maxlength="2000">{{.Notes}}</textarea></label>
+        {{if .Playable}}<label>Private brief <span class="muted small">only the player holding it (and you) can read it: secrets, orders from above, what they know that others don't</span><textarea name="brief" rows="4" maxlength="3000">{{.Brief}}</textarea></label>{{end}}
         {{if not .Playable}}<div class="row tight">
           <input type="hidden" name="known_set" value="1"><label class="toggle"><input type="checkbox" name="known"{{if .Known}} checked{{end}}> Players know it's there</label>
           <input type="hidden" name="identified_set" value="1"><label class="toggle"><input type="checkbox" name="identified"{{if .Identified}} checked{{end}}> and what it is</label>
-        </div>{{else}}<input type="hidden" name="radio_down_set" value="1"><label class="toggle"><input type="checkbox" name="radio_down"{{if .RadioDown}} checked{{end}}> Radio out</label>{{end}}
+        </div>
+        {{if .Viewers}}<fieldset class="plain-fieldset"><legend class="small">Or only these players know it's there</legend>
+          <input type="hidden" name="known_to_set" value="1">
+          <div class="row tight">{{range .Viewers}}<label class="toggle"><input type="checkbox" name="known_to" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Name}}</label>{{end}}</div>
+          <p class="muted small">A player's squad leader sees what they see. Use it for what one marine spots through a window and the others don't.</p></fieldset>{{end}}{{else}}<input type="hidden" name="radio_down_set" value="1"><label class="toggle"><input type="checkbox" name="radio_down"{{if .RadioDown}} checked{{end}}> Radio out</label>{{end}}
         <div class="row"><button type="submit">Save</button></div>
       </form>
       <form method="post" action="{{$.Base}}/units/{{.RawID}}/edit" data-confirm="Take {{.Unit.Name}} off the map for good?">

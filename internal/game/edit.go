@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -12,25 +11,25 @@ import (
 // EditOp is one referee change from the scenario editor. A batch of ops is
 // applied atomically: if any op fails, the store discards the whole batch.
 type EditOp struct {
-	Op         string  `json:"op"`
-	Hex        string  `json:"hex,omitempty"`
-	Dir        int     `json:"dir"`
-	Terrain    string  `json:"terrain,omitempty"`  // terrain id
-	Type       string  `json:"type,omitempty"`     // edge type; "" removes the edge
-	Crossing   string  `json:"crossing,omitempty"` // "" removes the crossing
-	On         bool    `json:"on,omitempty"`
-	Unit       string  `json:"unit,omitempty"`
-	Class      string  `json:"class,omitempty"`
-	Name       string  `json:"name,omitempty"`
-	Strength   int     `json:"strength,omitempty"`
-	Known      *bool   `json:"known,omitempty"`
-	Feature    string  `json:"feature,omitempty"`
-	Kind       string  `json:"kind,omitempty"`
-	Note       *string `json:"note,omitempty"`
-	Hidden     *bool   `json:"hidden,omitempty"`
-	Operations *int    `json:"operations,omitempty"` // experience: operations survived
-	Cols       int     `json:"cols,omitempty"`       // sector size
-	Rows       int     `json:"rows,omitempty"`
+	Op         string   `json:"op"`
+	Hex        string   `json:"hex,omitempty"`
+	Dir        int      `json:"dir"`
+	Terrain    string   `json:"terrain,omitempty"`  // terrain id
+	Type       string   `json:"type,omitempty"`     // edge type; "" removes the edge
+	Crossing   string   `json:"crossing,omitempty"` // "" removes the crossing
+	On         bool     `json:"on,omitempty"`
+	Unit       string   `json:"unit,omitempty"`
+	Class      string   `json:"class,omitempty"`
+	Name       string   `json:"name,omitempty"`
+	Strength   int      `json:"strength,omitempty"`
+	Known      *bool    `json:"known,omitempty"`
+	Feature    string   `json:"feature,omitempty"`
+	Kind       string   `json:"kind,omitempty"`
+	Note       *string  `json:"note,omitempty"`
+	Hidden     *bool    `json:"hidden,omitempty"`
+	Operations *int     `json:"operations,omitempty"` // experience: operations survived
+	X          *float64 `json:"x,omitempty"`          // a point on the board, for placing and moving
+	Y          *float64 `json:"y,omitempty"`
 }
 
 const (
@@ -51,6 +50,23 @@ func (r *Room) hex(id string) (int, int, error) {
 		return 0, 0, bad("no hex %q on this map", id)
 	}
 	return c, rw, nil
+}
+
+// point reads where an editor op puts something: an exact board point (x,
+// y), or the middle of a drawn hex.
+func (r *Room) point(op EditOp) (Pos, error) {
+	if op.X != nil && op.Y != nil {
+		w, h := r.Size()
+		if *op.X < 0 || *op.Y < 0 || *op.X > w || *op.Y > h {
+			return Pos{}, bad("that point is off the board")
+		}
+		return Pos{*op.X, *op.Y}, nil
+	}
+	col, row, err := r.hex(op.Hex)
+	if err != nil {
+		return Pos{}, err
+	}
+	return center(col, row), nil
 }
 
 func (r *Room) feature(id string) *Feature {
@@ -147,23 +163,6 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			return r.Map.SetEdge(s, e.Type, op.Crossing)
 		}
 
-	case "sector-name":
-		col, row, err := r.hex(op.Hex)
-		if err != nil {
-			return err
-		}
-		name := ""
-		if op.Name != "" {
-			if name, err = CleanName(op.Name); err != nil {
-				return err
-			}
-		}
-		r.Map.SetSectorName(col, row, name)
-		return nil
-
-	case "sector-size":
-		return r.Map.SetSectorSize(op.Cols, op.Rows)
-
 	case "unit-add":
 		if len(r.Units) >= maxUnits {
 			return bad("a map can hold at most %d units", maxUnits)
@@ -172,7 +171,7 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 		if cl == nil {
 			return bad("unknown unit class %q", op.Class)
 		}
-		col, row, err := r.hex(op.Hex)
+		p, err := r.point(op)
 		if err != nil {
 			return err
 		}
@@ -190,7 +189,7 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			str = max(1, cl.Strength)
 		}
 		r.Units = append(r.Units, &Unit{ID: fmt.Sprintf("s%d", r.Seq), Name: name, Class: cl.ID, Side: cl.Side,
-			Col: col, Row: row, Strength: min(100000, str), Known: known, Identified: known})
+			X: p.X, Y: p.Y, Strength: min(100000, str), Known: known, Identified: known})
 		return nil
 
 	case "unit-move", "unit-update", "unit-delete":
@@ -203,11 +202,11 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			r.Units = slices.DeleteFunc(r.Units, func(x *Unit) bool { return x == u })
 			return nil
 		case "unit-move":
-			col, row, err := r.hex(op.Hex)
+			p, err := r.point(op)
 			if err != nil {
 				return err
 			}
-			u.Col, u.Row = col, row
+			u.X, u.Y = p.X, p.Y
 			return nil
 		}
 		if op.Name != "" {
@@ -241,7 +240,7 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 		if !slices.Contains(FeatureKinds, op.Kind) {
 			return bad("unknown place kind %q", op.Kind)
 		}
-		col, row, err := r.hex(op.Hex)
+		p, err := r.point(op)
 		if err != nil {
 			return err
 		}
@@ -250,7 +249,7 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			return err
 		}
 		r.Seq++
-		f := Feature{ID: fmt.Sprintf("f%d", r.Seq), Name: name, Kind: op.Kind, Col: col, Row: row}
+		f := Feature{ID: fmt.Sprintf("f%d", r.Seq), Name: name, Kind: op.Kind, X: p.X, Y: p.Y}
 		if op.Hidden != nil {
 			f.Hidden = *op.Hidden
 		}
@@ -272,11 +271,11 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			r.Features = slices.DeleteFunc(r.Features, func(x Feature) bool { return x.ID == op.Feature })
 			return nil
 		case "feature-move":
-			col, row, err := r.hex(op.Hex)
+			p, err := r.point(op)
 			if err != nil {
 				return err
 			}
-			f.Col, f.Row = col, row
+			f.X, f.Y = p.X, p.Y
 			return nil
 		}
 		if op.Name != "" {
@@ -419,12 +418,7 @@ type Editor struct {
 	BriefingText   string
 	EventTable     []EventRow
 	ThreatLevels   []int
-	SectorCols     int
-	SectorRows     int
-	SectorNames    []NamedSector
 }
-
-type NamedSector struct{ ID, Name, Hex string }
 
 type ClassOption struct {
 	ID, Name, SideName string
@@ -432,14 +426,14 @@ type ClassOption struct {
 }
 
 type EditUnit struct {
-	ID, Name, ClassName, Side, SideName, Hex string
-	Strength, Operations                     int
-	Known, Playable                          bool
+	ID, Name, ClassName, Side, SideName, Where string
+	Strength, Operations                       int
+	Known, Playable                            bool
 }
 
 type EditPlace struct {
-	ID, Name, Kind, Hex, Note string
-	Hidden                    bool
+	ID, Name, Kind, Where, Note string
+	Hidden                      bool
 }
 
 type EventRow struct {
@@ -465,27 +459,18 @@ func BuildEditor(r *Room, sc *Scenario, mod *Module, me *Member) *Editor {
 		for _, u := range r.Units {
 			if u.Side == s.ID {
 				e.Units = append(e.Units, EditUnit{ID: u.ID, Name: u.Name, ClassName: mod.Class(u.Class).Name,
-					Side: u.Side, SideName: s.Name, Hex: HexID(u.Col, u.Row), Strength: u.Strength,
+					Side: u.Side, SideName: s.Name, Where: r.Where(u.Pos(), true), Strength: u.Strength,
 					Operations: u.Operations, Known: u.Known, Playable: s.Playable})
 			}
 		}
 	}
 	for _, f := range r.Features {
-		e.Places = append(e.Places, EditPlace{ID: f.ID, Name: f.Name, Kind: f.Kind, Hex: HexID(f.Col, f.Row), Note: f.Note, Hidden: f.Hidden})
+		e.Places = append(e.Places, EditPlace{ID: f.ID, Name: f.Name, Kind: f.Kind, Where: r.GridRef(f.Pos()), Note: f.Note, Hidden: f.Hidden})
 	}
 	for t := MinThreat; t <= MaxThreat; t++ {
 		e.ThreatLevels = append(e.ThreatLevels, t)
 	}
 	e.EventTable = eventTable(r, mod)
-	g := r.Map.sectors()
-	e.SectorCols, e.SectorRows = g.Cols, g.Rows
-	for _, id := range slices.Sorted(maps.Keys(g.Names)) {
-		var col, row int
-		fmt.Sscanf(id, "%c%d", new(rune), &row)
-		col = (int(id[0]) - 'A') * g.Cols
-		row = (row - 1) * g.Rows
-		e.SectorNames = append(e.SectorNames, NamedSector{ID: id, Name: g.Names[id], Hex: HexID(col, row)})
-	}
 	return e
 }
 

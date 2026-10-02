@@ -8,7 +8,7 @@
     </form>
     {{end}}
     {{if and .IsReferee (eq .Phase "setup")}}
-    <p class="muted small">Setup: players see a holding page until you start. Check the map and event tables in the <a href="{{.Base}}/edit">scenario editor</a> first.</p>
+    <p class="muted small">Setup: players see a holding page until you start. Check the map, scale, and briefs on the <a href="{{.Base}}/setup">Setup</a> screen first.</p>
     <form method="post" action="{{.Base}}/start" data-confirm="Start the operation? Players will see the map and turn 1 opens.">
       <button type="submit">Start the operation</button>
     </form>
@@ -21,49 +21,49 @@
         <button type="button" class="secondary icon" data-zoom="in" aria-label="Zoom in">+</button>
         <button type="button" class="secondary icon" data-zoom="out" aria-label="Zoom out">−</button>
         <button type="button" class="secondary" data-zoom="reset">Fit</button>
-        <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Labels</label>
-        <label class="toggle"><input type="checkbox" id="sectors-toggle" checked> Sectors</label>
+        <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Names</label>
+        <label class="toggle"><input type="checkbox" id="grid-toggle" checked> Grid</label>
       </div>
 {{end}}
 
 {{define "sec-inspector"}}
 <div id="inspector" class="inspector" aria-live="polite">
-      <p class="muted js-only">Select a hex to see its terrain, features, and units.</p>
+      <p class="muted js-only">Select a counter or a place on the map. With a counter selected, tap anywhere to measure how far it is.{{if .IsReferee}} Drag a counter to move it.{{end}}</p>
     </div>
 {{end}}
 
 {{define "sec-order-box"}}
-<details class="order-form" id="order-box"{{if or (not .Data.Orders.Open) (not .Data.Orders.Units)}} hidden{{end}}>
-      <summary>Write an order</summary>
+<section class="panel order-box" id="order-box" aria-labelledby="of-h"{{if or (not .Data.Orders.Open) (not .Data.Orders.Units)}} hidden{{end}}>
+      <h2 id="of-h">Your order, turn {{.Turn}}</h2>
       <form method="post" action="{{.Base}}/orders" class="stack" id="order-form" data-enhance>
-        <label>Who
-          <select name="unit" id="of-unit">{{range .Data.Orders.Units}}<option value="{{.ID}}" data-hex="{{.Hex}}">{{.Label}}</option>{{end}}</select></label>
-        <label>What they do <span class="muted small">Say it like you would on the radio: what, how, and why. Anything a marine could plausibly try.</span>
-          <textarea name="text" id="of-text" rows="6" maxlength="1500" required
-            placeholder="I go up the east stairwell slow, check the landing, then cover the corridor while Doyle comes up behind me. If it's crawling with them, we pull back to the lobby."></textarea></label>
+        <label{{if le (len .Data.Orders.Units) 1}} hidden{{end}}>Who
+          <select name="unit" id="of-unit">{{range .Data.Orders.Units}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select></label>
+        <label for="of-text" class="sr-only">What they do</label>
+        <textarea name="text" id="of-text" rows="5" maxlength="1500" required
+            placeholder="Say it like you would on the radio: what, how, and why. “I go up the east stairwell slow, check the landing, then cover the corridor while Doyle comes up behind me. If it's crawling with them, we pull back to the lobby.”"></textarea>
         <div class="mark-row">
-          <label>A spot on the map <span class="muted small">optional</span>
-            <input name="mark" id="of-mark" class="mono compact-input" maxlength="4" placeholder="0905" autocomplete="off"></label>
-          <button type="button" class="secondary small-btn js-only" id="of-pick">Pick on map</button>
-          <button type="button" class="link small js-only" id="of-unmark">Clear</button>
+          <input type="hidden" name="mark_x" id="of-mark-x"><input type="hidden" name="mark_y" id="of-mark-y">
+          <button type="button" class="secondary small-btn js-only" id="of-pick">Drop a pin</button>
+          <span class="small" id="of-mark-label"></span>
+          <button type="button" class="link small js-only" id="of-unmark" hidden>Remove pin</button>
         </div>
         <p class="small" id="of-status" role="status"></p>
         <div class="row">
-          <button type="submit" name="submit" value="commit">Commit order</button>
+          <button type="submit" name="submit" value="commit">Send order</button>
           <button type="submit" name="submit" value="draft" class="secondary">Save draft</button>
           <button type="submit" class="link danger js-only" id="of-withdraw" hidden>Withdraw</button>
         </div>
       </form>
-    </details>
+    </section>
 {{end}}
 
 {{define "sec-places"}}
 <details class="legend" id="feature-list" data-live>
       <summary>Places on the map</summary>
       <table>
-        <thead><tr><th scope="col">Hex</th><th scope="col">Place</th><th scope="col">Notes</th></tr></thead>
+        <thead><tr><th scope="col">Where</th><th scope="col">Place</th><th scope="col">Notes</th></tr></thead>
         <tbody>
-          {{range .Map.Features}}<tr><td class="mono">{{.Hex}}</td><td>{{.Name}}{{if .Hidden}} <span class="tag tag-hidden">hidden</span>{{end}}</td><td>{{.Note}}</td></tr>{{end}}
+          {{range .Map.Features}}<tr><td class="mono">{{.Where}}</td><td>{{.Name}}{{if .Hidden}} <span class="tag tag-hidden">hidden</span>{{end}}</td><td>{{.Note}}</td></tr>{{end}}
         </tbody>
       </table>
     </details>
@@ -91,13 +91,13 @@
     <header class="item-head">
       {{template "radio" .Unit}}<span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span>
       <h3 id="item-h-{{.Order.ID}}"><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card>{{.Unit.Name}}</a></h3>
-      <a href="{{$.Base}}?hex={{.Unit.Hex}}" class="mono small" data-goto="{{.Unit.Hex}}">{{.Unit.Hex}}</a>
+      <a href="{{$.Base}}#map" class="small" data-goto="{{.Unit.ID}}">{{.Unit.Where}}</a>
       <span class="muted small">{{.Unit.AssignedName}}</span>
       {{if .Outcome}}{{if .Outcome.Text}}<span class="tag tag-order-committed">written</span>{{end}}{{end}}
     </header>
     {{with .Unit.Status}}<p class="small unit-status">{{.}}</p>{{end}}
     <blockquote class="order-text">{{.Order.Text}}</blockquote>
-    {{with .Order.Mark}}<p class="small muted">Marked <a href="{{$.Base}}?hex={{.}}" class="mono" data-goto="{{.}}">{{.}}</a></p>{{end}}
+    {{if .Order.Mark}}<p class="small muted">Pin: {{.Order.MarkLabel}}</p>{{end}}
     <p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>
 
     {{range .Contests}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
@@ -134,7 +134,6 @@
     </details>{{end}}
     <details class="small unit-quick"><summary>Change {{.Unit.Name}}</summary>
       <form method="post" action="{{$.Base}}/units/{{.Unit.ID}}/edit" class="row tight" data-enhance>
-        <label class="inline">Hex <input name="hex" value="{{.Unit.Hex}}" maxlength="4" class="mono num-s"></label>
         <label class="inline grow">Status <input name="status" value="{{.Unit.Status}}" maxlength="200" placeholder="pinned, wounded: left arm" class="compact-input grow-input"></label>
         <input type="hidden" name="radio_down_set" value="1">
         <label class="toggle"><input type="checkbox" name="radio_down"{{if eq .Unit.Radio "down"}} checked{{end}}> Radio out</label>
@@ -145,7 +144,7 @@
 
   <section class="desk-extra" aria-labelledby="extra-h">
     <h3 id="extra-h">Everything else</h3>
-    <p class="small muted">The infected moving, survivors panicking, the building catching fire: things that happened without anyone ordering them. Move counters from the map (select a hex) or a unit's card.</p>
+    <p class="small muted">The infected moving, survivors panicking, the building catching fire: things that happened without anyone ordering them. Drag counters on the Table to move them.</p>
     {{range .Loose}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
     {{template "add-roll" (dict "V" $ "Order" "" "Unit" "" "Open" false)}}
     {{range .Extra}}<form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance>
@@ -234,13 +233,13 @@
       <ul class="plain list">
         {{range .MyOrders}}<li class="order-slot">
           <div>{{template "radio" .Unit}}<span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card><strong>{{.Unit.Name}}</strong></a>
-            <a href="{{$.Base}}?hex={{.Unit.Hex}}" class="mono small" data-goto="{{.Unit.Hex}}">{{.Unit.Hex}}</a>
+            <span class="small muted">{{.Unit.Where}}</span>
             {{with .Holder}}<span class="small muted">{{.}}</span>{{end}}
             <span class="tag tag-order-{{if .Order}}{{.Order.Status}}{{else}}none{{end}}">{{if .Order}}{{.Order.Status}}{{else}}no order{{end}}</span></div>
           {{with .Unit.Status}}<div class="small unit-status">{{.}}</div>{{end}}
           {{if .NoContact}}<div class="small no-contact">{{.Unit.RadioText}}. Their orders stay with {{if .Holder}}{{.Holder}}{{else}}them{{end}} until they're back on the radio.</div>{{end}}
           {{with .Order}}<blockquote class="order-text">{{.Text}}</blockquote>
-          <div class="small muted">{{with .Mark}}Marked {{.}} · {{end}}{{if .Author}}by {{.Author}}{{end}}</div>
+          <div class="small muted">{{if .Mark}}Pin: {{.MarkLabel}} · {{end}}{{if .Author}}by {{.Author}}{{end}}</div>
           {{if eq .Review "approved"}}<div class="small review ok">Approved by {{.ReviewedBy}}{{with .ReviewNote}}: “{{.}}”{{end}}</div>{{end}}
           {{if eq .Review "returned"}}<div class="small review back">Sent back by {{.ReviewedBy}}: “{{.ReviewNote}}” Revise it and commit again before the lock.</div>{{end}}
           {{if .CanReview}}<form method="post" action="{{$.Base}}/orders/{{.ID}}/review" class="review-form" data-enhance>
@@ -249,7 +248,7 @@
             <button type="submit" name="action" value="return" class="secondary small-btn">Send back</button>
           </form>{{end}}{{end}}
           {{if and $.Data.Orders.Open (not .NoContact)}}<div class="row tight slot-actions">
-            <a class="button secondary small-btn" href="{{$.Base}}?order={{.Unit.ID}}" data-order-unit="{{.Unit.ID}}">{{if .Order}}Edit order{{else}}Write order{{end}}</a></div>{{end}}
+            <a class="button secondary small-btn" href="{{$.Base}}?order={{.Unit.ID}}#order-box" data-order-unit="{{.Unit.ID}}">{{if .Order}}Edit order{{else}}Write order{{end}}</a></div>{{end}}
         </li>{{end}}
       </ul>
       {{if .OtherOrders}}
@@ -309,7 +308,7 @@
       <ul class="plain list">
         {{range $u := .Assignable}}<li>
           <form method="post" action="{{$.Base}}/units/{{$u.ID}}/assign" class="assign" data-enhance data-autosubmit>
-            <label for="as-{{$u.ID}}"><span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span><strong>{{$u.Name}}</strong> <span class="muted small">{{$u.ClassName}} · {{$u.Hex}}</span></label>
+            <label for="as-{{$u.ID}}"><span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span><strong>{{$u.Name}}</strong> <span class="muted small">{{$u.ClassName}} · {{$u.Where}}</span></label>
             <div class="row">
               <select name="member" id="as-{{$u.ID}}">
                 {{if $.IsReferee}}<option value="">Held by referee</option>{{end}}
@@ -525,10 +524,10 @@
     </details>
 {{end}}
 
-{{define "unit"}}{{$u := .U}}<li class="unit{{if $u.Hidden}} is-hidden{{end}}" data-h="{{$u.Hex}}">
+{{define "unit"}}{{$u := .U}}<li class="unit{{if $u.Hidden}} is-hidden{{end}}">
   <div>{{template "radio" $u}}<span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span>
     <a href="{{.Base}}/units/{{$u.ID}}" class="unit-link" data-card><strong>{{$u.Name}}</strong></a>
-    <a href="#map" class="mono small" data-goto="{{$u.Hex}}" aria-label="Show hex {{$u.Hex}} on the map">{{$u.Hex}}</a>
+    <a href="#map" class="small" data-goto="{{$u.ID}}">{{$u.Where}}</a>
     {{if $u.Hidden}}<span class="tag tag-hidden">hidden</span>{{end}}{{if $u.Stale}}<span class="tag">last called in</span>{{end}}</div>
   <div class="muted small">{{$u.ClassName}}{{with $u.Strength}} · {{.}}{{end}}{{with $u.AssignedName}} · {{.}}{{end}}</div>
   {{with $u.Status}}<div class="small unit-status">{{.}}</div>{{end}}
@@ -553,21 +552,20 @@
 {{define "sec-ledger"}}
 <section class="panel ledger-panel" id="ledger" data-live aria-labelledby="ledger-h">
   <h2 id="ledger-h">Forces</h2>
-  {{if .CanAssign}}<p class="muted small">{{if .IsReferee}}Give each marine to a player from the Player column. Open a unit's card to change its skills, kit, status, or notes.{{else}}You can hand out the marines in your command from the Player column.{{end}}</p>{{end}}
+  {{if .CanAssign}}<p class="muted small">{{if .IsReferee}}Give each character to a player from the Player column. Open a card to write its private brief, or to change its kit, status, or notes; on an enemy's card, choose which players know about it.{{else}}You can hand out the marines in your command from the Player column.{{end}}</p>{{end}}
   {{if .Frozen}}<p class="muted small">The board as it stood at the lock. It updates when the referee publishes the turn.</p>{{end}}
   {{range .Forces}}
   <h3 class="side-h side-{{.Side}}">{{.Name}} <span class="muted small">{{len .Units}}</span></h3>
   <div class="table-scroll">
   <table class="ledger">
-    <thead><tr><th scope="col">Unit</th><th scope="col">Kind</th><th scope="col">Hex</th><th scope="col">Sector</th><th scope="col">Strength</th>
+    <thead><tr><th scope="col">Unit</th><th scope="col">Kind</th><th scope="col">Where</th><th scope="col">Strength</th>
       <th scope="col">Status</th><th scope="col">Radio</th><th scope="col">Player</th><th scope="col">Order</th></tr></thead>
     <tbody>
     {{range $u := .Units}}<tr class="{{if $u.Hidden}}is-hidden{{end}}">
       <th scope="row"><span class="abbr side-{{$u.Side}}" aria-hidden="true">{{$u.Abbr}}</span><a href="{{$.Base}}/units/{{$u.ID}}" class="unit-link" data-card>{{$u.Name}}</a>
         {{if $u.Hidden}}<span class="tag tag-hidden">hidden</span>{{end}}</th>
       <td class="small">{{$u.ClassName}}</td>
-      <td><a href="{{$.Base}}?hex={{$u.Hex}}" class="mono small" data-goto="{{$u.Hex}}">{{$u.Hex}}</a></td>
-      <td class="small">{{$u.Sector}}</td>
+      <td class="small">{{$u.Where}}</td>
       <td class="small">{{$u.Strength}}</td>
       <td class="small">{{$u.Status}}</td>
       <td class="small radio-cell">{{if $u.Radio}}{{template "radio" $u}} {{$u.RadioText}}
@@ -611,7 +609,7 @@
         <button type="submit"{{if not .Clock.AllIn}} class="secondary"{{end}}>Lock turn {{.Turn}} now</button></form>
       <span class="small">{{if .Clock.AllIn}}Every player has committed.{{else}}Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}.{{end}} Otherwise it locks {{.Clock.DeadlineText}}.</span>
     {{else}}
-      {{if eq $stage "judge"}}<a class="button secondary" href="#desk">Go to the desk</a>{{end}}
+      {{if eq $stage "judge"}}<a class="button secondary" href="{{.Base}}/desk#desk">Go to the desk</a>{{end}}
       <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Players get the report, the board catches up, and turn {{.Clock.NextTurn}} opens.{{if .Clock.Unwritten}} {{.Clock.Unwritten}} order(s) have no outcome written; players will read 'carried out without incident'.{{end}}">
         <button type="submit"{{if .Clock.Unwritten}} class="secondary"{{end}}>Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>
     {{end}}
@@ -634,11 +632,11 @@
 <section class="panel" id="channels" data-live aria-labelledby="channels-h">
       <h2 id="channels-h">Channels</h2>
       <ul class="plain channel-list">
-        {{range .Channels}}<li><a href="{{$.Base}}/messages?c={{.ID}}" class="channel{{if eq .ID $.Channel.ID}} active{{end}}"{{if eq .ID $.Channel.ID}} aria-current="page"{{end}}>
+        {{range .Channels}}<li><a href="{{$.Base}}?c={{.ID}}#talk" class="channel{{if eq .ID $.Channel.ID}} active{{end}}"{{if eq .ID $.Channel.ID}} aria-current="page"{{end}}>
           <span class="channel-name">{{.Name}}</span>
           {{if and .Unread (ne .ID $.Channel.ID)}}<span class="count">{{.Unread}}</span>{{else if .Count}}<span class="muted small">{{.Count}}</span>{{end}}</a></li>{{end}}
       </ul>
-      {{if .IsReferee}}<p class="muted small">{{if .AdminMode}}Admin view: you can read the players' channels, but not post in them.{{else}}Refereeing blind: the players' own channels are closed to you. Admin view (Room screen) opens them read-only, and players are told.{{end}}</p>{{end}}
+      {{if .IsReferee}}<p class="muted small">{{if .AdminMode}}Admin view: you can read the players' channels, but not post in them.{{else}}Refereeing blind: the players' own channels are closed to you. Admin view (top right) opens them read-only, and players are told.{{end}}</p>{{end}}
     </section>
 {{end}}
 
@@ -699,7 +697,7 @@
         {{if eq .Status "pending"}}waiting…{{else if eq .Status "running"}}<span class="busy">{{.Model}} is working…</span>{{else if eq .Status "done"}}done{{with .Model}} by {{.}}{{end}}{{if .Tokens}} · {{.Tokens}} tokens{{end}}{{else}}failed: {{.Error}}{{end}}
         {{if eq .Status "failed"}}<form method="post" action="{{$.Base}}/assistant/run" class="inline-form" data-enhance><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.Target}}"><button type="submit" class="link small">Try again</button></form>{{end}}
       </li>{{end}}</ul>{{end}}
-      {{else if .AI.Available}}<p class="muted small">Switch the AI on for this room on the Room screen, and it can suggest rolls and draft outcomes here.</p>
+      {{else if .AI.Available}}<p class="muted small">Switch the AI on for this room on the Setup screen, and it can suggest rolls and draft outcomes here.</p>
       {{else}}<p class="muted small">This server has no AI model set up. Everything works without it.</p>{{end}}
     </section>
 {{end}}
@@ -844,7 +842,7 @@
         <form method="post" action="{{$.Base}}/intentions" class="intent-row" data-enhance>
           <input type="hidden" name="unit" value="{{.Unit.ID}}">
           <label for="int-{{.Unit.ID}}"><span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card>{{.Unit.Name}}</a>
-            <a href="{{$.Base}}?hex={{.Unit.Hex}}" class="mono small" data-goto="{{.Unit.Hex}}">{{.Unit.Hex}}</a>
+            <span class="small muted">{{.Unit.Where}}</span>
             {{if .Unit.Hidden}}<span class="tag tag-hidden">hidden</span>{{end}}
             {{if eq .Source "ai"}}<span class="tag" title="Proposed by {{.Model}}">AI</span>{{end}}</label>
           <div class="row tight">
@@ -852,4 +850,128 @@
             <button type="submit" class="secondary small-btn">Save</button></div>
         </form></li>{{end}}</ul>
     </section>
+{{end}}
+
+{{define "sec-situation"}}
+<section class="panel situation" id="situation" data-live aria-labelledby="sit-h">
+  <h2 id="sit-h">Situation</h2>
+  {{if not .Reports}}<details class="briefing-again" open><summary>Briefing</summary>{{range .Briefing}}<p>{{.}}</p>{{end}}</details>
+  {{else}}{{with index .Reports 0}}{{$rp := .}}
+  <h3 class="sit-turn">{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}{{if $rp.Corrected}} <span class="tag">corrected</span>{{end}}</h3>
+  {{with $rp.Corrected}}<p class="small correction">The referee corrected this turn after publishing it: {{.}}</p>{{end}}
+  {{if $.IsReferee}}{{template "narrative-desk" (pair $ $rp)}}{{else if $rp.Narrative}}<div class="narrative"><p>{{$rp.Narrative}}</p></div>{{end}}
+  {{range $rp.Entries}}{{template "entry" (pair $ .)}}{{end}}
+  {{end}}
+  <details class="briefing-again"><summary>Briefing</summary>{{range .Briefing}}<p>{{.}}</p>{{end}}</details>
+  {{if gt (len .Reports) 1}}<details class="history"><summary>Earlier turns</summary>
+    {{range $i, $rp := .Reports}}{{if $i}}<details class="report"><summary><strong>{{if gt $rp.Operation 1}}Operation {{$rp.Operation}}, {{end}}turn {{$rp.Turn}}</strong>{{if $rp.Corrected}} <span class="tag">corrected</span>{{end}}</summary>
+      {{if $rp.Narrative}}<div class="narrative"><p>{{$rp.Narrative}}</p></div>{{end}}
+      {{range $rp.Entries}}{{template "entry" (pair $ .)}}{{end}}
+    </details>{{end}}{{end}}
+  </details>{{end}}
+  {{end}}
+  {{with .AARs}}<details class="history"><summary>Past operations</summary>
+    {{range .}}<p class="small"><strong>Operation {{.Number}}</strong>, {{.Scenario}}, {{.Turns}} turns. Came home: {{range $i, $n := .Survivors}}{{if $i}}, {{end}}{{$n}}{{else}}nobody{{end}}.{{with .Lost}} Lost: {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}.{{end}}</p>{{end}}
+  </details>{{end}}
+</section>
+{{end}}
+
+{{define "entry"}}{{$v := index . 0}}{{with index . 1}}<article class="entry{{if .Mine}} mine{{end}}">
+  <h4 class="entry-h">{{.Title}}{{if and $v.IsReferee .Hidden}} <span class="tag tag-hidden">{{if eq .Seen "holder"}}only their player{{else}}referee only{{end}}</span>{{end}}</h4>
+  {{with .Order}}<details class="small"><summary>The order</summary><blockquote class="order-text">{{.}}</blockquote></details>{{end}}
+  {{if .Text}}<p class="entry-text">{{.Text}}</p>{{else if .Order}}<p class="muted small">Carried out without incident.</p>{{end}}
+  {{if or .Rolls .Secret}}<ul class="plain small rolls">{{range .Rolls}}<li>🎲 {{.}}</li>{{end}}{{range .Secret}}<li class="secret">🎲 {{.}} <span class="tag tag-hidden">secret</span></li>{{end}}</ul>{{end}}
+</article>{{end}}{{end}}
+
+{{define "sec-character"}}
+<section class="panel character" id="character" data-live aria-labelledby="char-h">
+  <h2 id="char-h">{{if gt (len .MyCards) 1}}Your characters{{else}}Your character{{end}}</h2>
+  {{range $c := .MyCards}}<article class="char">
+    <div class="char-head">
+      <svg class="card-counter" viewBox="-11 -11 23 23" aria-hidden="true">{{template "counter" .Counter}}</svg>
+      <div><h3><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card>{{.Unit.Name}}</a></h3>
+        <p class="muted small">{{.Unit.ClassName}} · <a href="#map" data-goto="{{.Unit.ID}}">{{.Unit.Where}}</a></p>
+        {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $c.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}</div>
+    </div>
+    {{with .Unit.Status}}<p class="unit-status">{{.}}</p>{{end}}
+    {{with .Brief}}<details class="brief" open><summary>Private brief</summary><p class="pre">{{.}}</p><p class="muted small">Only you and the referee can read this.</p></details>{{end}}
+    <p class="small"><strong>Usual bonus {{.Bonus}}</strong>{{with .Kit}} · {{.}}{{end}}</p>
+    {{with .Facts}}<ul class="plain small char-facts">{{range .}}<li>{{if ne .Status "accepted"}}<span class="tag tag-fact-{{.Status}}">{{if eq .Status "proposed"}}waiting{{else}}{{.Status}}{{end}}</span> {{end}}{{.Text}}</li>{{end}}</ul>{{end}}
+    {{if .CanPropose}}<details class="small"><summary>Propose a fact</summary>
+      <form method="post" action="{{$.Base}}/facts" class="stack" data-enhance data-reset>
+        <input type="hidden" name="unit" value="{{.Unit.ID}}">
+        <input name="text" maxlength="400" required class="compact-input" placeholder="Carries a flare gun with two flares" aria-label="The fact">
+        <p class="muted">Gear, a skill, a contact, something about the place. The referee accepts it, changes it, or turns it down.</p>
+        <div class="row tight"><button type="submit" class="secondary small-btn">Propose</button></div>
+      </form></details>{{end}}
+  </article>{{else}}<p class="muted small">You haven't been given a character yet.</p>{{end}}
+</section>
+{{end}}
+
+{{define "sec-talk"}}
+<section class="panel talk" id="talk" aria-labelledby="talk-h">
+  <h2 id="talk-h">Talk</h2>
+  <nav class="channel-pills" id="channel-pills" data-live aria-label="Channels">
+    {{range .Channels}}<a href="{{$.Base}}?c={{.ID}}#talk" class="pill{{if eq .ID $.Channel.ID}} active{{end}}"{{if eq .ID $.Channel.ID}} aria-current="page"{{end}}>{{.Name}}{{if and .Unread (ne .ID $.Channel.ID)}} <span class="count">{{.Unread}}</span>{{end}}</a>{{end}}
+  </nav>
+  <p class="muted small" id="channel-note" data-live>{{.Channel.Note}}</p>
+  <ol class="plain thread" id="thread" data-live aria-live="polite">
+    {{range .Thread}}{{if .NewLine}}<li class="new-line" aria-label="New messages"><span>New</span></li>{{end}}
+    <li class="msg{{if .Mine}} mine{{end}} role-{{.Role}}">
+      <div class="msg-head"><strong>{{.Author}}</strong>{{if eq .Role "referee"}} <span class="tag">referee</span>{{else if eq .Role "commander"}} <span class="tag">squad leader</span>{{end}}
+        <span class="muted small">turn {{.Turn}} · <time datetime="{{iso .At}}" title="{{stamp .At}}">{{ago .At}}</time></span></div>
+      <div class="msg-text">{{.Text}}</div>
+    </li>{{else}}<li class="muted small">No messages yet.</li>{{end}}
+  </ol>
+  <form method="post" action="{{.Base}}/messages" class="stack post-form" id="post-form" data-enhance data-reset data-live{{if not .Channel.CanPost}} hidden{{end}}>
+    <input type="hidden" name="channel" value="{{.Channel.ID}}">
+    <label class="sr-only" for="post-text">Message</label>
+    <textarea name="text" id="post-text" rows="2" maxlength="2000" required placeholder="Write to {{.Channel.Name}}… (Ctrl+Enter sends)"></textarea>
+    <div class="row"><button type="submit" class="small-btn">Send</button></div>
+  </form>
+</section>
+{{end}}
+
+{{define "sec-you"}}
+<details class="panel you" id="you">
+  <summary><h2>You and the table</h2></summary>
+  <h3>Who's playing</h3>
+  <ul class="plain small">{{range .Roster}}<li><strong>{{.Name}}</strong> <span class="tag tag-{{.Role}}">{{if eq .Role "commander"}}squad leader{{else}}{{.Role}}{{end}}</span>{{with .Units}} <span class="muted">{{range $i, $u := .}}{{if $i}}, {{end}}{{$u}}{{end}}</span>{{end}}</li>{{end}}</ul>
+  {{template "sec-notify" .}}
+  {{template "sec-access" .}}
+  {{template "sec-leave" .}}
+</details>
+{{end}}
+
+{{define "sec-board"}}
+<section class="panel board-settings" id="board" data-live aria-labelledby="board-h">
+  <h2 id="board-h">Map and scale</h2>
+  <p class="small">Say what the map means: how far one grid cell is, and how much time one turn covers. Everyone sees it on the map and in the briefing.</p>
+  <form method="post" action="{{.Base}}/board" class="stack" data-enhance>
+    <input type="hidden" name="back" value="setup">
+    <fieldset class="plain-fieldset"><legend>Background</legend>
+      <div class="row tight">
+        <label class="toggle"><input type="radio" name="background" value="hex"{{if eq .Board.Background "hex"}} checked{{end}}> The drawn hex map</label>
+        <label class="toggle"><input type="radio" name="background" value="image"{{if eq .Board.Background "image"}} checked{{end}}{{if not .Board.Image}} disabled{{end}}> The uploaded image</label>
+      </div></fieldset>
+    <fieldset class="plain-fieldset"><legend>Grid over it</legend>
+      <div class="row tight">
+        {{range (list "hex:Hexes" "square:Squares" "none:None")}}{{$p := split . ":"}}<label class="toggle"><input type="radio" name="grid" value="{{index $p 0}}"{{if eq $.Board.Grid (index $p 0)}} checked{{end}}> {{index $p 1}}</label>{{end}}
+        <label class="inline small">cell size <input type="number" name="cell" value="{{num .Board.Cell}}" min="1" step="any" class="num-s"> <span class="muted">{{if eq .Board.Background "image"}}pixels{{else}}(31.2 is one drawn hex){{end}}</span></label>
+      </div>
+      <p class="muted small">Counters and pins go anywhere; the grid is only for saying where and how far.</p></fieldset>
+    <div class="row tight">
+      <label class="inline">1 {{.Board.CellName}} is <input type="number" name="distance" value="{{num .Board.Distance.Amount}}" min="0" step="any" class="num-s"></label>
+      <select name="distance_unit" class="compact" aria-label="Distance unit">{{range distanceUnits}}<option{{if eq . $.Board.Distance.Unit}} selected{{end}}>{{.}}</option>{{end}}</select>
+      <label class="inline">1 turn is <input type="number" name="turn" value="{{num .Board.Turn.Amount}}" min="0" step="any" class="num-s"></label>
+      <select name="turn_unit" class="compact" aria-label="Time unit">{{range timeUnits}}<option{{if eq . $.Board.Turn.Unit}} selected{{end}}>{{.}}</option>{{end}}</select>
+    </div>
+    <div class="row"><button type="submit" class="secondary">Save map settings</button>{{with .ScaleText}}<span class="small">Now: {{.}}</span>{{end}}</div>
+  </form>
+  <form method="post" action="{{.Base}}/board/image" enctype="multipart/form-data" class="row tight upload-form">
+    <label class="inline">Upload a map image <input type="file" name="image" accept="image/png,image/jpeg,image/gif" required></label>
+    <button type="submit" class="secondary small-btn">Upload and use it</button>
+    <span class="muted small">PNG, JPEG, or GIF, up to 15 MB: a sketch, a scan, a city plan. Counters keep their relative places.</span>
+  </form>
+</section>
 {{end}}

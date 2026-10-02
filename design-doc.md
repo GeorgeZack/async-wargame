@@ -34,7 +34,7 @@ the world they play in.
 ## A turn
 
 1. **Orders.** Each player writes what their character does, optionally
-   marking a spot on the map. A squad leader can approve a player's order or
+   dropping a pin on the map. A squad leader can approve a player's order or
    send it back with a note before the lock.
 2. **Lock.** At the scheduled time, or earlier if the referee locks it,
    orders freeze. A character without an order carries on as before.
@@ -74,10 +74,24 @@ Players join with a room code (the referee approves them) or an invite link.
 Messages run in channels: everyone, players only, a command, and privately
 with the referee.
 
+## The table
+
+Players have one page: what's happened (the latest report, the briefing,
+earlier turns), the map, their character (with a private brief), the order
+box, and talk. The referee has four screens: Table, Desk, People, and Setup.
+
+The map is the drawn hex map or an uploaded image, with a hex grid, square
+grid, or no grid over it. Counters and pins go anywhere; the grid is for
+saying where and how far. Every map states its scale and its turn ("1 hex =
+50 m · 1 turn = 10 minutes") so orders mean the same thing to everyone.
+
 ## Information
 
+- **Private briefs.** Each character can carry a brief only its player and
+  the referee read: a secret, an order from above, a personal stake.
 - **Fog of war is the referee's call.** They reveal an enemy as a contact,
-  and identify it when the characters get a good look.
+  to everyone or only to chosen players, and identify it when the
+  characters get a good look.
 - **Radio contact.** A character whose radio is out keeps their orders to
   themselves. The rest of the squad sees them where they last called in.
 - **Reports** show each order's outcome to whoever the referee chose: the
@@ -119,7 +133,7 @@ notifications are optional, and so is the AI model. See `deploy/`.
 
 ## What's next
 
-See `docs/roadmap.md`: email, enemy intentions on the desk, instancing
+See `docs/roadmap.md`: email, instancing
 (linked battles on several maps in one campaign), two-sided play, and more.
 
 ## Terms
@@ -130,4 +144,6 @@ See `docs/roadmap.md`: email, enemy intentions on the desk, instancing
 - **Fact:** something established about the world, proposed by anyone and
   accepted by the referee.
 - **Desk:** the referee's screen for judging a locked turn.
+- **Brief:** what one character knows that the others don't.
+- **Scale:** what one grid cell and one turn are in the world.
 - **Jev:** the referee's AI assistant.

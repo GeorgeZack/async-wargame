@@ -48,7 +48,7 @@ func OpenStore(path string, cat *Catalog) (*Store, error) {
 	var rooms []*Room
 	for _, msg := range raw {
 		var r Room
-		if err := json.Unmarshal(msg, &r); err != nil {
+		if err := json.Unmarshal(migrateBoard(msg), &r); err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 		if cat.Modules[r.ModuleID] == nil || cat.Scenarios[r.ScenarioID] == nil {
@@ -73,6 +73,12 @@ func OpenStore(path string, cat *Catalog) (*Store, error) {
 				r.Map, r.Briefing, r.RefereeNotes = sc.Map.Clone(), sc.Briefing, sc.RefereeNotes
 			}
 		}
+		if r.Board.Background == "" { // saved before boards had settings
+			if sc := cat.Scenarios[r.ScenarioID]; sc != nil {
+				r.Board = sc.Board
+			}
+		}
+		r.Board = r.Board.withDefaults()
 		s.rooms[r.Code] = r
 	}
 	return s, nil
@@ -313,3 +319,6 @@ func (s *Store) Delete(code string, check func(*Room) error) error {
 	}
 	return nil
 }
+
+// MapDir is where uploaded map images are kept: next to the state file.
+func (s *Store) MapDir() string { return filepath.Join(filepath.Dir(s.path), "maps") }

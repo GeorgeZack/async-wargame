@@ -19,7 +19,9 @@ import (
 func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 	var prompts []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Messages []struct{ Role, Content string } }
+		var req struct {
+			Messages []struct{ Role, Content string }
+		}
 		b, _ := io.ReadAll(r.Body)
 		json.Unmarshal(b, &req)
 		system, user := req.Messages[0].Content, req.Messages[1].Content

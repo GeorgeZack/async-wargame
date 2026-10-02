@@ -87,8 +87,8 @@ func New(store *game.Store, opts Options) (*Server, error) {
 			}
 			return m
 		},
-		"weekdays":    func() []string { return game.WeekdayShort },
-		"split":       strings.Split,
+		"weekdays": func() []string { return game.WeekdayShort },
+		"split":    strings.Split,
 		"seq": func(n int) []int { // 1..n
 			out := make([]int, n)
 			for i := range out {

@@ -22,9 +22,11 @@ import (
 
 // Run kinds.
 const (
-	RunSuggest   = "suggest"   // contests for every locked order
-	RunOutcome   = "outcome"   // what happened, for one order
-	RunNarrative = "narrative" // the report's opening
+	RunSuggest    = "suggest"    // contests for every locked order
+	RunOutcome    = "outcome"    // what happened, for one order
+	RunNarrative  = "narrative"  // the report's opening
+	RunIntentions = "intentions" // what the enemy means to do this turn
+	RunQuestion   = "question"   // a question to a player about an order
 )
 
 // Run statuses.
@@ -62,7 +64,8 @@ type Run struct {
 }
 
 // Prompt versions, recorded on each run so results can be compared later.
-var promptVersions = map[string]string{RunSuggest: "suggest/1", RunOutcome: "outcome/1", RunNarrative: "narrative/1"}
+var promptVersions = map[string]string{RunSuggest: "suggest/2", RunOutcome: "outcome/2", RunNarrative: "narrative/1",
+	RunIntentions: "intentions/1", RunQuestion: "question/1"}
 
 func (r *Room) queueRun(kind, target string, turn int, now time.Time) {
 	op := max(r.Operation, 1)
@@ -102,6 +105,7 @@ type promptUnit struct {
 	Notes    string   `json:"notes,omitempty"`
 	Facts    []string `json:"facts,omitempty"`
 	Hidden   bool     `json:"hiddenFromPlayers,omitempty"`
+	Intends  string   `json:"intends,omitempty"` // enemy units: the referee's intention for them this turn
 	Distance int      `json:"hexesAway,omitempty"`
 }
 
@@ -122,6 +126,9 @@ func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 		Hidden: !r.VisibleToPlayers(mod, u)}
 	if cl.IsGroup() || u.Strength > 1 {
 		p.Count = u.Strength
+	}
+	if !mod.Side(u.Side).Playable {
+		p.Intends = r.IntentionOf(u.ID)
 	}
 	return p
 }
@@ -160,6 +167,10 @@ func (r *Room) PromptFor(mod *Module, run *Run) (system, user string, ok bool) {
 		return r.outcomePrompt(mod, run)
 	case RunNarrative:
 		return r.narrativePrompt(mod, run)
+	case RunIntentions:
+		return r.intentionsPrompt(mod, run)
+	case RunQuestion:
+		return r.questionPrompt(mod, run)
 	}
 	return "", "", false
 }
@@ -194,7 +205,7 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 
 ` + r.settingText(mod) + `
 
-For each order, suggest the rolls the referee might make, in the order they'd happen. Most orders need zero to two. Don't roll for things that would simply work (walking down an empty street) or simply fail. For each side, list the situational factors that change its usual bonus, with a value and a short reason grounded in the order or the situation: a good plan in the order deserves +1; an ambush +3; darkness -1. Don't repeat the unit's usual bonus; it's added for you. For an opponent that isn't a unit on the list (a locked door, a frightened survivor), give a name and its whole bonus as factors. Mark a roll secret when players shouldn't see it (a hidden enemy noticing them, say). Use only the unit ids given.
+For each order, suggest the rolls the referee might make, in the order they'd happen. Most orders need zero to two. Don't roll for things that would simply work (walking down an empty street) or simply fail. For each side, list the situational factors that change its usual bonus, with a value and a short reason grounded in the order or the situation: a good plan in the order deserves +1; an ambush +3; darkness -1. Don't repeat the unit's usual bonus; it's added for you. For an opponent that isn't a unit on the list (a locked door, a frightened survivor), give a name and its whole bonus as factors. Mark a roll secret when players shouldn't see it (a hidden enemy noticing them, say). Enemy units may say what they intend this turn ("intends"); the referee decided that before reading the orders, so use it. Use only the unit ids given.
 
 Reply with only a JSON object:
 {"contests":[{"order":"<order id>","title":"<short label>","a":{"unit":"<unit id>","factors":[{"name":"<why>","value":<number>}]},"b":{"unit":"<unit id, or empty>","name":"<who, if not a unit>","factors":[{"name":"<why>","value":<number>}]},"secret":false}]}
@@ -229,7 +240,7 @@ func (r *Room) outcomePrompt(mod *Module, run *Run) (string, string, bool) {
 
 ` + r.settingText(mod) + `
 
-Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Read the rolls as the referee would: compare each side's total with the other's and with what each was trying to do. A big gap is decisive; a small one is close and costs something; a low total rolled alone means the situation got the better of them. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
+Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Read the rolls as the referee would: compare each side's total with the other's and with what each was trying to do. A big gap is decisive; a small one is close and costs something; a low total rolled alone means the situation got the better of them. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Enemy units nearby may say what they intend this turn; they act on it. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
 	b, _ := json.MarshalIndent(map[string]any{
 		"order": o.Text, "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
 		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes}, "", " ")
@@ -266,6 +277,10 @@ func (r *Room) ApplyReply(mod *Module, run *Run, reply string, decode func(strin
 		return r.applyOutcomeDraft(run, reply)
 	case RunNarrative:
 		return r.applyNarrative(run, reply)
+	case RunIntentions:
+		return r.applyIntentions(mod, run, reply, decode)
+	case RunQuestion:
+		return r.applyQuestion(run, reply)
 	}
 	return nil
 }
@@ -480,7 +495,8 @@ func (r *Room) ResetRunning() bool {
 }
 
 func runLabel(kind string) string {
-	return map[string]string{RunSuggest: "Suggesting rolls", RunOutcome: "Drafting an outcome", RunNarrative: "Drafting the narrative"}[kind]
+	return map[string]string{RunSuggest: "Suggesting rolls", RunOutcome: "Drafting an outcome", RunNarrative: "Drafting the narrative",
+		RunIntentions: "Proposing intentions", RunQuestion: "Drafting a question"}[kind]
 }
 
 // --- Referee actions ---
@@ -531,6 +547,16 @@ func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 				r.queueRun(RunOutcome, o.ID, r.Turn, now)
 			}
 		}
+	case RunIntentions:
+		if err := r.intentionsOpen(); err != nil {
+			return err
+		}
+		r.queueRun(RunIntentions, "", r.Turn, now)
+	case RunQuestion:
+		if r.Phase != PhaseResolving || r.lockedOrder(target) == nil {
+			return bad("questions are drafted about a locked order")
+		}
+		r.queueRun(RunQuestion, target, r.Turn, now)
 	case RunNarrative:
 		if len(r.Reports) == 0 {
 			return bad("there's no report to write a narrative for yet")

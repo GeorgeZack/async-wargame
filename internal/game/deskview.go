@@ -26,6 +26,9 @@ type DeskItem struct {
 	Contests []ContestView
 	Outcome  *Outcome
 	Busy     bool // the assistant is drafting its outcome
+	Question *Question
+	Asking   bool   // the assistant is drafting a question
+	Holder   string // who'd be asked; "" if no player holds the unit
 }
 
 type ContestView struct {
@@ -68,7 +71,10 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 		}
 		ordered[u.ID] = true
 		it := DeskItem{Order: r.orderView(o, false), Unit: unitView(r, u, mod, me), Bonus: bonusText(mod, u), Kit: KitOf(mod, u),
-			Outcome: d.outcomeFor(o.ID), Busy: ai.Busy[RunOutcome+"/"+o.ID]}
+			Outcome: d.outcomeFor(o.ID), Busy: ai.Busy[RunOutcome+"/"+o.ID], Question: d.Questions[o.ID], Asking: ai.Busy[RunQuestion+"/"+o.ID]}
+		if h := r.memberOrNil(u.AssignedTo); h != nil && h.Status == StatusApproved {
+			it.Holder = h.Name
+		}
 		for _, c := range d.Contests {
 			if c.Order == o.ID {
 				it.Contests = append(it.Contests, contestView(c))

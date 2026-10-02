@@ -75,6 +75,7 @@ type Room struct {
 	LockedUnits []*Unit       `json:"lockedUnits,omitempty"`
 	Reports     []*TurnReport `json:"reports,omitempty"`
 	Facts       []*Fact       `json:"facts,omitempty"`
+	Intentions  []*Intention  `json:"intentions,omitempty"` // what enemy units mean to do, by turn
 	Log         []LogEntry    `json:"log"`
 	Messages    []*Message    `json:"messages,omitempty"`
 	Assistant   Assistant     `json:"assistant,omitzero"`    // the referee's AI assistant

@@ -953,3 +953,9 @@ html.js #order-box > summary { list-style: none; }
 .roll-total { font: 800 1.5rem/1 ui-monospace, monospace; padding: .1rem .45rem; border: 2px solid var(--text); border-radius: .3rem; background: var(--surface); }
 .roll-vs { color: var(--muted); font-style: italic; }
 .bonus-line { margin: .4rem 0; }
+
+.intent-row { display: grid; gap: .25rem; }
+.intent-row label { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .9rem; font-weight: 600; }
+.intent-row label > * { width: auto; }
+.ask-player { margin-top: .4rem; }
+.ask-player summary { cursor: pointer; color: var(--accent); }

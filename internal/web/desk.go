@@ -117,3 +117,17 @@ func (s *Server) decideFact(w http.ResponseWriter, r *http.Request) {
 			r.FormValue("private") == "on", time.Now())
 	})
 }
+
+// setIntention records what an enemy unit means to do this turn.
+func (s *Server) setIntention(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		return room.SetIntention(me, s.store.Cat.Modules[room.ModuleID], r.FormValue("unit"), r.FormValue("text"))
+	})
+}
+
+// askAboutOrder sends the player a question about their order.
+func (s *Server) askAboutOrder(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		return room.AskAboutOrder(me, r.FormValue("order"), r.FormValue("text"), time.Now())
+	})
+}

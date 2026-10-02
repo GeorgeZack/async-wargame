@@ -161,6 +161,8 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /desk/contests/{id}/roll", s.rollContest)
 	seat("POST /desk/contests/{id}/delete", s.deleteContest)
 	seat("POST /desk/outcome", s.setOutcome)
+	seat("POST /desk/ask", s.askAboutOrder)
+	seat("POST /intentions", s.setIntention)
 	seat("POST /facts", s.proposeFact)
 	seat("POST /facts/{id}", s.decideFact)
 	seat("POST /close", s.closeRoom)

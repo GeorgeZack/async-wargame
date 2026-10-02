@@ -123,6 +123,15 @@
     {{with .Outcome}}{{with .Draft}}<div class="ai-draft small"><p><strong>AI draft</strong> (beside your text): {{.}}</p>
       <form method="post" action="{{$.Base}}/assistant/draft" data-enhance><input type="hidden" name="order" value="{{$it.Order.ID}}"><button type="submit" class="link small">Use this instead</button></form></div>{{end}}{{end}}
 
+    {{if .Holder}}<details class="small ask-player"{{if .Question}}{{if not .Question.Sent.IsZero}}{{else}} open{{end}}{{end}}><summary>Ask {{.Holder}} about this order{{with .Question}}{{if not .Sent.IsZero}} <span class="tag tag-order-committed">asked</span>{{else if eq .Source "ai"}} <span class="tag">AI draft</span>{{end}}{{end}}</summary>
+      {{with .Question}}{{if not .Sent.IsZero}}<p class="small">You asked: “{{.Text}}” The answer arrives in your private messages with {{$it.Holder}}.</p>{{end}}{{end}}
+      <form method="post" action="{{$.Base}}/desk/ask" class="stack" data-enhance>
+        <input type="hidden" name="order" value="{{.Order.ID}}"><input type="hidden" name="target" value="{{.Order.ID}}">
+        <textarea name="text" rows="2" maxlength="600" required aria-label="Question for {{.Holder}}" placeholder="When you say you pull back, do you mean to the bridge or all the way to the beach?">{{with .Question}}{{if .Sent.IsZero}}{{.Text}}{{end}}{{end}}</textarea>
+        <div class="row tight"><button type="submit" class="small-btn">Send to {{.Holder}}</button>
+          {{if $.AI.On}}<button type="submit" formaction="{{$.Base}}/assistant/run" formnovalidate name="kind" value="question" class="link small"{{if .Asking}} disabled{{end}}>{{if .Asking}}Drafting…{{else}}Draft a question with AI{{end}}</button>{{end}}</div>
+      </form>
+    </details>{{end}}
     <details class="small unit-quick"><summary>Change {{.Unit.Name}}</summary>
       <form method="post" action="{{$.Base}}/units/{{.Unit.ID}}/edit" class="row tight" data-enhance>
         <label class="inline">Hex <input name="hex" value="{{.Unit.Hex}}" maxlength="4" class="mono num-s"></label>
@@ -822,5 +831,25 @@
       <h2 id="known-h">What we know</h2>
       {{range .Facts}}<p class="small known-fact">{{if ne .Status "accepted"}}<span class="tag tag-fact-{{.Status}}">{{if eq .Status "proposed"}}waiting{{else}}{{.Status}}{{end}}</span> {{end}}{{with .UnitName}}<strong>{{.}}:</strong> {{end}}{{.Text}}{{with .Reply}} <span class="muted">— {{.}}</span>{{end}}</p>
       {{else}}<p class="muted small">Nothing established yet. Propose something from your marine's card.</p>{{end}}
+    </section>
+{{end}}
+
+{{define "sec-intentions"}}
+<section class="panel intentions" id="intentions" data-live aria-labelledby="int-h"{{if not .Intentions}} hidden{{end}}>
+      <h2 id="int-h">The other side</h2>
+      <p class="small muted">What each of them means to do this turn. Best decided while players are still writing orders, so you're not reacting to them. Players never see this.</p>
+      {{if .AI.On}}<form method="post" action="{{.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="intentions">
+        <button type="submit" class="secondary small-btn"{{if index .AI.Busy "intentions/"}} disabled{{end}}>{{if index .AI.Busy "intentions/"}}Proposing…{{else}}Propose intentions with AI{{end}}</button></form>{{end}}
+      <ul class="plain list">{{range .Intentions}}<li>
+        <form method="post" action="{{$.Base}}/intentions" class="intent-row" data-enhance>
+          <input type="hidden" name="unit" value="{{.Unit.ID}}">
+          <label for="int-{{.Unit.ID}}"><span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card>{{.Unit.Name}}</a>
+            <a href="{{$.Base}}?hex={{.Unit.Hex}}" class="mono small" data-goto="{{.Unit.Hex}}">{{.Unit.Hex}}</a>
+            {{if .Unit.Hidden}}<span class="tag tag-hidden">hidden</span>{{end}}
+            {{if eq .Source "ai"}}<span class="tag" title="Proposed by {{.Model}}">AI</span>{{end}}</label>
+          <div class="row tight">
+            <input name="text" id="int-{{.Unit.ID}}" value="{{.Text}}" maxlength="400" class="compact-input grow-input" placeholder="drift toward the radio noise; wait under the stairs">
+            <button type="submit" class="secondary small-btn">Save</button></div>
+        </form></li>{{end}}</ul>
     </section>
 {{end}}

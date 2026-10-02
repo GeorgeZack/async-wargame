@@ -22,6 +22,8 @@ type Desk struct {
 	Turn     int        `json:"turn"`
 	Contests []*Contest `json:"contests,omitempty"`
 	Outcomes []*Outcome `json:"outcomes,omitempty"`
+	// Questions about orders, by order id: drafted, and sent to the player.
+	Questions map[string]*Question `json:"questions,omitempty"`
 }
 
 // Contest is a roll: one side against another, or one side alone.

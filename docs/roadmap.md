@@ -12,11 +12,6 @@ everything after it.
 
 - **Email notifications.** Web push works on devices people have turned it
   on for; email reaches everyone else (turn open, orders due, results in).
-- **Enemy control modes.** The referee writes the opposition's intentions
-  as orders on the desk, or asks the assistant to propose them from what the
-  infected know, and judges both sides together.
-- **Assistant: interpreting orders.** Ask the model what an unclear order
-  most likely means, and draft a question back to the player.
 
 ## Instancing
 

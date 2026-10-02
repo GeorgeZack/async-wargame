@@ -70,13 +70,14 @@ type View struct {
 	CommittedCount int // the viewer's committed orders this turn
 	AwaitingReview int // a commander's players' orders waiting for review
 
-	Desk      *DeskView // referee, while a turn is being adjudicated
-	Reports   []ReportView
-	AARs      []OperationRecord
-	AdminMode bool // referee sees everything
-	Blind     bool // referee can't see player orders right now
-	Frozen    bool // players: the board as it stood at the lock
-	Watched   bool // players: the referee can see this turn's orders (admin view)
+	Desk       *DeskView       // referee, while a turn is being adjudicated
+	Intentions []IntentionView // referee: what each enemy unit means to do this turn
+	Reports    []ReportView
+	AARs       []OperationRecord
+	AdminMode  bool // referee sees everything
+	Blind      bool // referee can't see player orders right now
+	Frozen     bool // players: the board as it stood at the lock
+	Watched    bool // players: the referee can see this turn's orders (admin view)
 
 	Facts       []FactView  // the viewer can read, newest first
 	OpenFacts   int         // referee: proposals waiting
@@ -326,6 +327,9 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 		addRefereeEvents(v, r, mod)
 		v.AI = assistantView(r)
 		v.Desk = buildDesk(r, mod, me, v.AI)
+		if r.intentionsOpen() == nil {
+			v.Intentions = r.intentionViews(mod, me)
+		}
 		for _, f := range r.Facts {
 			if f.Status == FactProposed {
 				v.OpenFacts++

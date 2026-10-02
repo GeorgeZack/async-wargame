@@ -3,6 +3,7 @@
   {{template "sec-next" .}}
   {{template "sec-steps" .}}
   {{if eq .Phase "resolving"}}
+  {{template "sec-intentions" .}}
   {{template "sec-desk" .}}
   <div class="cols cols-turn">
     <div class="col">{{template "sec-assistant" .}}</div>
@@ -10,7 +11,7 @@
   </div>
   {{else}}
   <div class="cols cols-turn">
-    <div class="col">{{template "sec-clock" .}}{{template "sec-assistant" .}}</div>
+    <div class="col">{{template "sec-intentions" .}}{{template "sec-clock" .}}{{template "sec-assistant" .}}</div>
     <div class="col">{{template "sec-orders" .}}
       {{if not .MyOrders}}<section class="panel"><h2>Orders</h2><p class="muted small">{{if .Blind}}You're refereeing blind: players' orders appear at the lock.{{else}}No orders yet.{{end}} When the turn locks, every order lands on the desk here for you to judge.</p></section>{{end}}</div>
   </div>

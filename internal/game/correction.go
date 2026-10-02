@@ -47,11 +47,12 @@ type gameState struct {
 	LockedUnits *[]*Unit       `json:"lockedUnits"`
 	Reports     *[]*TurnReport `json:"reports"`
 	Seq         *int           `json:"seq"`
+	Intentions  *[]*Intention  `json:"intentions"`
 }
 
 func (r *Room) gameState() gameState {
 	return gameState{&r.Turn, &r.Phase, &r.Deadline, &r.Deferred, &r.LockedAt, &r.Threat, &r.Units, &r.Features,
-		&r.Events, &r.Orders, &r.Desk, &r.LockedUnits, &r.Reports, &r.Seq}
+		&r.Events, &r.Orders, &r.Desk, &r.LockedUnits, &r.Reports, &r.Seq, &r.Intentions}
 }
 
 // snapshot saves the game state for a correction of this turn.
@@ -96,7 +97,7 @@ func (r *Room) ReopenTurn(actor *Member, reason string, now time.Time) error {
 	undo := r.Undo
 	// Decoding into existing slices and maps would merge with what's there;
 	// start them empty so the snapshot replaces them outright.
-	r.Units, r.Features, r.Events, r.Orders, r.Desk, r.LockedUnits, r.Reports = nil, nil, nil, nil, nil, nil, nil
+	r.Units, r.Features, r.Events, r.Orders, r.Desk, r.LockedUnits, r.Reports, r.Intentions = nil, nil, nil, nil, nil, nil, nil, nil
 	st := r.gameState()
 	if err := json.Unmarshal(undo.State, &st); err != nil {
 		return fmt.Errorf("restoring turn %d: %w", undo.Turn, err)

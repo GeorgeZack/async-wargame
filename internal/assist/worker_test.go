@@ -41,6 +41,8 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 				`{"order":"nope","title":"bogus","a":{"unit":"m2"}},{"order":"` + orderID + `","title":"ghost","a":{"unit":"ghost"}}]}` + "\n```"
 		case strings.Contains(system, "radio operator"):
 			reply = "Grenade in the lobby. Quiet after."
+		case strings.Contains(system, `"intentions"`):
+			reply = `{"intentions":[{"unit":"z1","intent":"Follow the radio noise toward the beach."}]}`
 		}
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": reply}}},
 			"usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
@@ -146,6 +148,18 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 	if !strings.Contains(prompts[len(prompts)-1], "My own words.") {
 		t.Errorf("narrative prompt: %s", prompts[len(prompts)-1])
 	}
+	// Turn 2's planning: the assistant proposes what the enemy intends.
+	update(func(r *game.Room, mod *game.Module, ref *game.Member) error {
+		return r.RunNow(ref, game.RunIntentions, "", now)
+	})
+	if !w.Once(ctx) {
+		t.Fatal("no intentions run")
+	}
+	store.Read(code, func(r *game.Room) {
+		if r.IntentionOf("z1") != "Follow the radio noise toward the beach." {
+			t.Errorf("intention %q", r.IntentionOf("z1"))
+		}
+	})
 	if w.Once(ctx) {
 		t.Error("worked with nothing queued")
 	}

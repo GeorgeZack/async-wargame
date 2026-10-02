@@ -75,7 +75,8 @@ func (w *Worker) Once(ctx context.Context) bool {
 		var callErr error
 		if ok {
 			callCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			maxTokens := map[string]int{game.RunSuggest: 2500, game.RunOutcome: 600, game.RunNarrative: 600}[run.Kind]
+			maxTokens := map[string]int{game.RunSuggest: 2500, game.RunOutcome: 600, game.RunNarrative: 600,
+				game.RunIntentions: 1500, game.RunQuestion: 300}[run.Kind]
 			reply, usage, callErr = w.Client.Complete(callCtx, system, user, maxTokens)
 			cancel()
 		}

@@ -102,9 +102,15 @@ cross the canal, reach the hospital, and bring the survivors out.
   radio) as they go; players keep seeing the board as it stood at the lock
   until the turn is published. Secret rolls stay on the referee's side of
   the report.
+- **The other side.** On the Turn screen the referee notes what each enemy
+  unit intends this turn, ideally before reading the players' orders.
+  Players never see it; it guides the judging (and the AI's suggestions).
+- **Asking about an order.** At the desk, the referee can send a player a
+  question about their order as a private message; the AI can draft it.
 - **The assistant (optional):** an AI model can suggest rolls from the
   orders (who rolls, and what counts for each side), draft outcomes from the rolls, and
-  draft an opening narrative for each report. Suggestions sit unrolled until
+  draft an opening narrative for each report, propose what the enemy
+  intends, and draft questions about unclear orders. Suggestions sit unrolled until
   the referee rolls them; drafts until the referee keeps or rewrites them.
 - **Fog and radios, by hand.** The referee decides what players know about:
   revealing a unit shows it as a contact, identifying it says what it is. A

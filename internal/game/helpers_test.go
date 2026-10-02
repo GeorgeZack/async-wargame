@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -69,3 +70,5 @@ func publishTurn(t *testing.T, r *Room, mod *Module, ref *Member, now time.Time)
 		t.Fatal(err)
 	}
 }
+
+func jsonDecode(s string, v any) error { return json.Unmarshal([]byte(s), v) }

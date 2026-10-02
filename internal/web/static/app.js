@@ -153,6 +153,7 @@
 
   const map = {
     svg: null, full: null, vb: null, selected: null,
+    group: new Set(), multi: false, // the referee's selection of counters, to move together
     pointers: new Map(), dragStart: null, moved: false, pinchDist: 0, dragging: null,
 
     init() {
@@ -287,7 +288,10 @@
       }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (this.pointers.size === 1) {
-        this.dragStart = { x: e.clientX, y: e.clientY, vb: { ...this.vb }, target: e.target, piece: this.draggable(e.target) };
+        const piece = this.draggable(e.target);
+        const add = this.canGroup() && (e.shiftKey || e.ctrlKey || e.metaKey || this.multi);
+        this.dragStart = { x: e.clientX, y: e.clientY, vb: { ...this.vb }, target: e.target, piece, add,
+          box: add && !piece && !e.target.closest?.("[data-unit], [data-place]") && !ruler.on };
         this.moved = false;
       } else if (this.pointers.size === 2) {
         this.cancelDrag();
@@ -321,6 +325,7 @@
       const dx = e.clientX - s.x, dy = e.clientY - s.y;
       if (!this.moved && Math.hypot(dx, dy) < 6) return;
       this.moved = true;
+      if (s.box) { this.drawBox(this.toSvg(s.x, s.y), this.toSvg(e.clientX, e.clientY)); return; }
       if (s.piece) { this.dragPiece(s.piece, this.toSvg(e.clientX, e.clientY)); return; }
       this.svg.classList.add("dragging");
       const scale = s.vb.w / this.svg.getBoundingClientRect().width;
@@ -330,25 +335,42 @@
       this.apply();
     },
 
+    // dragPiece moves a counter or place with the pointer, or the whole
+    // group when the counter is part of a selection of several.
     dragPiece(piece, p) {
       if (!this.dragging) {
-        const t = piece.getAttribute("transform") || "";
-        this.dragging = { piece, scale: (t.match(/scale\(([^)]+)\)/) || [])[1] || "1", from: t };
-        piece.classList.add("lifted");
+        const id = piece.dataset.unit;
+        const els = id && this.group.size > 1 && this.group.has(id)
+          ? [...this.group].map((g) => this.marker(g)).filter(Boolean) : [piece];
+        const start = this.toSvg(this.dragStart.x, this.dragStart.y);
+        this.dragging = {
+          start,
+          pieces: els.map((el) => {
+            const t = el.getAttribute("transform") || "";
+            const at = (t.match(/translate\(([-\d.]+)[ ,]+([-\d.]+)\)/) || []).slice(1).map(Number);
+            return { el, from: t, scale: (t.match(/scale\(([^)]+)\)/) || [])[1] || "1", x0: at[0] || 0, y0: at[1] || 0 };
+          }),
+        };
+        els.forEach((el) => el.classList.add("lifted"));
       }
-      p.x = Math.min(this.full.w, Math.max(0, p.x));
-      p.y = Math.min(this.full.h, Math.max(0, p.y));
-      this.dragging.to = p;
-      piece.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${this.dragging.scale})`);
+      const g = this.dragging;
+      const dx = p.x - g.start.x, dy = p.y - g.start.y;
+      for (const m of g.pieces) {
+        m.to = { x: Math.min(this.full.w, Math.max(0, m.x0 + dx)), y: Math.min(this.full.h, Math.max(0, m.y0 + dy)) };
+        m.el.setAttribute("transform", `translate(${m.to.x.toFixed(1)} ${m.to.y.toFixed(1)}) scale(${m.scale})`);
+      }
       const d = mapData();
-      if (d) ruler.hint(`${piece.querySelector("title")?.textContent.split(",")[0] || ""} → ${whereText(p, d) || "here"}`);
+      if (g.pieces.length > 1) ruler.hint(`Moving ${g.pieces.length} counters together`);
+      else if (d) ruler.hint(`${piece.querySelector("title")?.textContent.split(",")[0] || ""} → ${whereText(g.pieces[0].to, d) || "here"}`);
     },
 
     cancelDrag() {
       if (!this.dragging) return;
       ruler.hint("");
-      this.dragging.piece.setAttribute("transform", this.dragging.from);
-      this.dragging.piece.classList.remove("lifted");
+      for (const m of this.dragging.pieces) {
+        m.el.setAttribute("transform", m.from);
+        m.el.classList.remove("lifted");
+      }
       this.dragging = null;
     },
 
@@ -356,19 +378,102 @@
       const g = this.dragging;
       this.dragging = null;
       ruler.hint("");
-      g.piece.classList.remove("lifted");
-      if (!g.to) return;
-      const x = g.to.x.toFixed(1), y = g.to.y.toFixed(1);
-      if (g.piece.dataset.unit) {
-        if (editor.active) { editor.send([{ op: "unit-move", unit: g.piece.dataset.unit, x: +x, y: +y }]); return; }
-        const body = new URLSearchParams({ x, y });
-        const res = await fetch(`${main().dataset.base}/units/${g.piece.dataset.unit}/edit`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
-        if (!res.ok) { alert((await res.text()) || "That didn't work."); g.piece.setAttribute("transform", g.from); }
-        await refresh();
-      } else {
-        const place = mapData()?.places?.[+g.piece.dataset.place];
-        if (place?.id) editor.send([{ op: "feature-move", feature: place.id, x: +x, y: +y }]);
+      g.pieces.forEach((m) => m.el.classList.remove("lifted"));
+      const moved = g.pieces.filter((m) => m.to);
+      if (!moved.length) return;
+      const units = moved.filter((m) => m.el.dataset.unit);
+      if (editor.active) {
+        const places = mapData()?.places || [];
+        editor.send(moved.map((m) => m.el.dataset.unit
+          ? { op: "unit-move", unit: m.el.dataset.unit, x: +m.to.x.toFixed(1), y: +m.to.y.toFixed(1) }
+          : { op: "feature-move", feature: places[+m.el.dataset.place]?.id, x: +m.to.x.toFixed(1), y: +m.to.y.toFixed(1) })
+          .filter((op) => op.unit || op.feature));
+        return;
       }
+      if (!units.length) return;
+      const body = new URLSearchParams();
+      for (const m of units) {
+        body.append("unit", m.el.dataset.unit);
+        body.append("x", m.to.x.toFixed(1));
+        body.append("y", m.to.y.toFixed(1));
+      }
+      const res = await fetch(`${main().dataset.base}/units/move`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
+      if (!res.ok) {
+        alert((await res.text()) || "That didn't work.");
+        units.forEach((m) => m.el.setAttribute("transform", m.from));
+      }
+      await refresh();
+    },
+
+    // --- selecting several counters (the referee) ---
+
+    canGroup() { return main()?.dataset.referee === "1" || editor.active; },
+
+    paintGroup() {
+      this.svg?.querySelectorAll("[data-unit]").forEach((m) => m.classList.toggle("picked", this.group.has(m.dataset.unit)));
+    },
+
+    toggleInGroup(id) {
+      if (this.selected && !this.group.size) this.group.add(this.selected);
+      this.group.has(id) ? this.group.delete(id) : this.group.add(id);
+      this.afterGroupChange();
+    },
+
+    afterGroupChange() {
+      this.paintGroup();
+      if (this.group.size === 1) { this.select([...this.group][0], false); return; }
+      this.selected = null;
+      this.cursorAt(null);
+      this.save();
+      if (this.group.size > 1) showGroup(); else this.clearPanel();
+    },
+
+    clearGroup() {
+      this.group.clear();
+      this.paintGroup();
+    },
+
+    clearPanel() {
+      const box = document.getElementById("inspector");
+      if (box) box.replaceChildren(el("p", { class: "muted small" }, "Nothing selected."));
+    },
+
+    setMulti(on) {
+      this.multi = on;
+      document.querySelectorAll("[data-multi]").forEach((b) => b.setAttribute("aria-pressed", on ? "true" : "false"));
+      ruler.hint(on ? "Selecting several: click counters to add or remove them, or drag a box around them." : "");
+    },
+
+    drawBox(a, b) {
+      const r = document.getElementById("select-box");
+      if (!r) return;
+      r.setAttribute("x", Math.min(a.x, b.x).toFixed(1));
+      r.setAttribute("y", Math.min(a.y, b.y).toFixed(1));
+      r.setAttribute("width", Math.abs(a.x - b.x).toFixed(1));
+      r.setAttribute("height", Math.abs(a.y - b.y).toFixed(1));
+      r.setAttribute("visibility", "visible");
+      this.box = { x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y), x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y) };
+    },
+
+    endBox() {
+      document.getElementById("select-box")?.setAttribute("visibility", "hidden");
+      const b = this.box;
+      this.box = null;
+      if (!b) return;
+      if (this.selected && !this.group.size) this.group.add(this.selected);
+      this.svg.querySelectorAll("[data-unit]").forEach((m) => {
+        const p = this.markerPos(m);
+        if (p.x >= b.x1 && p.x <= b.x2 && p.y >= b.y1 && p.y <= b.y2) this.group.add(m.dataset.unit);
+      });
+      this.afterGroupChange();
+    },
+
+    // After a live update the counters are new elements: mark the selection again.
+    afterRefresh() {
+      for (const id of [...this.group]) if (!this.marker(id)) this.group.delete(id);
+      this.paintGroup();
+      if (this.group.size > 1) showGroup();
+      else if (this.selected) this.select(this.selected, false);
     },
 
     up(e) {
@@ -379,15 +484,18 @@
       if (this.pointers.size > 0) return;
       this.dragStart = null;
       if (this.dragging) { this.dropPiece(); return; }
+      if (s && s.box && this.moved) { this.endBox(); return; }
       if (s && !this.moved) {
         const p = this.toSvg(e.clientX, e.clientY);
         if (ruler.click(p, s.target)) return;
         if (editor.click(p)) return;
         if (orders.click(p)) return;
         const hit = s.target.closest && s.target.closest("[data-unit], [data-place]");
-        if (hit && hit.dataset.unit) this.select(hit.dataset.unit, false);
-        else if (hit) this.showPlace(+hit.dataset.place);
-        else this.point(p);
+        if (hit && hit.dataset.unit && s.add) this.toggleInGroup(hit.dataset.unit);
+        else if (hit && hit.dataset.unit) this.select(hit.dataset.unit, false);
+        else if (hit) { this.clearGroup(); this.showPlace(+hit.dataset.place); }
+        else if (s.add) { /* a click on open ground while adding: keep the selection */ }
+        else { this.clearGroup(); this.point(p); }
       }
     },
 
@@ -402,7 +510,7 @@
       else if (e.key === "-") { this.zoom("out"); }
       else if (e.key === "0") { this.zoom("reset"); }
       else if (e.key === "m" || e.key === "M") { ruler.toggle(); }
-      else if (e.key === "Escape") { this.cancelDrag(); ruler.stop(); this.clear(); }
+      else if (e.key === "Escape") { this.cancelDrag(); ruler.stop(); this.setMulti(false); this.clear(); this.clearPanel(); }
     },
 
     cursorAt(p) {
@@ -416,6 +524,7 @@
 
     clear() {
       this.selected = null;
+      this.clearGroup();
       this.cursorAt(null);
       this.save();
     },
@@ -425,6 +534,11 @@
       const m = this.marker(id);
       if (!m) { this.clear(); return; }
       this.selected = id;
+      if (this.canGroup() && !(this.group.size === 1 && this.group.has(id))) {
+        this.group.clear();
+        this.group.add(id);
+        this.paintGroup();
+      }
       const p = this.markerPos(m);
       this.cursorAt(p);
       if (pan) this.centerOn(p);
@@ -573,6 +687,22 @@
     const pl = e.target.closest("[data-measure-place]");
     const place = pl && mapData()?.places?.[+pl.dataset.measurePlace];
     if (place) ruler.start({ x: place.x, y: place.y, name: place.name });
+  });
+
+  function showGroup() {
+    const box = document.getElementById("inspector");
+    const d = mapData();
+    if (!box || !d) return;
+    const names = [...map.group].map((id) => d.units?.find((u) => u.id === id)?.name).filter(Boolean);
+    box.replaceChildren(el("h3", {}, `${names.length} counters selected`),
+      el("p", { class: "small" }, names.join(", ")),
+      el("p", { class: "muted small" }, "Drag any of them to move them all together. Shift-click (or Select several) adds or removes one."),
+      el("div", { class: "row tight" }, el("button", { type: "button", class: "link small", "data-clear-group": "" }, "Clear selection")));
+  }
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-multi]")) { map.setMulti(!map.multi); return; }
+    if (e.target.closest("[data-clear-group]")) { map.clear(); map.clearPanel(); }
   });
 
   function inspect(id) {
@@ -1022,7 +1152,7 @@
       countdown();
       orders.afterRefresh();
       threadToEnd();
-      if (map.selected) map.select(map.selected, false);
+      map.afterRefresh();
     } catch {
       // Offline or server restarting; the event stream will retry.
     } finally {

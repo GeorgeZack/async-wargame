@@ -154,3 +154,21 @@ func TestOldSavesMoveToPoints(t *testing.T) {
 		}
 	})
 }
+
+func TestMoveSeveralUnitsAtOnce(t *testing.T) {
+	r, mod, _, ref := testRoom(t)
+	hicks := &Member{ID: "h", Name: "Hicks", Role: RolePlayer, Status: StatusApproved}
+	moves := []UnitMove{{ID: "m1", At: Pos{100, 100}}, {ID: "m2", At: Pos{110, 100}}}
+	if err := r.MoveUnits(hicks, mod, moves); err != ErrForbidden {
+		t.Errorf("a player moved counters: %v", err)
+	}
+	if err := r.MoveUnits(ref, mod, moves); err != nil {
+		t.Fatal(err)
+	}
+	if r.Unit("m1").Pos() != (Pos{100, 100}) || r.Unit("m2").Pos() != (Pos{110, 100}) {
+		t.Errorf("m1 %v m2 %v", r.Unit("m1").Pos(), r.Unit("m2").Pos())
+	}
+	if err := r.MoveUnits(ref, mod, []UnitMove{{ID: "m1", At: Pos{5, 5}}, {ID: "nobody", At: Pos{5, 5}}}); err == nil {
+		t.Error("moved a unit that doesn't exist")
+	}
+}

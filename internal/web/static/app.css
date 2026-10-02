@@ -135,7 +135,7 @@ button.link {
 }
 
 @media (min-width: 960px) {
-    .next { grid-column: 1 / -1; }
+  .screen > .next { grid-column: 1 / -1; }
 }
 .next {
   margin: 0; padding: 0.7rem 1rem; border-radius: 8px; background: var(--surface);
@@ -1025,3 +1025,9 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
 .side-col .turn-steps li span { display: none; }
 .side-col .turn-steps li strong { font-size: .85rem; }
 .side-col .step-action { flex-wrap: wrap; }
+
+/* The referee's selection of several counters. */
+.marker.picked .ctr { stroke: #e0a100; stroke-width: 1.6; }
+.marker.picked { filter: drop-shadow(0 0 1.6px #f2c94c) drop-shadow(0 0 1.6px #f2c94c); }
+.select-box { fill: rgb(242 201 76 / .15); stroke: #e0a100; stroke-width: 1.5; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.multi-btn[aria-pressed="true"] { background: #a87b00; border-color: #a87b00; color: #fff !important; }

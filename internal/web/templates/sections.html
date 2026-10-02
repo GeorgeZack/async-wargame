@@ -22,6 +22,7 @@
         <button type="button" class="secondary icon" data-zoom="out" aria-label="Zoom out">−</button>
         <button type="button" class="secondary" data-zoom="reset">Fit</button>
         <button type="button" class="secondary ruler-btn" data-ruler aria-pressed="false" title="Measure a distance (M)">Measure</button>
+        {{if .IsReferee}}<button type="button" class="secondary multi-btn" data-multi aria-pressed="false" title="Select several counters to move together: click each, or drag a box around them (or hold Shift)">Select several</button>{{end}}
         <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Names</label>
         <label class="toggle"><input type="checkbox" id="grid-toggle" checked> Grid</label>
       </div>
@@ -29,7 +30,7 @@
 
 {{define "sec-inspector"}}
 <div id="inspector" class="inspector" aria-live="polite">
-      <p class="muted js-only">Select a counter or a place to read about it.{{if .IsReferee}} Drag a counter to move it.{{end}} Use Measure (or press M) to find a distance.</p>
+      <p class="muted js-only">Select a counter or a place to read about it.{{if .IsReferee}} Drag a counter to move it; to move several together, Shift-click them (or use Select several) or Shift-drag a box around them, then drag any one.{{end}} Use Measure (or press M) to find a distance.</p>
     </div>
 {{end}}
 

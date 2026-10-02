@@ -135,3 +135,27 @@ func (s *Server) askAboutOrder(w http.ResponseWriter, r *http.Request) {
 		return room.AskAboutOrder(me, r.FormValue("order"), r.FormValue("text"), time.Now())
 	})
 }
+
+// moveUnits is the referee dragging a group of counters: unit, x, and y
+// repeat once per unit, in step.
+func (s *Server) moveUnits(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	ids, xs, ys := r.Form["unit"], r.Form["x"], r.Form["y"]
+	if len(ids) != len(xs) || len(ids) != len(ys) {
+		http.Error(w, "Each unit needs an x and a y.", http.StatusBadRequest)
+		return
+	}
+	moves := make([]game.UnitMove, len(ids))
+	for i, id := range ids {
+		x, errX := strconv.ParseFloat(xs[i], 64)
+		y, errY := strconv.ParseFloat(ys[i], 64)
+		if errX != nil || errY != nil {
+			http.Error(w, "Each unit needs an x and a y.", http.StatusBadRequest)
+			return
+		}
+		moves[i] = game.UnitMove{ID: id, At: game.Pos{X: x, Y: y}}
+	}
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		return room.MoveUnits(me, s.store.Cat.Modules[room.ModuleID], moves)
+	})
+}

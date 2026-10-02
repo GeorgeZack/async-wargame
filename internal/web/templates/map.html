@@ -47,6 +47,7 @@
         {{if or .Top.Mine (eq .Top.Role "player")}}<text class="ctr-name" y="15.5">{{.Top.Name}}</text>{{end}}</g>{{end}}
     </g>
     <g id="edit-preview" aria-hidden="true"></g>
+    <rect id="select-box" class="select-box" x="0" y="0" width="0" height="0" visibility="hidden" aria-hidden="true"/>
     <line id="side-cursor" class="side-cursor" x1="0" y1="0" x2="0" y2="0" visibility="hidden"/>
     <circle id="cursor" class="cursor" r="{{f1 (mul 13 .Map.K)}}" cx="0" cy="0" visibility="hidden"/>
   </svg>

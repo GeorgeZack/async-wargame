@@ -172,6 +172,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /orders/{id}/review", s.reviewOrder)
 
 	seat("POST /admin-mode", s.adminMode)
+	seat("POST /units/move", s.moveUnits)
 	seat("POST /units/{id}/edit", s.editUnit)
 	seat("POST /board", s.setBoard)
 	seat("POST /board/image", s.uploadMap)

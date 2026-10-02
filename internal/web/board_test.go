@@ -105,3 +105,29 @@ func TestBriefsAndRevealsOverHTTP(t *testing.T) {
 		}
 	})
 }
+
+func TestMoveSeveralOverHTTP(t *testing.T) {
+	_, store, ref, hicks, code, _ := setupSquad(t)
+	base := "/r/" + code
+	form := url.Values{"unit": {"m1", "m2", "m3"}, "x": {"100", "120", "140"}, "y": {"200", "200", "200"}}
+	if res, _ := hicks.post(base+"/units/move", form); res.StatusCode != 403 {
+		t.Errorf("a player moved counters: %d", res.StatusCode)
+	}
+	if res, _ := ref.post(base+"/units/move", url.Values{"unit": {"m1", "m2"}, "x": {"1"}, "y": {"1", "2"}}); res.StatusCode != 400 {
+		t.Errorf("unmatched coordinates: %d", res.StatusCode)
+	}
+	if res, _ := ref.post(base+"/units/move", form); res.StatusCode != 200 {
+		t.Fatalf("move: %d", res.StatusCode)
+	}
+	store.Read(code, func(r *game.Room) {
+		for i, id := range []string{"m1", "m2", "m3"} {
+			if u := r.Unit(id); u.X != float64(100+20*i) || u.Y != 200 {
+				t.Errorf("%s at %v,%v", id, u.X, u.Y)
+			}
+		}
+	})
+	_, body := ref.get(base)
+	mustContain(t, body, "Select several", `id="select-box"`)
+	_, body = hicks.get(base)
+	mustNotContain(t, body, "Select several")
+}

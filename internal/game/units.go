@@ -183,3 +183,27 @@ func capitalize(s string) string {
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
 }
+
+// UnitMove puts one unit at a point.
+type UnitMove struct {
+	ID string
+	At Pos
+}
+
+// MoveUnits moves several units at once, as one change: all of them or,
+// if any can't be moved, none.
+func (r *Room) MoveUnits(actor *Member, mod *Module, moves []UnitMove) error {
+	if actor.Role != RoleReferee {
+		return ErrForbidden
+	}
+	if len(moves) == 0 || len(moves) > 200 {
+		return bad("move 1 to 200 units at a time")
+	}
+	for _, m := range moves {
+		at := m.At
+		if err := r.EditUnit(actor, mod, m.ID, UnitEdit{At: &at}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

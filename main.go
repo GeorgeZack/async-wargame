@@ -40,7 +40,15 @@ func main() {
 	pushKey := flag.String("push-key", "", "VAPID key file for web push notifications (default: vapid.pem next to the -data file); created if missing")
 	noPush := flag.Bool("no-push", false, "turn web push notifications off")
 	proxy := flag.Bool("proxy", false, "running behind a reverse proxy or tunnel that terminates HTTPS (trusts X-Forwarded-Proto and X-Forwarded-For)")
+	flag.String("config", defaultConfig, "settings file: the flags above as name = value lines, plus ai-key, ai-key-file, host-password, and push-contact (see async-wargame.example.conf)")
+	configFile, err := loadConfig(flag.CommandLine, os.Args[1:])
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
 	flag.Parse()
+	if configFile != "" {
+		log.Printf("settings from %s", configFile)
+	}
 
 	sources := []fs.FS{content.FS}
 	if *modsDir != "" {

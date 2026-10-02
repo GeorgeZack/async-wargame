@@ -13,6 +13,32 @@ go test ./...
 
 State is kept in `data/campaigns.json` (`-data` to change).
 
+### A config file instead of a long command
+
+Every flag can go in a settings file, one `name = value` per line, so the
+server starts with just `./async-wargame`. It reads `async-wargame.conf`
+from the working directory if there is one, or the file named by
+`-config`. Flags on the command line still win.
+
+```sh
+cp async-wargame.example.conf async-wargame.conf   # then edit it
+./async-wargame
+```
+
+```ini
+addr = 127.0.0.1:8080
+data = data/campaigns.json
+ai = opencode
+ai-key-file = ~/.config/opencode/api-key.env
+```
+
+Secrets go in the file rather than on the command line (where the process
+list shows them): `ai-key` or `ai-key-file` (the key alone, or
+`OPENCODE_API_KEY=...` lines like OpenCode's own file), `host-password`, and
+`push-contact`. Environment variables, when set, win over the file.
+`async-wargame.conf` is git-ignored; see `async-wargame.example.conf` for
+every setting.
+
 ### Hosting
 
 Run one copy on an always-on machine: the state lives in one file, and a

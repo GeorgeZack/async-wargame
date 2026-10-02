@@ -153,7 +153,9 @@ systemctl start async-wargame
 
 ## The AI assistant
 
-Add the flags to `ExecStart` in the service and the key to the env file:
+Add the flags to `ExecStart` in the service and the key to the env file
+(or put all the settings in a file and use `ExecStart=... -config
+/etc/async-wargame/async-wargame.conf`; see the main README):
 
 ```sh
 # /etc/async-wargame/env

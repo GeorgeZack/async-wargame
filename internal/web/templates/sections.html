@@ -82,6 +82,7 @@
     {{if $.AI.On}}<div class="row tight">
       <form method="post" action="{{$.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="suggest">
         <button type="submit" class="secondary small-btn"{{if index $.AI.Busy "suggest/"}} disabled{{end}}>{{if index $.AI.Busy "suggest/"}}Suggesting rolls…{{else}}Suggest rolls with AI{{end}}</button></form>
+      {{if index $.AI.Busy "suggest/"}}{{template "ai-cancel" (dict "V" $ "Kind" "suggest" "Target" "")}}{{end}}
       {{if .Unwritten}}<form method="post" action="{{$.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="outcome"><input type="hidden" name="target" value="all">
         <button type="submit" class="secondary small-btn">Draft every missing outcome with AI</button></form>{{end}}
     </div>{{end}}
@@ -122,7 +123,8 @@
     </form>
     {{if $.AI.On}}<form method="post" action="{{$.Base}}/assistant/run" class="row tight" data-enhance>
       <input type="hidden" name="kind" value="outcome"><input type="hidden" name="target" value="{{.Order.ID}}">
-      <button type="submit" class="link small"{{if .Busy}} disabled{{end}}>{{if .Busy}}Drafting…{{else}}Draft with AI from the rolls{{end}}</button></form>{{end}}
+      <button type="submit" class="link small"{{if .Busy}} disabled{{end}}>{{if .Busy}}Drafting…{{else}}Draft with AI from the rolls{{end}}</button></form>
+    {{if .Busy}}{{template "ai-cancel" (dict "V" $ "Kind" "outcome" "Target" .Order.ID)}}{{end}}{{end}}
     {{with .Outcome}}{{with .Draft}}<div class="ai-draft small"><p><strong>AI draft</strong> (beside your text): {{.}}</p>
       <form method="post" action="{{$.Base}}/assistant/draft" data-enhance><input type="hidden" name="order" value="{{$it.Order.ID}}"><button type="submit" class="link small">Use this instead</button></form></div>{{end}}{{end}}
 
@@ -134,6 +136,7 @@
         <div class="row tight"><button type="submit" class="small-btn">Send to {{.Holder}}</button>
           {{if $.AI.On}}<button type="submit" formaction="{{$.Base}}/assistant/run" formnovalidate name="kind" value="question" class="link small"{{if .Asking}} disabled{{end}}>{{if .Asking}}Drafting…{{else}}Draft a question with AI{{end}}</button>{{end}}</div>
       </form>
+      {{if .Asking}}{{template "ai-cancel" (dict "V" $ "Kind" "question" "Target" .Order.ID)}}{{end}}
     </details>{{end}}
     <details class="small unit-quick"><summary>Change {{.Unit.Name}}</summary>
       <form method="post" action="{{$.Base}}/units/{{.Unit.ID}}/edit" class="row tight" data-enhance>
@@ -707,10 +710,12 @@
       {{if .AI.On}}
       <p class="small muted">It suggests rolls and drafts outcomes at the desk; you decide. Suggestions sit unrolled until you roll them.</p>
       {{with .AI.Runs}}<ul class="plain run-list small">{{range .}}<li class="run run-{{.Status}}">
-        <strong>{{if eq .Kind "suggest"}}Suggesting rolls{{else if eq .Kind "outcome"}}Drafting an outcome{{else}}Narrative{{end}}, turn {{.Turn}}:</strong>
-        {{if eq .Status "pending"}}waiting…{{else if eq .Status "running"}}<span class="busy">{{.Model}} is working…</span>{{else if eq .Status "done"}}done{{with .Model}} by {{.}}{{end}}{{if .Tokens}} · {{.Tokens}} tokens{{end}}{{else}}failed: {{.Error}}{{end}}
-        {{if eq .Status "failed"}}<form method="post" action="{{$.Base}}/assistant/run" class="inline-form" data-enhance><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.Target}}"><button type="submit" class="link small">Try again</button></form>{{end}}
-      </li>{{end}}</ul>{{end}}
+        <strong>{{.Label}}, turn {{.Turn}}:</strong>
+        {{if eq .Status "pending"}}waiting…{{else if eq .Status "running"}}<span class="busy">{{.Model}} is working…</span>{{else if eq .Status "done"}}done{{with .Model}} by {{.}}{{end}}{{if .Tokens}} · {{.Tokens}} tokens{{end}}{{else if eq .Status "cancelled"}}cancelled{{else}}failed: {{.Error}}{{end}}
+        {{if .Active}}<form method="post" action="{{$.Base}}/assistant/cancel" class="inline-form" data-enhance><input type="hidden" name="run" value="{{.ID}}"><button type="submit" class="link small danger">Cancel</button></form>{{end}}
+        {{if or (eq .Status "failed") (eq .Status "cancelled")}}<form method="post" action="{{$.Base}}/assistant/run" class="inline-form" data-enhance><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.Target}}"><button type="submit" class="link small">Try again</button></form>{{end}}
+      </li>{{end}}</ul>
+      {{if gt (len $.AI.Busy) 1}}<form method="post" action="{{$.Base}}/assistant/cancel" data-enhance data-confirm="Cancel everything the assistant is doing or waiting to do?"><input type="hidden" name="all" value="1"><button type="submit" class="secondary small-btn">Cancel all AI requests</button></form>{{end}}{{end}}
       {{else if .AI.Available}}<p class="muted small">Switch the AI on for this room on the Setup screen, and it can suggest rolls and draft outcomes here.</p>
       {{else}}<p class="muted small">This server has no AI model set up. Everything works without it.</p>{{end}}
     </section>
@@ -852,7 +857,8 @@
       <h2 id="int-h">The other side</h2>
       <p class="small muted">What each of them means to do this turn. Best decided while players are still writing orders, so you're not reacting to them. Players never see this.</p>
       {{if .AI.On}}<form method="post" action="{{.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="intentions">
-        <button type="submit" class="secondary small-btn"{{if index .AI.Busy "intentions/"}} disabled{{end}}>{{if index .AI.Busy "intentions/"}}Proposing…{{else}}Propose intentions with AI{{end}}</button></form>{{end}}
+        <button type="submit" class="secondary small-btn"{{if index .AI.Busy "intentions/"}} disabled{{end}}>{{if index .AI.Busy "intentions/"}}Proposing…{{else}}Propose intentions with AI{{end}}</button></form>
+      {{if index .AI.Busy "intentions/"}}{{template "ai-cancel" (dict "V" $ "Kind" "intentions" "Target" "")}}{{end}}{{end}}
       <ul class="plain list">{{range .Intentions}}<li>
         <form method="post" action="{{$.Base}}/intentions" class="intent-row" data-enhance>
           <input type="hidden" name="unit" value="{{.Unit.ID}}">
@@ -994,3 +1000,5 @@
   </form>
 </section>
 {{end}}
+
+{{define "ai-cancel"}}<form method="post" action="{{.V.Base}}/assistant/cancel" class="inline-form" data-enhance><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.Target}}"><button type="submit" class="link small danger">Cancel</button></form>{{end}}

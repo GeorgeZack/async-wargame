@@ -31,10 +31,11 @@ const (
 
 // Run statuses.
 const (
-	RunPending = "pending"
-	RunRunning = "running"
-	RunDone    = "done"
-	RunFailed  = "failed"
+	RunPending   = "pending"
+	RunRunning   = "running"
+	RunDone      = "done"
+	RunFailed    = "failed"
+	RunCancelled = "cancelled" // the referee called it off; a late reply is thrown away
 )
 
 // Assistant is a room's assistant settings and work.
@@ -70,7 +71,7 @@ var promptVersions = map[string]string{RunSuggest: "suggest/2", RunOutcome: "out
 func (r *Room) queueRun(kind, target string, turn int, now time.Time) {
 	op := max(r.Operation, 1)
 	r.Assistant.Runs = slices.DeleteFunc(r.Assistant.Runs, func(x *Run) bool {
-		return x.Kind == kind && x.Target == target && x.Turn == turn && x.Operation == op && (x.Status == RunPending || x.Status == RunFailed)
+		return x.Kind == kind && x.Target == target && x.Turn == turn && x.Operation == op && (x.Status == RunPending || x.Status == RunFailed || x.Status == RunCancelled)
 	})
 	r.Assistant.Runs = append(r.Assistant.Runs, &Run{ID: newID(), Kind: kind, Target: target, Operation: op, Turn: turn, Status: RunPending, Queued: now.UTC()})
 	if n := len(r.Assistant.Runs); n > 60 {
@@ -467,6 +468,10 @@ func (r *Room) FinishRun(id string, tokens int, runErr error, apply func(*Run) e
 		return
 	}
 	run := r.Assistant.Runs[i]
+	if run.Status == RunCancelled {
+		run.Tokens = tokens // what it cost before it was stopped; the reply is ignored
+		return
+	}
 	run.Finished, run.Tokens = now.UTC(), tokens
 	if runErr == nil && apply != nil {
 		runErr = apply(run)
@@ -499,6 +504,57 @@ func (r *Room) FinishRun(id string, tokens int, runErr error, apply func(*Run) e
 	}
 }
 
+// CancelRuns calls off the assistant's work: one run by id, every run of
+// a kind and target ("outcome" for an order), or with all, everything
+// queued or running. A run that's talking to the model is cut off, and a
+// reply that arrives anyway is thrown away. It reports how many it stopped.
+func (r *Room) CancelRuns(actor *Member, id, kind, target string, all bool, now time.Time) (int, error) {
+	if actor.Role != RoleReferee {
+		return 0, ErrForbidden
+	}
+	var match func(*Run) bool
+	switch {
+	case all:
+		match = func(*Run) bool { return true }
+	case id != "":
+		match = func(x *Run) bool { return x.ID == id }
+	case kind != "":
+		match = func(x *Run) bool { return x.Kind == kind && x.Target == target }
+	default:
+		return 0, bad("say which request to cancel")
+	}
+	n := r.cancelRuns(match, now)
+	if n == 0 {
+		return 0, bad("there's nothing of that to cancel: it has already finished")
+	}
+	r.logKind(VisReferee, "", "Cancelled %s.", plural(n, "AI request", "AI requests"))
+	return n, nil
+}
+
+func (r *Room) cancelRuns(match func(*Run) bool, now time.Time) int {
+	n := 0
+	for _, run := range r.Assistant.Runs {
+		if (run.Status == RunPending || run.Status == RunRunning) && match(run) {
+			run.Status, run.Finished, run.Error = RunCancelled, now.UTC(), ""
+			n++
+		}
+	}
+	return n
+}
+
+// RunCancelledNow reports whether a run has been called off, for the
+// worker to stop waiting on the model.
+func (r *Room) RunCancelledNow(id string) bool {
+	i := slices.IndexFunc(r.Assistant.Runs, func(x *Run) bool { return x.ID == id })
+	return i < 0 || r.Assistant.Runs[i].Status == RunCancelled
+}
+
+// Label names what a run does, for the referee.
+func (run Run) Label() string { return runLabel(run.Kind) }
+
+// Active reports whether a run is queued or talking to the model.
+func (run Run) Active() bool { return run.Status == RunPending || run.Status == RunRunning }
+
 // ResetRunning puts runs interrupted by a restart back in the queue.
 func (r *Room) ResetRunning() bool {
 	changed := false
@@ -524,6 +580,9 @@ func (r *Room) SetAssistant(actor *Member, on, suggest, narrative bool) error {
 	}
 	was := r.Assistant.On
 	r.Assistant.On, r.Assistant.Suggest, r.Assistant.Narrative = on, suggest, narrative
+	if !on {
+		r.cancelRuns(func(*Run) bool { return true }, time.Now()) // switching it off ends what it was doing
+	}
 	if on != was {
 		r.logKind(VisReferee, "", "AI assistant switched %s.", map[bool]string{true: "on", false: "off"}[on])
 	}

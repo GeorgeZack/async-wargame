@@ -164,3 +164,74 @@ func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 		t.Error("worked with nothing queued")
 	}
 }
+
+func TestCancellingCutsOffTheModel(t *testing.T) {
+	started := make(chan struct{}, 1)
+	quit := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		select { // a slow model: answers after a minute, unless the caller hangs up
+		case <-r.Context().Done():
+			return
+		case <-quit:
+			return
+		case <-time.After(time.Minute):
+		}
+		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"contests":[]}`}}}})
+	}))
+	defer srv.Close()
+	defer close(quit) // runs first, so Close doesn't wait on the slow handler
+	cat, _ := game.LoadCatalog(content.FS)
+	store, _ := game.OpenStore(filepath.Join(t.TempDir(), "state.json"), cat)
+	code, _ := store.Create("Lantern", "st-ines", "Ref", game.HashToken("ref"))
+	w := &Worker{Store: store, Client: ai.New(ai.Config{BaseURL: srv.URL + "/v1", Model: "m", Name: "test"})}
+	now := time.Now()
+	store.Update(code, func(r *game.Room) error {
+		mod, ref := cat.Modules[r.ModuleID], r.Referee()
+		r.StartOperation(ref, mod, now)
+		r.SaveOrder(ref, mod, "m2", "Okafor tosses a grenade.", nil, true, now)
+		r.SetAssistant(ref, true, true, false)
+		return r.LockNow(ref, mod, now) // queues the roll suggestions
+	})
+
+	done := make(chan time.Duration)
+	go func() {
+		t0 := time.Now()
+		w.Once(context.Background())
+		done <- time.Since(t0)
+	}()
+	<-started
+	if err := store.Update(code, func(r *game.Room) error {
+		_, err := r.CancelRuns(r.Referee(), "", "suggest", "", false, time.Now())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case took := <-done:
+		if took > 10*time.Second {
+			t.Errorf("the call took %v after cancelling", took)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("cancelling didn't stop the model call")
+	}
+	store.Read(code, func(r *game.Room) {
+		run := r.Assistant.Runs[len(r.Assistant.Runs)-1]
+		if run.Status != game.RunCancelled || run.Error != "" {
+			t.Errorf("run %s %q", run.Status, run.Error)
+		}
+		if r.HasPendingRun() {
+			t.Error("the cancelled run went back in the queue")
+		}
+	})
+	// Nothing left to cancel says so; a player can't cancel.
+	store.Update(code, func(r *game.Room) error {
+		if _, err := r.CancelRuns(r.Referee(), "", "", "", true, time.Now()); err == nil {
+			t.Error("cancelled nothing without saying so")
+		}
+		if _, err := r.CancelRuns(&game.Member{Role: game.RolePlayer}, "", "", "", true, time.Now()); err != game.ErrForbidden {
+			t.Errorf("a player cancelled: %v", err)
+		}
+		return nil
+	})
+}

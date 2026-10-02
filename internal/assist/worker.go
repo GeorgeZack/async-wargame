@@ -75,9 +75,11 @@ func (w *Worker) Once(ctx context.Context) bool {
 		var callErr error
 		if ok {
 			callCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			stop := w.watchCancel(callCtx, cancel, code, run.ID)
 			maxTokens := map[string]int{game.RunSuggest: 2500, game.RunOutcome: 600, game.RunNarrative: 600,
 				game.RunIntentions: 1500, game.RunQuestion: 300}[run.Kind]
 			reply, usage, callErr = w.Client.Complete(callCtx, system, user, maxTokens)
+			stop()
 			cancel()
 		}
 		err = w.Store.Update(code, func(r *game.Room) error {
@@ -95,6 +97,33 @@ func (w *Worker) Once(ctx context.Context) bool {
 		return true
 	}
 	return false
+}
+
+// watchCancel cuts the model call short if the referee cancels the run
+// (or switches the assistant off) while it's waiting. It returns a
+// function that stops watching.
+func (w *Worker) watchCancel(ctx context.Context, cancel context.CancelFunc, code, runID string) func() {
+	changes, unsubscribe := w.Store.Subscribe(code)
+	done := make(chan struct{})
+	go func() {
+		defer unsubscribe()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-changes:
+				stopped := false
+				w.Store.Read(code, func(r *game.Room) { stopped = r.RunCancelledNow(runID) })
+				if stopped {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 type nothing struct{}

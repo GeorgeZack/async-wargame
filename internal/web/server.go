@@ -163,6 +163,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /turn/reopen", s.reopenTurn)
 	seat("POST /assistant", s.setAssistant)
 	seat("POST /assistant/run", s.assistantRun)
+	seat("POST /assistant/cancel", s.assistantCancel)
 	seat("POST /assistant/draft", s.useDraft)
 	seat("POST /reports/{op}/{turn}/narrative", s.decideNarrative)
 	seat("GET /units/{id}", s.unitCard)

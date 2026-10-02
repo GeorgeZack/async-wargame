@@ -90,6 +90,11 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
   model is on the provider's list, printing the list if it isn't. Some free
   Zen models log prompts or use them for training (see
   [opencode.ai/docs/zen](https://opencode.ai/docs/zen/)).
+- **Cancelling:** every queued or running AI request has a Cancel button
+  (next to the busy button that started it, and in the Desk's Assistant
+  panel, with Cancel all). A request already waiting on the model is cut
+  off, and an answer that arrives anyway is thrown away. Switching the
+  assistant off for a room cancels its requests too.
 - **Your own instructions to the model:** `ai-instructions` (one line;
   `\n` starts a new one) and/or `ai-instructions-file` are added to every
   prompt the assistant sends, for example "Answer directly. Don't reason at

@@ -38,6 +38,15 @@ func (s *Server) assistantRun(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// assistantCancel calls off assistant work: one run (run), every run of a
+// kind for a target (kind, target), or everything (all=1).
+func (s *Server) assistantCancel(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		_, err := room.CancelRuns(me, r.FormValue("run"), r.FormValue("kind"), r.FormValue("target"), r.FormValue("all") == "1", time.Now())
+		return err
+	})
+}
+
 func (s *Server) decideNarrative(w http.ResponseWriter, r *http.Request) {
 	op, _ := strconv.Atoi(r.PathValue("op"))
 	turn, _ := strconv.Atoi(r.PathValue("turn"))

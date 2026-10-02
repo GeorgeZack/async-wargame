@@ -136,7 +136,6 @@ button.link {
 
 @media (min-width: 960px) {
     .next { grid-column: 1 / -1; }
-  .side { max-height: calc(100vh - 8rem); overflow-y: auto; position: sticky; top: 1rem; }
 }
 .next {
   margin: 0; padding: 0.7rem 1rem; border-radius: 8px; background: var(--surface);
@@ -726,14 +725,12 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
 .sb-live.off::before { background: #f2c94c; }
 @media (max-width: 640px) { .statusbar { font-size: 0.72rem; } .sb-cell { padding: 0 0.5rem; } }
 
-/* The scenario editor: map and tools on the left, lists on the right. */
-.editor-screen { grid-template-columns: minmax(0, 1fr); align-items: start; }
-.editor-screen .side { display: grid; gap: 1rem; align-content: start; min-width: 0; }
-@media (min-width: 1100px) {
-  .editor-screen { grid-template-columns: minmax(0, 1fr) 24rem; }
-  .editor-screen > .next, .editor-screen > .event-tables { grid-column: 1 / -1; }
-  .editor-screen .side { position: sticky; top: 6.5rem; max-height: calc(100vh - 10rem); overflow-y: auto; }
-}
+/* Setup: the map with its settings beside it, then rows of panels. Nothing
+   sticks, so nothing can slide over anything else. */
+.setup-top { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.setup-aside { display: grid; gap: 1rem; align-content: start; min-width: 0; }
+@media (min-width: 1100px) { .setup-top { grid-template-columns: minmax(0, 1fr) 24rem; } }
+.setup-screen .edit-list { max-height: 34rem; overflow-y: auto; }
 
 .order-slot .button { justify-self: start; }
 @media (max-width: 700px) {
@@ -986,7 +983,12 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
 .board-col, .side-col { display: grid; gap: 1rem; align-content: start; min-width: 0; }
 @media (min-width: 1000px) {
   .table-layout { grid-template-columns: minmax(0, 1fr) 26rem; }
-  .board-col { position: sticky; top: 6.5rem; }
+}
+@media (min-width: 1000px) and (min-height: 820px) {
+  /* The map stays in view while the side column scrolls; it's kept short
+     enough to fit, so nothing in it ends up out of reach. */
+  .board-col { position: sticky; top: 6.5rem; max-height: calc(100vh - 7.5rem); overflow-y: auto; }
+  .board-col #map { max-height: calc(100vh - 20rem); }
 }
 .selected-panel { padding-top: .6rem !important; }
 .selected-panel .inspector h3 { margin: 0 0 .2rem; font-size: 1rem; }
@@ -1014,3 +1016,9 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
 .you .panel { border: 0 !important; padding: 0 !important; }
 .board-settings .num-s { width: 5.5rem; }
 .upload-form { margin-top: .8rem; padding-top: .6rem; border-top: 1px solid var(--border); }
+/* In the Table's side column the turn steps are a compact strip. */
+.side-col .turn-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .3rem; }
+.side-col .turn-steps li { padding: .35rem .45rem; }
+.side-col .turn-steps li span { display: none; }
+.side-col .turn-steps li strong { font-size: .85rem; }
+.side-col .step-action { flex-wrap: wrap; }

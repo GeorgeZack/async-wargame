@@ -607,9 +607,9 @@
     {{else if eq $stage "plan"}}
       <form method="post" action="{{.Base}}/turn/lock" data-enhance data-confirm="Lock turn {{.Turn}} now? Players can't change orders after this.">
         <button type="submit"{{if not .Clock.AllIn}} class="secondary"{{end}}>Lock turn {{.Turn}} now</button></form>
-      <span class="small">{{if .Clock.AllIn}}Every player has committed.{{else}}Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}.{{end}} Otherwise it locks {{.Clock.DeadlineText}}.</span>
+      <span class="small">{{if .Clock.AllIn}}Every player has committed.{{else}}Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}.{{with .Clock.Waiting}} Waiting on {{range $i, $w := .}}{{if $i}}, {{end}}{{$w}}{{end}}.{{end}}{{end}} Otherwise it locks {{.Clock.DeadlineText}}. <a href="{{.Base}}/setup#turn-clock">Defer or change the schedule</a></span>
     {{else}}
-      {{if eq $stage "judge"}}<a class="button secondary" href="{{.Base}}/desk#desk">Go to the desk</a>{{end}}
+      {{if and (eq $stage "judge") (ne .Screen "desk")}}<a class="button secondary" href="{{.Base}}/desk#desk">Go to the desk</a>{{end}}
       <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Players get the report, the board catches up, and turn {{.Clock.NextTurn}} opens.{{if .Clock.Unwritten}} {{.Clock.Unwritten}} order(s) have no outcome written; players will read 'carried out without incident'.{{end}}">
         <button type="submit"{{if .Clock.Unwritten}} class="secondary"{{end}}>Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>
     {{end}}
@@ -938,7 +938,11 @@
   <h3>Who's playing</h3>
   <ul class="plain small">{{range .Roster}}<li><strong>{{.Name}}</strong> <span class="tag tag-{{.Role}}">{{if eq .Role "commander"}}squad leader{{else}}{{.Role}}{{end}}</span>{{with .Units}} <span class="muted">{{range $i, $u := .}}{{if $i}}, {{end}}{{$u}}{{end}}</span>{{end}}</li>{{end}}</ul>
   {{template "sec-notify" .}}
-  {{template "sec-access" .}}
+  <section class="panel" aria-labelledby="link-h"><h3 id="link-h">Your access link</h3>
+    <p class="small">Opens <strong>your seat</strong> on another device, or in another tab without cookies. Anyone with this link acts as you, so keep it private.</p>
+    <div class="row"><input readonly value="{{.AccessLink}}" class="mono small grow-input" aria-label="Your access link">
+      <button type="button" class="secondary js-only small-btn" data-copy="{{.AccessLink}}">Copy</button></div>
+  </section>
   {{template "sec-leave" .}}
 </details>
 {{end}}

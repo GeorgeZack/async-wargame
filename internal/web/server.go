@@ -128,6 +128,12 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		mux.HandleFunc(method+" /r/{code}/k/{key}"+rest, h)
 	}
 	seat("GET ", s.room)
+	// A pasted link with a trailing slash still opens the room.
+	trim := func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, strings.TrimSuffix(r.URL.Path, "/"), http.StatusMovedPermanently)
+	}
+	mux.HandleFunc("GET /r/{code}/{$}", trim)
+	mux.HandleFunc("GET /r/{code}/k/{key}/{$}", trim)
 	seat("GET /live", s.events)
 	seat("GET /desk", s.screen("desk"))
 	seat("GET /people", s.screen("people"))

@@ -649,7 +649,7 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 	_, body = ref.room(base)
 	mustNotContain(t, body, "tosses a grenade")
 	_, body = ref.get(base + "/desk")
-	mustContain(t, body, "Orders in: 1 of 1")
+	mustContain(t, body, "Every player has committed")
 
 	ref.post(base+"/turn/lock", nil)
 	var orderID string

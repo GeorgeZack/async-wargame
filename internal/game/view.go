@@ -63,7 +63,7 @@ type View struct {
 	PushKey     string        // the server's web push key; empty when push is off
 	AI          AIView        // referee: the assistant
 	SetAside    int           // orders reopening it would set aside
-	Channel     Channel       // the one open on the Messages screen
+	Channel     Channel       // the one open under Talk
 	Thread      []MessageView // its messages
 	Screen      string
 
@@ -467,13 +467,13 @@ func stackRank(u UnitView) int {
 func nextAction(v *View) string {
 	if v.Phase == PhaseResolving {
 		if !v.IsReferee {
-			return fmt.Sprintf("Turn %d is locked. The referee is working out what happens; the report will appear on the Reports screen.", v.Turn)
+			return fmt.Sprintf("Turn %d is locked. The referee is working out what happens; the report will appear under Situation.", v.Turn)
 		}
 		if v.Desk != nil && v.Desk.Unwritten > 0 {
-			return fmt.Sprintf("Turn %d is locked. Work through %s on the Turn screen: roll where it's in doubt, write what happened, then publish.",
+			return fmt.Sprintf("Turn %d is locked. Work through %s on the Desk: roll where it's in doubt, write what happened, then publish.",
 				v.Turn, plural(v.Desk.Unwritten, "order", "orders"))
 		}
-		return fmt.Sprintf("Turn %d is ready. Check the outcomes on the Turn screen, then publish it and open turn %d.", v.Turn, v.Turn+1)
+		return fmt.Sprintf("Turn %d is ready. Check the outcomes on the Desk, then publish it and open turn %d.", v.Turn, v.Turn+1)
 	}
 	if v.Phase == PhasePlanning && len(v.MyOrders) > 0 && !v.IsReferee {
 		done, reachable := 0, 0
@@ -500,14 +500,14 @@ func nextAction(v *View) string {
 		}
 		switch {
 		case len(v.Pending) > 0:
-			return fmt.Sprintf("%s waiting for your decision.", plural(len(v.Pending), "access request", "access requests"))
+			return fmt.Sprintf("%s waiting on the People screen.", plural(len(v.Pending), "access request", "access requests"))
 		case v.OpenFacts > 0:
-			return fmt.Sprintf("%s on the Notes screen.", capitalize(plural(v.OpenFacts, "proposed fact is waiting", "proposed facts are waiting")))
+			return fmt.Sprintf("%s on the Desk.", capitalize(plural(v.OpenFacts, "proposed fact is waiting", "proposed facts are waiting")))
 		case v.Phase == PhasePlanning && v.Clock.AllIn:
 			return fmt.Sprintf("Every order is in (%d of %d). Lock turn %d now, or wait for %s.",
 				v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Turn, v.Clock.DeadlineText)
 		case len(v.Proposals) > 0:
-			return fmt.Sprintf("Review %s: apply or discard.", plural(len(v.Proposals), "proposed event", "proposed events"))
+			return fmt.Sprintf("Review %s on the Desk: apply or discard.", plural(len(v.Proposals), "proposed event", "proposed events"))
 		case len(v.Players) == 0 && v.Phase == PhaseSetup:
 			return "Share room code " + v.CodeDisplay + " or an invite link with your players. Their requests will appear on the People screen."
 		case v.Phase == PhasePlanning:
@@ -516,14 +516,14 @@ func nextAction(v *View) string {
 		case unassigned > 0:
 			return fmt.Sprintf("Hand out the marines: %s still held by the referee.", plural(unassigned, "unit is", "units are"))
 		default:
-			return "Everyone has a marine. Start the operation when you're ready."
+			return "Everyone has a marine. Check the map, scale, and briefs on Setup, then start the operation."
 		}
 	}
 	if len(v.MyUnits) == 0 && !v.IsCommander {
 		return "Waiting for the referee to give you a marine. Read the briefing and the map while you wait."
 	}
 	if v.Phase == PhaseSetup {
-		return "Orders open when the operation starts. Read your marine's card, and propose anything you'd like to be true."
+		return "Orders open when the operation starts. Read your character and private brief, and propose anything you'd like to be true."
 	}
 	return fmt.Sprintf("Orders lock %s.", v.Clock.DeadlineText)
 }

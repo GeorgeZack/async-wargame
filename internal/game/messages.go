@@ -190,7 +190,7 @@ func (r *Room) Thread(me *Member, channel string) []MessageView {
 	return out
 }
 
-// OpenChannel puts a channel on the Messages screen: the one asked for if
+// OpenChannel puts a channel under Talk: the one asked for if
 // the viewer can read it, otherwise the first. It returns the channel's ID.
 func (v *View) OpenChannel(r *Room, me *Member, id string) string {
 	if len(v.Channels) == 0 {

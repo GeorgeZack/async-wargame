@@ -397,7 +397,7 @@ func (r *Room) publish(mod *Module, now time.Time) {
 	r.Reports = append(r.Reports, rep)
 	r.LockedUnits = nil
 	r.assistAtPublish(now)
-	r.logKind(VisAll, "sitrep", "Turn %d is published. The report is on the Reports screen.", r.Turn)
+	r.logKind(VisAll, "sitrep", "Turn %d is published. The report is under Situation.", r.Turn)
 	r.openTurn(r.Turn+1, now)
 }
 

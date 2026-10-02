@@ -530,7 +530,7 @@ func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 		return ErrForbidden
 	}
 	if !r.Assistant.On {
-		return bad("switch the AI assistant on for this room first (Room screen)")
+		return bad("switch the AI assistant on for this room first (Setup screen)")
 	}
 	switch kind {
 	case RunSuggest:

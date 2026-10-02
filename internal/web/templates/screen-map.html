@@ -5,10 +5,10 @@
     <div class="board-col">
       {{template "map-window" .}}
       <section class="panel selected-panel" aria-labelledby="sel-h"><h2 id="sel-h" class="sr-only">Selected</h2>{{template "sec-inspector" .}}</section>
-      {{if .IsReferee}}{{template "sec-steps" .}}{{end}}
     </div>
     <aside class="side-col" aria-label="{{if .IsReferee}}The table{{else}}You{{end}}">
       {{if .IsReferee}}
+        {{template "sec-steps" .}}
         {{template "sec-orders" .}}
         {{template "sec-talk" .}}
         {{template "sec-situation" .}}

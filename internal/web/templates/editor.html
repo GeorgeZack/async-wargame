@@ -19,6 +19,7 @@
     <noscript><p class="alert">Map editing needs JavaScript. You can still edit the texts below.</p></noscript>
   </div>
 
+  <div class="setup-top">
   <section class="panel map-panel" aria-labelledby="map-h">
     <div class="panel-head">
       <h2 id="map-h">Map</h2>
@@ -81,9 +82,11 @@
     </div>
     {{if eq .Map.Background "hex"}}{{template "legend" .}}{{end}}
   </section>
+    <div class="setup-aside">{{template "sec-board" .}}</div>
+  </div>
 
-  <div class="side">
-    {{template "sec-board" .}}
+  <div class="cols cols-turn">
+    <div class="col">
     <section class="panel" id="edit-units" data-live aria-labelledby="eu-h">
       <h2 id="eu-h">Units <span class="muted small">{{len .Units}}</span></h2>
       {{$side := ""}}
@@ -106,7 +109,8 @@
         {{end}}
       </ul>
     </section>
-
+    </div>
+    <div class="col">
     <section class="panel" id="edit-places" data-live aria-labelledby="ep-h">
       <h2 id="ep-h">Places <span class="muted small">{{len .Places}}</span></h2>
       <ul class="plain list edit-list">
@@ -127,7 +131,11 @@
         {{end}}
       </ul>
     </section>
+    </div>
+  </div>
 
+  <div class="cols cols-turn">
+    <div class="col">
     <section class="panel" aria-labelledby="txt-h">
       <h2 id="txt-h">Briefing and notes</h2>
       <form method="post" action="{{.Base}}/edit/text" class="stack" data-enhance>
@@ -141,14 +149,17 @@
       </form>
       <p class="muted small">Each character's private brief is on its card: open it from the map or the People screen.</p>
     </section>
-    {{template "sec-assistant-settings" .}}
-    {{template "sec-clock" .}}
-    {{template "sec-notify" .}}
-    {{template "sec-danger" .}}
+    </div>
+    <div class="col">{{template "sec-clock" .}}</div>
   </div>
 
-  <section class="panel event-tables" id="event-tables" data-live aria-labelledby="et-h">
-    <h2 id="et-h">Random event tables</h2>
+  <div class="cols cols-turn">
+    <div class="col">{{template "sec-assistant-settings" .}}</div>
+    <div class="col">{{template "sec-notify" .}}{{template "sec-danger" .}}</div>
+  </div>
+
+  <details class="panel event-tables" id="event-tables" data-live>
+    <summary><h2>Random event tables</h2></summary>
     <p class="muted small">Chance that a random roll picks each event at each threat level, given what is on the map now (for example, brood events need a nest). Current threat is {{.Threat}}; you can change it and roll events from the <a href="{{.Base}}/desk">Desk</a>.</p>
     <div class="table-scroll">
       <table class="events">
@@ -168,7 +179,7 @@
         </tbody>
       </table>
     </div>
-  </section>
+  </details>
 </main>
 <script type="application/json" id="map-data" data-live>{{.Data}}</script>
 {{template "shell-bottom" .}}{{end}}

@@ -78,6 +78,7 @@ type Room struct {
 	Facts       []*Fact       `json:"facts,omitempty"`
 	Intentions  []*Intention  `json:"intentions,omitempty"` // what enemy units mean to do, by turn
 	Moves       []*Move       `json:"moves,omitempty"`      // counters the referee moved, by turn
+	Formations  []*Formation  `json:"formations,omitempty"` // units that share a token
 	Log         []LogEntry    `json:"log"`
 	Messages    []*Message    `json:"messages,omitempty"`
 	Assistant   Assistant     `json:"assistant,omitzero"`    // the referee's AI assistant
@@ -144,6 +145,10 @@ type Unit struct {
 	LastContact  int  `json:"lastContact,omitempty"`  // last turn it was in contact
 	JammedUntil  int  `json:"jammedUntil,omitempty"`  // radio jammed through this turn
 	Reported     *Pos `json:"reported,omitempty"`     // where it was when last in contact
+	// Formation is the token it moves with (a squad), if any; Detached
+	// means it has split off and has a chit of its own.
+	Formation string `json:"formation,omitempty"`
+	Detached  bool   `json:"detached,omitempty"`
 }
 
 type Feature struct {
@@ -311,6 +316,10 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Members: []*Member{ref},
 		Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), RefereeNotes: sc.RefereeNotes,
 	}
+	for _, f := range sc.Formations {
+		f := f
+		r.Formations = append(r.Formations, &f)
+	}
 	for _, f := range sc.Features {
 		p := f.Pos()
 		r.Features = append(r.Features, Feature{ID: f.ID, Name: f.Name, Kind: f.Kind, X: p.X, Y: p.Y, Hidden: f.Hidden, Note: f.Note})
@@ -325,7 +334,7 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		p := su.Pos()
 		r.Units = append(r.Units, &Unit{
 			ID: su.ID, Name: su.Name, Class: su.Class, Side: cl.Side,
-			X: p.X, Y: p.Y, Strength: str, Brief: su.Brief,
+			X: p.X, Y: p.Y, Strength: str, Brief: su.Brief, Formation: su.Formation,
 			Known: su.Known || side.Playable, Identified: su.Known || side.Playable,
 		})
 	}

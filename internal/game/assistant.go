@@ -108,6 +108,8 @@ type promptUnit struct {
 	Hidden   bool     `json:"hiddenFromPlayers,omitempty"`
 	Intends  string   `json:"intends,omitempty"`  // enemy units: the referee's intention for them this turn
 	Distance string   `json:"distance,omitempty"` // from the unit in question
+	Move     string   `json:"movePerTurn,omitempty"`
+	Squad    string   `json:"squad,omitempty"` // the formation it moves with, and whether it has split off
 }
 
 // where describes a point for the model: grid reference, nearest place, and
@@ -137,6 +139,8 @@ func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 	if !mod.Side(u.Side).Playable {
 		p.Intends = r.IntentionOf(u.ID)
 	}
+	p.Move = r.ReachText(mod, u)
+	p.Squad = r.squadForAI(u)
 	return p
 }
 
@@ -163,7 +167,8 @@ func (r *Room) settingText(mod *Module) string {
 	}
 	return fmt.Sprintf(`The game: %s. %s %s.
 Rolls: when a situation is in doubt, each side rolls a d10 and adds one bonus: everything that matters summed into a single number (how good the unit is, veterancy, the situation, surprise, the weather). The result is just the two totals, like "Okafor 5, the horde 9". There's no rule for what totals mean: the referee compares them, considers what each side was trying to do, and decides. A side can also roll alone, against the situation.
-Each unit's usual bonus (quality plus veterancy) is given. Factors that often count: %s.`, mod.Name, mod.Intro, r.scaleForAI(), strings.Join(fs, ", "))
+Each unit's usual bonus (quality plus veterancy) is given. Factors that often count: %s.
+Movement: each unit's "movePerTurn" says how far it can realistically get in one turn at a careful pace and at a run, at this map's scale. An order's "wantsToReach" says where its pin is and how far that is. Hold orders to that: a unit asked to go farther than it can only gets part of the way, less through rubble, crowds, water, darkness, or a fight, and running is loud and tiring. Say where it ends up.`, mod.Name, mod.Intro, r.scaleForAI(), strings.Join(fs, ", "))
 }
 
 // PromptFor builds a run's prompts. It reports false if there's nothing to do.
@@ -190,7 +195,8 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 	type item struct {
 		Order  string       `json:"order"`
 		Text   string       `json:"orderText"`
-		Mark   string       `json:"markedHex,omitempty"`
+		Mark   string       `json:"markedSpot,omitempty"`
+		Wants  string       `json:"wantsToReach,omitempty"`
 		Unit   promptUnit   `json:"unit"`
 		Nearby []promptUnit `json:"nearby,omitempty"`
 	}
@@ -203,6 +209,7 @@ func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
 		it := item{Order: o.ID, Text: o.Text, Unit: r.promptUnit(mod, u), Nearby: r.nearby(mod, u, 3)}
 		if o.Mark != nil {
 			it.Mark = r.where(mod, *o.Mark)
+			it.Wants = r.IntendedMove(mod, u, o)
 		}
 		items = append(items, it)
 	}
@@ -250,7 +257,7 @@ func (r *Room) outcomePrompt(mod *Module, run *Run) (string, string, bool) {
 
 Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Read the rolls as the referee would: compare each side's total with the other's and with what each was trying to do. A big gap is decisive; a small one is close and costs something; a low total rolled alone means the situation got the better of them. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Enemy units nearby may say what they intend this turn; they act on it. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
 	b, _ := json.MarshalIndent(map[string]any{
-		"order": o.Text, "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
+		"order": o.Text, "wantsToReach": r.IntendedMove(mod, u, o), "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
 		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes, "refereeMovedCounter": r.moveForAI(u.ID)}, "", " ")
 	return system, string(b), true
 }

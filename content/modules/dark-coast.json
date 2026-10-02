@@ -1,6 +1,6 @@
 {
   "id": "dark-coast",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "name": "Dark Coast",
   "intro": "Colonial marines in a dead city. Say what your marines do; the referee says what happens.",
   "factors": [
@@ -88,7 +88,9 @@
       "strength": 1,
       "quality": 2,
       "description": "Runs the squad, carries the radio, and answers for everyone who doesn't come back.",
-      "kit": "Carbine, sidearm, squad radio, flares, two frag grenades, map tablet."
+      "kit": "Carbine, sidearm, squad radio, flares, two frag grenades, map tablet.",
+      "speed": 3,
+      "run": 10
     },
     {
       "id": "rifleman",
@@ -100,7 +102,9 @@
       "strength": 1,
       "quality": 2,
       "description": "Point man: first through the door, last out of it.",
-      "kit": "Rifle with underslung light, combat knife, three frag grenades, one smoke grenade."
+      "kit": "Rifle with underslung light, combat knife, three frag grenades, one smoke grenade.",
+      "speed": 3,
+      "run": 10
     },
     {
       "id": "gunner",
@@ -112,7 +116,9 @@
       "strength": 1,
       "quality": 2,
       "description": "Carries the squad's firepower and most of its ammunition.",
-      "kit": "Light machine gun, extra belts, sidearm, one frag grenade."
+      "kit": "Light machine gun, extra belts, sidearm, one frag grenade.",
+      "speed": 3,
+      "run": 8
     },
     {
       "id": "corpsman",
@@ -124,7 +130,9 @@
       "strength": 1,
       "quality": 1,
       "description": "Keeps marines and civilians breathing.",
-      "kit": "Carbine, aid bag, folding stretcher, sedatives, flashlight."
+      "kit": "Carbine, aid bag, folding stretcher, sedatives, flashlight.",
+      "speed": 3,
+      "run": 10
     },
     {
       "id": "civilians",
@@ -134,7 +142,9 @@
       "symbol": "civilian",
       "strength": 6,
       "quality": -1,
-      "description": "Frightened people. Some are hurt; some will panic; some might help."
+      "description": "Frightened people. Some are hurt; some will panic; some might help.",
+      "speed": 2,
+      "run": 6
     },
     {
       "id": "shamblers",
@@ -148,7 +158,9 @@
       "contact": {
         "abbr": "?",
         "label": "Movement"
-      }
+      },
+      "speed": 1.5,
+      "run": 3
     },
     {
       "id": "runners",
@@ -162,7 +174,9 @@
       "contact": {
         "abbr": "?",
         "label": "Fast movement"
-      }
+      },
+      "speed": 5,
+      "run": 18
     },
     {
       "id": "crawler",
@@ -177,7 +191,9 @@
       "contact": {
         "abbr": "!",
         "label": "Something small"
-      }
+      },
+      "speed": 1,
+      "run": 6
     },
     {
       "id": "screamer",
@@ -192,7 +208,9 @@
       "contact": {
         "abbr": "!",
         "label": "Single contact"
-      }
+      },
+      "speed": 2,
+      "run": 6
     },
     {
       "id": "brute",
@@ -207,7 +225,9 @@
       "contact": {
         "abbr": "!",
         "label": "Large contact"
-      }
+      },
+      "speed": 3,
+      "run": 12
     }
   ],
   "terrain": [

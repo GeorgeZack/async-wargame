@@ -20,6 +20,7 @@ type Scenario struct {
 	Board        Board             `json:"board"`
 	Features     []ScenarioFeature `json:"features"`
 	Units        []ScenarioUnit    `json:"units"`
+	Formations   []Formation       `json:"formations,omitempty"`
 }
 
 // Spot is where something starts: a drawn hex (col, row, from 0), or an
@@ -46,6 +47,8 @@ type ScenarioUnit struct {
 	Strength int    `json:"strength"`
 	Known    bool   `json:"known"`
 	Brief    string `json:"brief,omitempty"` // private, for whoever plays it
+	// Formation is the token it starts in, from the scenario's formations.
+	Formation string `json:"formation,omitempty"`
 }
 
 type ScenarioFeature struct {

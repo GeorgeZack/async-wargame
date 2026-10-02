@@ -92,6 +92,7 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 		p := r.clampPos(*e.At)
 		u.X, u.Y = p.X, p.Y
 		r.noteMove(u, from)
+		r.moveWithFormation(u)
 	}
 	if e.Strength != nil {
 		if *e.Strength < 0 || *e.Strength > 100000 {

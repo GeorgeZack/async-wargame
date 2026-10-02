@@ -31,6 +31,8 @@ type DeskItem struct {
 	Asking   bool      // the assistant is drafting a question
 	Holder   string    // who'd be asked; "" if no player holds the unit
 	Moved    *MoveView // the referee moved this unit's counter this turn
+	Reach    string    // how far it can get in a turn
+	Wants    string    // the order's pin, read against that
 }
 
 type ContestView struct {
@@ -78,6 +80,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 			it.Holder = h.Name
 		}
 		it.Moved = r.MoveOf(u.ID)
+		it.Reach, it.Wants = r.ReachText(mod, u), r.IntendedMove(mod, u, o)
 		for _, c := range d.Contests {
 			if c.Order == o.ID {
 				it.Contests = append(it.Contests, contestView(c))

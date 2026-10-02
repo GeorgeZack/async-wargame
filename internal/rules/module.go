@@ -63,10 +63,15 @@ type Class struct {
 	Strength int `json:"strength,omitempty"`
 	// Quality is how good a unit of this kind is, as a bonus to its rolls:
 	// 0 for ordinary, +1 or +2 for trained, more for the exceptional.
-	Quality     int      `json:"quality"`
-	Description string   `json:"description,omitempty"`
-	Kit         string   `json:"kit,omitempty"`     // what it usually carries, in a sentence
-	Contact     *Contact `json:"contact,omitempty"` // how players see it before it's identified
+	Quality     int    `json:"quality"`
+	Description string `json:"description,omitempty"`
+	Kit         string `json:"kit,omitempty"` // what it usually carries, in a sentence
+	// Speed is how fast it moves at a careful, tactical pace, and Run flat
+	// out, both in km/h. They tell the referee and the AI how far it can
+	// realistically get in a turn.
+	Speed   float64  `json:"speed,omitempty"`
+	Run     float64  `json:"run,omitempty"`
+	Contact *Contact `json:"contact,omitempty"` // how players see it before it's identified
 }
 
 type Contact struct {

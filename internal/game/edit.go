@@ -209,6 +209,7 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			from := u.Pos()
 			u.X, u.Y = p.X, p.Y
 			r.noteMove(u, from)
+			r.moveWithFormation(u)
 			return nil
 		}
 		if op.Name != "" {

@@ -100,7 +100,8 @@
     </header>
     {{with .Unit.Status}}<p class="small unit-status">{{.}}</p>{{end}}
     <blockquote class="order-text">{{.Order.Text}}</blockquote>
-    {{if .Order.Mark}}<p class="small muted">Pin: {{.Order.MarkLabel}}</p>{{end}}
+    {{if .Wants}}<p class="small">Pin: {{.Wants}}.</p>{{else if .Order.Mark}}<p class="small muted">Pin: {{.Order.MarkLabel}}</p>{{end}}
+    {{with .Reach}}<p class="small muted">Moves {{.}}.</p>{{end}}
     {{with .Moved}}<p class="small moved">{{.Text}}</p>{{end}}
     <p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>
 

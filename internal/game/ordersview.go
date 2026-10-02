@@ -26,8 +26,19 @@ type OrderView struct {
 type OrderSlot struct {
 	Unit      UnitView
 	Order     *OrderView
-	NoContact bool   // out of contact: the viewer (a commander) can't reach it
-	Holder    string // who holds it, when that's not the viewer
+	NoContact bool      // out of contact: the viewer (a commander) can't reach it
+	Holder    string    // who holds it, when that's not the viewer
+	Moved     *MoveView // referee: the counter was moved by hand this turn
+}
+
+// CheckIn is one player unit's order status, for the referee: who's in,
+// even while they referee blind (the status, never the text).
+type CheckIn struct {
+	Unit   UnitView
+	Holder string
+	Status string    // "in", "draft", "returned", "none"
+	At     time.Time // when it was committed
+	Moved  *MoveView
 }
 
 // OrderData is what the order form needs on the client.
@@ -66,6 +77,26 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 	if r.Phase == PhaseSetup {
 		return
 	}
+	if me.Role == RoleReferee && r.Phase == PhasePlanning {
+		for _, u := range r.Units {
+			h := r.memberOrNil(u.AssignedTo)
+			if !mod.Side(u.Side).Playable || h == nil || h.Role == RoleReferee || h.Status != StatusApproved {
+				continue
+			}
+			c := CheckIn{Unit: unitView(r, u, mod, me), Holder: h.Name, Status: "none", Moved: r.MoveOf(u.ID)}
+			if o := r.CurrentOrder(u.ID); o != nil {
+				switch {
+				case o.Status == OrderCommitted:
+					c.Status, c.At = "in", o.UpdatedAt
+				case o.Review == "returned":
+					c.Status = "returned"
+				default:
+					c.Status = "draft"
+				}
+			}
+			v.CheckIns = append(v.CheckIns, c)
+		}
+	}
 	mine := map[string]bool{}
 	for _, u := range r.Units {
 		if !r.CanOrder(mod, me, u) {
@@ -89,6 +120,9 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 		}
 		mine[u.ID] = true
 		slot := OrderSlot{Unit: uv}
+		if me.Role == RoleReferee {
+			slot.Moved = r.MoveOf(u.ID)
+		}
 		if h := r.memberOrNil(u.AssignedTo); h != nil && h.ID != me.ID {
 			slot.Holder = h.Name
 		}

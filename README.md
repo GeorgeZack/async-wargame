@@ -116,8 +116,8 @@ cross the canal, reach the hospital, and bring the survivors out.
   approve one or send it back with a note.
 - **One page for players:** the situation (latest report, briefing,
   history), the map, their character with a **private brief** only they and
-  the referee can read, the order box, and talk. The referee has four
-  screens: Table (map, orders, talk), Desk (judging, the other side, events,
+  the referee can read, the order box, and game chat. The referee has four
+  screens: Table (map, orders, game chat), Desk (judging, the other side, events,
   facts), People, and Setup (map and scale, scenario, schedule, settings).
 - **The map** is the drawn hex map or an image the referee uploads (a
   sketch, a scan, a city plan), with a hex grid, a square grid, or none laid

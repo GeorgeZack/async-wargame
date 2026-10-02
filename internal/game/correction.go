@@ -48,11 +48,12 @@ type gameState struct {
 	Reports     *[]*TurnReport `json:"reports"`
 	Seq         *int           `json:"seq"`
 	Intentions  *[]*Intention  `json:"intentions"`
+	Moves       *[]*Move       `json:"moves"`
 }
 
 func (r *Room) gameState() gameState {
 	return gameState{&r.Turn, &r.Phase, &r.Deadline, &r.Deferred, &r.LockedAt, &r.Threat, &r.Units, &r.Features,
-		&r.Events, &r.Orders, &r.Desk, &r.LockedUnits, &r.Reports, &r.Seq, &r.Intentions}
+		&r.Events, &r.Orders, &r.Desk, &r.LockedUnits, &r.Reports, &r.Seq, &r.Intentions, &r.Moves}
 }
 
 // snapshot saves the game state for a correction of this turn.

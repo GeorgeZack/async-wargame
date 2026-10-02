@@ -15,7 +15,8 @@ type DeskView struct {
 	Unrolled  int
 	Units     []UnitOption // who can roll
 	Factors   []Factor
-	Missing   []string // player units with no order this turn
+	Missing   []string   // player units with no order this turn
+	Moves     []MoveView // counters the referee moved that have no order on the desk
 }
 
 type DeskItem struct {
@@ -27,8 +28,9 @@ type DeskItem struct {
 	Outcome  *Outcome
 	Busy     bool // the assistant is drafting its outcome
 	Question *Question
-	Asking   bool   // the assistant is drafting a question
-	Holder   string // who'd be asked; "" if no player holds the unit
+	Asking   bool      // the assistant is drafting a question
+	Holder   string    // who'd be asked; "" if no player holds the unit
+	Moved    *MoveView // the referee moved this unit's counter this turn
 }
 
 type ContestView struct {
@@ -75,6 +77,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 		if h := r.memberOrNil(u.AssignedTo); h != nil && h.Status == StatusApproved {
 			it.Holder = h.Name
 		}
+		it.Moved = r.MoveOf(u.ID)
 		for _, c := range d.Contests {
 			if c.Order == o.ID {
 				it.Contests = append(it.Contests, contestView(c))
@@ -103,6 +106,11 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 	for _, u := range r.Units {
 		if mod.Side(u.Side).Playable && !ordered[u.ID] && r.memberOrNil(u.AssignedTo) != nil {
 			dv.Missing = append(dv.Missing, u.Name)
+		}
+	}
+	for _, m := range r.movesThisTurn() {
+		if !ordered[m.Unit] && r.Unit(m.Unit) != nil {
+			dv.Moves = append(dv.Moves, r.moveView(m))
 		}
 	}
 	return dv

@@ -8,7 +8,7 @@
     <div class="col">{{template "sec-fact-notes" .}}{{template "sec-assistant" .}}</div>
     <div class="col">{{template "sec-events" .}}</div>
   </div>
-  <details class="panel"><summary><h2>Event table</h2></summary>{{template "sec-odds" .}}</details>
-  <details class="panel"><summary><h2>Activity</h2></summary>{{template "sec-log" .}}</details>
+  {{template "sec-odds" .}}
+  {{template "sec-log" .}}
 </main>
 {{template "shell-bottom" .}}{{end}}

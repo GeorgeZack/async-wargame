@@ -100,6 +100,7 @@
     {{with .Unit.Status}}<p class="small unit-status">{{.}}</p>{{end}}
     <blockquote class="order-text">{{.Order.Text}}</blockquote>
     {{if .Order.Mark}}<p class="small muted">Pin: {{.Order.MarkLabel}}</p>{{end}}
+    {{with .Moved}}<p class="small moved">{{.Text}}</p>{{end}}
     <p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>
 
     {{range .Contests}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
@@ -147,6 +148,8 @@
   <section class="desk-extra" aria-labelledby="extra-h">
     <h3 id="extra-h">Everything else</h3>
     <p class="small muted">The infected moving, survivors panicking, the building catching fire: things that happened without anyone ordering them. Drag counters on the Table to move them.</p>
+    {{with .Moves}}<h4 class="moves-h">Counters you moved this turn</h4>
+    <ul class="plain small moves">{{range .}}<li><strong>{{.Unit}}</strong>: {{.Text}}</li>{{end}}</ul>{{end}}
     {{range .Loose}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
     {{template "add-roll" (dict "V" $ "Order" "" "Unit" "" "Open" false)}}
     {{range .Extra}}<form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance>
@@ -228,8 +231,16 @@
 {{end}}
 
 {{define "sec-orders"}}
-<section class="panel" id="orders-panel" data-live aria-labelledby="orders-h"{{if not .MyOrders}} hidden{{end}}>
+<section class="panel" id="orders-panel" data-live aria-labelledby="orders-h"{{if not (or .MyOrders .CheckIns)}} hidden{{end}}>
       <h2 id="orders-h">Orders, turn {{.Turn}}</h2>
+      {{if .CheckIns}}<h3 class="checkin-h">Who's in <span class="muted small">{{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}</span></h3>
+      <ul class="plain list checkins">{{range .CheckIns}}<li class="checkin ci-{{.Status}}">
+        <div><span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><strong>{{.Unit.Name}}</strong> <span class="muted small">{{.Holder}}</span>
+          <span class="tag ci-tag">{{if eq .Status "in"}}✓ in{{else if eq .Status "draft"}}draft, not sent{{else if eq .Status "returned"}}sent back{{else}}no order yet{{end}}</span>
+          {{if eq .Status "in"}}<span class="muted small">sent <time datetime="{{iso .At}}" title="{{stamp .At}}">{{ago .At}}</time></span>{{end}}</div>
+        {{with .Moved}}<div class="small moved">{{.Text}}</div>{{end}}
+      </li>{{end}}</ul>
+      {{if $.Blind}}<p class="muted small">Refereeing blind: you see who's in, not what they wrote, until the lock.</p>{{end}}{{end}}
       {{if eq .Phase "planning"}}<p class="muted small">Orders lock {{.Clock.DeadlineText}}. A marine without a committed order carries on as before, and the referee decides what that means.</p>
       {{else if eq .Phase "resolving"}}<p class="muted small">Orders are locked while the referee works out what happens.</p>{{end}}
       <ul class="plain list">
@@ -239,6 +250,7 @@
             {{with .Holder}}<span class="small muted">{{.}}</span>{{end}}
             <span class="tag tag-order-{{if .Order}}{{.Order.Status}}{{else}}none{{end}}">{{if .Order}}{{.Order.Status}}{{else}}no order{{end}}</span></div>
           {{with .Unit.Status}}<div class="small unit-status">{{.}}</div>{{end}}
+          {{with .Moved}}<div class="small moved">{{.Text}}</div>{{end}}
           {{if .NoContact}}<div class="small no-contact">{{.Unit.RadioText}}. Their orders stay with {{if .Holder}}{{.Holder}}{{else}}them{{end}} until they're back on the radio.</div>{{end}}
           {{with .Order}}<blockquote class="order-text">{{.Text}}</blockquote>
           <div class="small muted">{{if .Mark}}Pin: {{.MarkLabel}} · {{end}}{{if .Author}}by {{.Author}}{{end}}</div>
@@ -478,7 +490,7 @@
 {{end}}
 
 {{define "sec-log"}}
-<section class="panel" id="log" data-live aria-labelledby="log-h">
+<section class="panel" id="log" data-live aria-labelledby="log-h" data-collapsed>
       <h2 id="log-h">Activity</h2>
       <ol class="plain log">
         {{range .Log}}<li><time datetime="{{iso .At}}" title="{{stamp .At}}">{{ago .At}}</time> {{if eq .Kind "sitrep"}}<span class="tag tag-sitrep">sitrep</span> {{else if eq .Kind "event"}}<span class="tag tag-cat">event</span> {{end}}{{.Text}}{{if eq .Visibility "referee"}} <span class="tag tag-hidden">referee only</span>{{end}}</li>{{end}}
@@ -536,7 +548,7 @@
 </li>{{end}}
 
 {{define "sec-odds"}}
-<section class="panel" id="odds" data-live aria-labelledby="odds-h">
+<section class="panel" id="odds" data-live aria-labelledby="odds-h" data-collapsed>
   <h2 id="odds-h">Event table</h2>
   <p class="muted small">Chance that a random roll picks each event at each threat level, given what's on the map now. Current threat: {{.Threat}}.</p>
   <div class="table-scroll">
@@ -912,7 +924,7 @@
 
 {{define "sec-talk"}}
 <section class="panel talk" id="talk" aria-labelledby="talk-h">
-  <h2 id="talk-h">Talk</h2>
+  <h2 id="talk-h">Game Chat</h2>
   <nav class="channel-pills" id="channel-pills" data-live aria-label="Channels">
     {{range .Channels}}<a href="{{$.Base}}?c={{.ID}}#talk" class="pill{{if eq .ID $.Channel.ID}} active{{end}}"{{if eq .ID $.Channel.ID}} aria-current="page"{{end}}>{{.Name}}{{if and .Unread (ne .ID $.Channel.ID)}} <span class="count">{{.Unread}}</span>{{end}}</a>{{end}}
   </nav>

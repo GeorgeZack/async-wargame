@@ -88,8 +88,10 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 		u.Name = name
 	}
 	if e.At != nil {
+		from := u.Pos()
 		p := r.clampPos(*e.At)
 		u.X, u.Y = p.X, p.Y
+		r.noteMove(u, from)
 	}
 	if e.Strength != nil {
 		if *e.Strength < 0 || *e.Strength > 100000 {

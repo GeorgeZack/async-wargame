@@ -166,7 +166,7 @@
       let stored = null;
       try { stored = JSON.parse(sessionStorage.getItem("aw-map:" + location.pathname)); } catch {}
       if (stored && stored.vb && stored.full === this.svg.dataset.viewbox) this.vb = stored.vb;
-      else if (this.svg.getBoundingClientRect().width < 700) this.focusStart();
+      else if (this.svg.getBoundingClientRect().width < 480) this.focusStart();
       try {
         if (localStorage.getItem("aw-grid") === "off") {
           this.svg.classList.add("no-grid");
@@ -1153,6 +1153,7 @@
       orders.afterRefresh();
       threadToEnd();
       map.afterRefresh();
+      folds.apply();
     } catch {
       // Offline or server restarting; the event stream will retry.
     } finally {
@@ -1363,6 +1364,70 @@
     },
   };
 
+  // ---------- collapsible sections ----------
+  //
+  // Every panel gets a button in its header to fold it away. The choice is
+  // remembered in this browser, per room seat and screen, so a player who
+  // never needs a section can keep it out of the way. Folding panels
+  // (<details>) remember whether they're open the same way.
+
+  const folds = {
+    key(panel) {
+      const name = panel.id || panel.querySelector("h2")?.textContent.trim().toLowerCase().replace(/\s+/g, "-") || "";
+      return name ? `aw-fold:${main()?.dataset.base || ""}:${main()?.className || ""}:${name}` : "";
+    },
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+
+    header(panel) {
+      const h = panel.querySelector(":scope > h2, :scope > .panel-head, :scope > .desk-head > h2");
+      return h && !h.classList.contains("sr-only") ? h : null;
+    },
+
+    apply() {
+      document.querySelectorAll(".screen section.panel").forEach((panel) => {
+        const head = this.header(panel);
+        const k = this.key(panel);
+        if (!head || !k) return;
+        let btn = head.querySelector(":scope > .fold-btn");
+        if (!btn) {
+          btn = el("button", { type: "button", class: "fold-btn", "aria-expanded": "true" });
+          head.append(btn);
+        }
+        const stored = this.get(k);
+        this.show(panel, btn, stored ? stored === "open" : !panel.hasAttribute("data-collapsed"));
+      });
+      document.querySelectorAll(".screen details.panel").forEach((d) => {
+        const k = this.key(d);
+        const stored = k && this.get(k);
+        if (stored) d.open = stored === "open";
+        if (!d.dataset.foldWatch) {
+          d.dataset.foldWatch = "1";
+          d.addEventListener("toggle", () => { const key = this.key(d); if (key) this.set(key, d.open ? "open" : "closed"); });
+        }
+      });
+    },
+
+    show(panel, btn, open) {
+      panel.classList.toggle("is-collapsed", !open);
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      const name = panel.querySelector("h2")?.textContent.trim() || "section";
+      btn.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} ${name}`);
+      btn.title = open ? "Collapse" : "Expand";
+    },
+  };
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".fold-btn");
+    if (!btn) return;
+    e.preventDefault();
+    const panel = btn.closest(".panel");
+    const open = panel.classList.contains("is-collapsed");
+    folds.show(panel, btn, open);
+    const k = folds.key(panel);
+    if (k) folds.set(k, open ? "open" : "closed");
+  });
+
   // The open discussion thread scrolls to its latest message. Ctrl+Enter sends.
   function threadToEnd() {
     const t = document.getElementById("thread");
@@ -1376,6 +1441,7 @@
   });
 
   document.addEventListener("DOMContentLoaded", () => {
+    folds.apply();
     threadToEnd();
     notify.init();
     map.init();

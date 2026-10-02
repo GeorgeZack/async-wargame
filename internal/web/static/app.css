@@ -1031,3 +1031,32 @@ table.ledger th[scope=row] { font-weight: 600; white-space: nowrap; }
 .marker.picked { filter: drop-shadow(0 0 1.6px #f2c94c) drop-shadow(0 0 1.6px #f2c94c); }
 .select-box { fill: rgb(242 201 76 / .15); stroke: #e0a100; stroke-width: 1.5; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 .multi-btn[aria-pressed="true"] { background: #a87b00; border-color: #a87b00; color: #fff !important; }
+
+/* Folding sections away. The button sits at the right of the header bar. */
+.fold-btn { float: right; margin: -.15rem -.35rem 0 .5rem; width: 1.7rem; height: 1.7rem; min-height: 0; padding: 0;
+  border: 1px solid color-mix(in srgb, var(--titlebar-text) 40%, transparent); border-radius: 4px; background: transparent;
+  color: var(--titlebar-text); font-size: .9rem; line-height: 1; cursor: pointer; }
+.fold-btn::before { content: "−"; }
+.fold-btn[aria-expanded="false"]::before { content: "+"; }
+.fold-btn:hover { background: color-mix(in srgb, var(--titlebar-text) 15%, transparent); }
+.panel-head > .fold-btn { float: none; margin: 0 0 0 .25rem; order: 99; }
+.screen .panel.is-collapsed { padding-bottom: 0; }
+.screen .panel.is-collapsed > :not(h2):not(.panel-head):not(.desk-head),
+.screen .panel.is-collapsed > .desk-head > :not(h2),
+.screen .panel.is-collapsed > .panel-head ~ * { display: none !important; }
+.screen .panel.is-collapsed > h2:first-child, .screen .panel.is-collapsed > .panel-head:first-child { margin-bottom: 0; }
+
+/* Equal halves: the side column is as readable as the map. */
+@media (min-width: 1000px) {
+  .table-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (min-width: 1100px) { .setup-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* The referee's check-in list and move notes. */
+.checkin-h { margin: .4rem 0 .2rem; font-size: .95rem; }
+.checkins .ci-tag { font-weight: 700; }
+.checkin.ci-in .ci-tag { color: var(--ok); }
+.checkin.ci-draft .ci-tag { color: var(--civilians); }
+.checkin.ci-returned .ci-tag, .checkin.ci-none .ci-tag { color: var(--danger); }
+.moved { color: #3d6ab3; font-style: italic; }
+.moves-h { margin: .6rem 0 .2rem; font-size: .9rem; }

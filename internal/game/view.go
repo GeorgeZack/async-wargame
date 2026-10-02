@@ -85,6 +85,7 @@ type View struct {
 	OpenFacts   int         // referee: proposals waiting
 	FactUnits   []UnitView  // units the viewer may propose facts about
 	MyOrders    []OrderSlot // units the viewer can give orders to
+	CheckIns    []CheckIn   // referee, while orders are open: each player unit's status
 	OtherOrders []OrderView // other friendly orders the viewer may see
 
 	// Referee only.

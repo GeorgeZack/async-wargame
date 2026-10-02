@@ -858,7 +858,7 @@ func TestScreensByRole(t *testing.T) {
 	}
 	// A player has one page: situation, map, character, order, talk.
 	_, body := hicks.get(base)
-	mustContain(t, body, "Situation", "Your character", "Your order, turn 1", "Talk", `id="map"`)
+	mustContain(t, body, "Situation", "Your character", "Your order, turn 1", "Game Chat", `id="map"`)
 	mustNotContain(t, body, `id="screen-tabs"`, ">Desk<", ">Setup<")
 }
 

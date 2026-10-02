@@ -206,7 +206,9 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			if err != nil {
 				return err
 			}
+			from := u.Pos()
 			u.X, u.Y = p.X, p.Y
+			r.noteMove(u, from)
 			return nil
 		}
 		if op.Name != "" {

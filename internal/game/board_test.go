@@ -172,3 +172,41 @@ func TestMoveSeveralUnitsAtOnce(t *testing.T) {
 		t.Error("moved a unit that doesn't exist")
 	}
 }
+
+func TestRefereeMovesShowAtTheDesk(t *testing.T) {
+	r, mod, ref, _, hicks := orderRoom(t)
+	now := central(t, "2026-09-30 13:00")
+	o, _ := r.SaveOrder(hicks, mod, "m1", "Reyes heads for the bridge.", nil, true, now)
+	start := r.Unit("m1").Pos()
+	// While orders are open the referee sees who's in, and moves the shamblers.
+	v := BuildView(r, testScenario(t), mod, ref)
+	in := map[string]string{}
+	for _, c := range v.CheckIns {
+		in[c.Unit.ID] = c.Status
+	}
+	if in["m1"] != "in" || in["m2"] != "none" {
+		t.Errorf("check-ins %v", in)
+	}
+	r.MoveUnits(ref, mod, []UnitMove{{ID: "z1", At: center(9, 7)}})
+	r.Tick(mod, r.Deadline)
+	// At the desk: Reyes moved twice by hand comes out as one move.
+	r.EditUnit(ref, mod, "m1", UnitEdit{At: ptr(center(6, 8))})
+	r.EditUnit(ref, mod, "m1", UnitEdit{At: ptr(center(8, 7))})
+	d := buildDesk(r, mod, ref, AIView{})
+	if len(d.Items) != 1 || d.Items[0].Order.ID != o.ID || d.Items[0].Moved == nil ||
+		!strings.Contains(d.Items[0].Moved.Text, "Red Beach") || !strings.Contains(d.Items[0].Moved.Text, "0908") {
+		t.Fatalf("Reyes's move: %+v", d.Items[0].Moved)
+	}
+	if len(d.Moves) != 1 || d.Moves[0].Unit != "Shamblers by the canal" || !strings.Contains(d.Moves[0].Text, "Canal bridge") {
+		t.Errorf("other moves: %+v", d.Moves)
+	}
+	// Moving him back where he started forgets the move.
+	r.EditUnit(ref, mod, "m1", UnitEdit{At: &start})
+	if r.MoveOf("m1") != nil {
+		t.Error("a move back to the start is still noted")
+	}
+	// Players never see the notes.
+	if v := BuildView(r, testScenario(t), mod, hicks); len(v.CheckIns) != 0 {
+		t.Error("a player sees the check-in list")
+	}
+}

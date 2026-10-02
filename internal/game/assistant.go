@@ -250,8 +250,17 @@ func (r *Room) outcomePrompt(mod *Module, run *Run) (string, string, bool) {
 Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Read the rolls as the referee would: compare each side's total with the other's and with what each was trying to do. A big gap is decisive; a small one is close and costs something; a low total rolled alone means the situation got the better of them. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Enemy units nearby may say what they intend this turn; they act on it. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
 	b, _ := json.MarshalIndent(map[string]any{
 		"order": o.Text, "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
-		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes}, "", " ")
+		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes, "refereeMovedCounter": r.moveForAI(u.ID)}, "", " ")
 	return system, string(b), true
+}
+
+// moveForAI says where the referee put a unit's counter this turn, so a
+// drafted outcome ends where the counter now stands.
+func (r *Room) moveForAI(unitID string) string {
+	if mv := r.MoveOf(unitID); mv != nil {
+		return "The referee moved this unit's counter by hand this turn: " + mv.Text + " Treat where it ended as where the marine got to."
+	}
+	return ""
 }
 
 func (r *Room) narrativePrompt(mod *Module, run *Run) (string, string, bool) {

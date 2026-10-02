@@ -56,3 +56,29 @@ host-password = "hunter2"
 		t.Error("a missing -config file was ignored")
 	}
 }
+
+func TestAIInstructionText(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "in.txt")
+	os.WriteFile(f, []byte("\nKeep outcomes under 80 words.\n"), 0o600)
+	got, err := aiInstructionText(`Answer directly.\nDon't reason at length.`, f)
+	want := "Answer directly.\nDon't reason at length.\n\nKeep outcomes under 80 words."
+	if err != nil || got != want {
+		t.Errorf("got %q, %v", got, err)
+	}
+	if got, _ := aiInstructionText("", ""); got != "" {
+		t.Errorf("empty: %q", got)
+	}
+	if _, err := aiInstructionText("", filepath.Join(dir, "missing")); err == nil {
+		t.Error("a missing file was ignored")
+	}
+	// The config file sets it like any flag.
+	conf := filepath.Join(dir, "aw.conf")
+	os.WriteFile(conf, []byte("ai-instructions = Answer directly. Keep it short.\n"), 0o600)
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	in := fs.String("ai-instructions", "", "")
+	fs.String("config", "", "")
+	if _, err := loadConfig(fs, []string{"-config", conf}); err != nil || *in != "Answer directly. Keep it short." {
+		t.Errorf("from config: %q, %v", *in, err)
+	}
+}

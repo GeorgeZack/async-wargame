@@ -73,3 +73,28 @@ func TestSessionIDsAreUUIDs(t *testing.T) {
 		t.Errorf("session ids %q %q", a, b)
 	}
 }
+
+func TestInstructionsJoinEveryPrompt(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []struct{ Role, Content string }
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		got = req.Messages[0].Content
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL + "/v1", Model: "m", Name: "t", Instructions: "Answer directly.\nNo long reasoning."})
+	if _, _, err := c.Complete(context.Background(), "You are Jev.", "hi", 50); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, "You are Jev.") || !strings.HasSuffix(got, "Answer directly.\nNo long reasoning.") {
+		t.Errorf("system prompt %q", got)
+	}
+	c = New(Config{BaseURL: srv.URL + "/v1", Model: "m", Name: "t"})
+	c.Complete(context.Background(), "You are Jev.", "hi", 50)
+	if got != "You are Jev." {
+		t.Errorf("without instructions: %q", got)
+	}
+}

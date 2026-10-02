@@ -37,6 +37,8 @@ func main() {
 	aiLlama := flag.String("ai-llama-server", "llama-server", `llama.cpp server binary for -ai local`)
 	aiLocalModel := flag.String("ai-local-model", "", "GGUF model file for -ai local")
 	aiContext := flag.Int("ai-context", 8192, "context size for -ai local")
+	aiInstructions := flag.String("ai-instructions", "", `instructions added to every prompt the assistant sends, e.g. "Answer directly; don't reason at length." (\n for a new line)`)
+	aiInstructionsFile := flag.String("ai-instructions-file", "", "file of instructions added to every prompt the assistant sends (after -ai-instructions)")
 	pushKey := flag.String("push-key", "", "VAPID key file for web push notifications (default: vapid.pem next to the -data file); created if missing")
 	noPush := flag.Bool("no-push", false, "turn web push notifications off")
 	proxy := flag.Bool("proxy", false, "running behind a reverse proxy or tunnel that terminates HTTPS (trusts X-Forwarded-Proto and X-Forwarded-For)")
@@ -95,7 +97,11 @@ func main() {
 	go store.RunClock(30*time.Second, ctx.Done()) // locks turns on schedule; lets the AI stand in for an absent referee
 
 	if *aiFlag != "" {
-		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext)
+		instructions, err := aiInstructionText(*aiInstructions, *aiInstructionsFile)
+		if err != nil {
+			log.Fatalf("AI: %v", err)
+		}
+		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions)
 		if err != nil {
 			log.Fatalf("AI: %v", err)
 		}
@@ -112,6 +118,9 @@ func main() {
 		srv.SetAI(client)
 		go (&assist.Worker{Store: store, Client: client}).Run(ctx)
 		log.Printf("AI assistant: %s via %s", client.Model(), client.Provider())
+		if in := client.Instructions(); in != "" {
+			log.Printf("AI instructions added to every prompt: %q", in)
+		}
 	}
 
 	hs := &http.Server{
@@ -133,12 +142,12 @@ func main() {
 }
 
 // startAI sets up the assistant's model from the -ai flags.
-func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int) (*ai.Client, *ai.Local, error) {
+func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int, instructions string) (*ai.Client, *ai.Local, error) {
 	key := os.Getenv("AW_AI_KEY")
 	if key == "" {
 		key = os.Getenv("OPENCODE_API_KEY") // what OpenCode's own tools use
 	}
-	cfg := ai.Config{BaseURL: which, Model: model, APIKey: key, Name: which}
+	cfg := ai.Config{BaseURL: which, Model: model, APIKey: key, Name: which, Instructions: instructions}
 	var local *ai.Local
 	switch p, ok := ai.Presets[which]; {
 	case ok:
@@ -186,4 +195,22 @@ func startAI(ctx context.Context, which, model, llama, localModel string, contex
 		log.Printf("AI: warning: %s doesn't list a model called %q; it lists: %s", cfg.Name, cfg.Model, strings.Join(ids, ", "))
 	}
 	return client, local, nil
+}
+
+// aiInstructionText joins the operator's instructions for the assistant:
+// the setting (where \n starts a new line) and then the file, if any.
+func aiInstructionText(text, file string) (string, error) {
+	parts := []string{strings.ReplaceAll(strings.TrimSpace(text), `\n`, "\n")}
+	if file != "" {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("-ai-instructions-file: %w", err)
+		}
+		parts = append(parts, strings.TrimSpace(string(b)))
+	}
+	out := strings.TrimSpace(strings.Join(parts, "\n\n"))
+	if len(out) > 8000 {
+		return "", fmt.Errorf("the AI instructions are %d characters; keep them under 8000", len(out))
+	}
+	return out, nil
 }

@@ -46,6 +46,9 @@ type Config struct {
 	// Session, if set, is sent as x-opencode-session: OpenCode groups a
 	// client's requests by it. One per server run.
 	Session string
+	// Instructions, if set, are the operator's own instructions, added to
+	// every system prompt ("Answer directly; don't reason at length.").
+	Instructions string
 }
 
 // NewSessionID makes a random UUID (version 4) for Config.Session.
@@ -55,6 +58,15 @@ func NewSessionID() string {
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// system adds the operator's instructions, if any, to a system prompt.
+func (c *Client) system(prompt string) string {
+	extra := strings.TrimSpace(c.cfg.Instructions)
+	if extra == "" {
+		return prompt
+	}
+	return prompt + "\n\nInstructions from whoever runs this server, for every task:\n" + extra
 }
 
 // header sets what every request carries.
@@ -88,6 +100,9 @@ func New(cfg Config) *Client {
 func (c *Client) Model() string    { return c.cfg.Model }
 func (c *Client) Provider() string { return c.cfg.Name }
 
+// Instructions are the operator's extra instructions, added to every prompt.
+func (c *Client) Instructions() string { return strings.TrimSpace(c.cfg.Instructions) }
+
 // Usage is what one call cost, in tokens.
 type Usage struct {
 	Prompt     int `json:"prompt_tokens"`
@@ -104,7 +119,7 @@ type message struct {
 func (c *Client) Complete(ctx context.Context, system, user string, maxTokens int) (string, Usage, error) {
 	body, _ := json.Marshal(map[string]any{
 		"model":       c.cfg.Model,
-		"messages":    []message{{"system", system}, {"user", user}},
+		"messages":    []message{{"system", c.system(system)}, {"user", user}},
 		"temperature": 0.3,
 		"max_tokens":  maxTokens,
 		"stream":      false,

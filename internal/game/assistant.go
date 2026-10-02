@@ -639,14 +639,15 @@ func (r *Room) DecideNarrative(actor *Member, op, turn int, action, text string)
 
 // AIView is the assistant as the referee sees it.
 type AIView struct {
-	Available bool   // the server has a model
-	Provider  string // where game data goes
-	Model     string
-	On        bool
-	Suggest   bool
-	Narrative bool
-	Runs      []Run // latest first
-	Busy      map[string]bool
+	Available    bool   // the server has a model
+	Provider     string // where game data goes
+	Model        string
+	Instructions string // the server operator's extra instructions to the model
+	On           bool
+	Suggest      bool
+	Narrative    bool
+	Runs         []Run // latest first
+	Busy         map[string]bool
 }
 
 func assistantView(r *Room) AIView {

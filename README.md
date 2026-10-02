@@ -90,6 +90,11 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
   model is on the provider's list, printing the list if it isn't. Some free
   Zen models log prompts or use them for training (see
   [opencode.ai/docs/zen](https://opencode.ai/docs/zen/)).
+- **Your own instructions to the model:** `ai-instructions` (one line;
+  `\n` starts a new one) and/or `ai-instructions-file` are added to every
+  prompt the assistant sends, for example "Answer directly. Don't reason at
+  length." to cut a thinking model's reasoning. The referee sees them in
+  Setup's AI assistant panel.
 - **`-ai local`** starts `llama-server` (from [llama.cpp](https://github.com/ggml-org/llama.cpp);
   `-ai-llama-server` if it isn't on the `PATH`) on a private port with your
   GGUF model, waits for it to load, and stops it on shutdown. `-ai-context`

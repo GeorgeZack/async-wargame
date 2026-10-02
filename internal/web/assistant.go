@@ -17,7 +17,7 @@ func (s *Server) aiView(v *game.View) {
 	if s.ai == nil || !v.IsReferee {
 		return
 	}
-	v.AI.Available, v.AI.Provider, v.AI.Model = true, s.ai.Provider(), s.ai.Model()
+	v.AI.Available, v.AI.Provider, v.AI.Model, v.AI.Instructions = true, s.ai.Provider(), s.ai.Model(), s.ai.Instructions()
 }
 
 func (s *Server) setAssistant(w http.ResponseWriter, r *http.Request) {

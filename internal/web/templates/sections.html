@@ -720,6 +720,7 @@
 <section class="panel" id="assistant-settings" data-live aria-labelledby="ai-h">
       <h2 id="ai-h">AI assistant</h2>
       {{if .AI.Available}}
+      {{with .AI.Instructions}}<p class="small">This server adds these instructions to everything it asks the model: <span class="pre ai-instructions">{{.}}</span> <span class="muted">(set with <code>ai-instructions</code> in the server's config)</span></p>{{end}}
       <p class="small">This server's model is <strong>{{.AI.Model}}</strong>, through <strong>{{.AI.Provider}}</strong>. When it's on, it reads the locked orders and suggests rolls (skills, advantages, and why), drafts what happened from the rolls you make, and can draft an opening narrative for each report. It never changes the game: you roll, you keep or rewrite, and players see a narrative only after you approve it.</p>
       <p class="small muted">What's sent: unit names, skills, kit, status and notes, orders as written, positions, facts, your referee notes, and report lines. Not sent: messages, or anyone's name or account. Some free hosted models keep or train on what they're sent; check the provider's terms.</p>
       <form method="post" action="{{.Base}}/assistant" class="stack" data-enhance>

@@ -2,190 +2,598 @@
   "id": "st-ines",
   "name": "St. Ines",
   "module": "dark-coast",
-  "summary": "A four-marine squad lands on the beach, crosses the canal into the old city, reaches St. Ines Hospital, and brings the survivors out to the dropship.",
+  "summary": "A four-marine squad lands on Red Beach, crosses the canal into the edge of the city, reaches St. Ines Hospital, and brings the survivors back over the bridge to the dropship.",
   "briefing": [
-    "Port Ines stopped transmitting thirty hours ago. A distress beacon is still pinging from St. Ines Hospital, six blocks inland from Red Beach.",
+    "Port Ines stopped transmitting thirty hours ago. A distress beacon is still pinging from St. Ines Hospital, just across the canal from Red Beach.",
     "Your squad goes in alone: one dropship, Halyard, will hold just offshore of Red Beach and can take everyone you bring back. It can't come inland.",
-    "Get across the canal, get into the hospital, find whoever set off that beacon, and get them to the beach. Nobody knows what's in the streets. Assume the worst and move like it.",
+    "Avenida do Porto runs from the beach over the canal bridge to the hospital's front gate. There's an old footbridge at the harbor lock, north by the port. Find whoever set off that beacon and get them to the beach. Nobody knows what's in the streets. Assume the worst and move like it.",
     "Squad leader, you have the radio. Everyone else: if you lose sight of your sergeant, you're on your own until you find them again."
   ],
-  "refereeNotes": "Nine survivors are barricaded on the hospital's second floor with a wounded nurse, Ana Reis, who set off the beacon. She was bitten on the forearm yesterday and is hiding it (Okafor knows her; Lin's antiviral is too late for her, though nobody can be sure); a crawler is in the basement and will take anyone who goes looking for the generator. Three more people are holed up in the pharmacy, with shamblers pressing at the shutters. One group of shamblers is in the open across the canal at the start and can be seen from the beach. Runners are lying up in the old town to the northeast; they come at noise. Raise the threat when the squad is loud, or slow. The bridge is the only way over the canal for anyone carrying a stretcher.",
+  "refereeNotes": "Nine survivors are barricaded on the hospital's second floor with a wounded nurse, Ana Reis, who set off the beacon. She was bitten on the forearm yesterday and is hiding it (Okafor knows her; Lin's antiviral is too late for her, though nobody can be sure); a crawler is in the basement and will take anyone who goes looking for the generator. The compound wall has two ways in: the front gate on the avenue, chained, and the ambulance bay round the back. Three more people are holed up in Duarte's Pharmacy on Rua Duarte, with shamblers pressing at the shutters. One group of shamblers is in the open strip across the canal at the start and can be seen from the beach. Runners are lying up in the old town to the north-east; they come at noise. The police post by the bridge has a locked armory. The radio mast on Signal Hill would boost the squad's radios if someone got it running. Raise the threat when the squad is loud, or slow. The road bridge is the only crossing a stretcher can make; the lock footbridge is one person wide and rotten in the middle.",
   "board": {
     "background": "hex",
     "grid": "hex",
-    "distance": {"amount": 50, "unit": "m"},
-    "turn": {"amount": 10, "unit": "minutes"}
+    "distance": {
+      "amount": 15,
+      "unit": "m"
+    },
+    "turn": {
+      "amount": 2,
+      "unit": "minutes"
+    }
   },
   "map": {
-    "cols": 14,
+    "cols": 22,
     "rows": [
-      "~~b..ffuuuuu.f",
-      "~~b...uuuUUu.f",
-      "~~bb..uUUUUuu.",
-      "~~~b..uUUUUUu.",
-      "~~~b..uuUUUUuu",
-      "~~bb..iuuUUuu.",
-      "~~b...iiuuuu..",
-      "~~b..iii.uu.ff",
-      "~~bb.....fff..",
-      "~~~b....ffff.h"
+      "~~~~~~~~~~uuuuuUUUUUUu",
+      "~~~~~~~~~~uffuuUUUUUUu",
+      "~~~iiiiiiiuffuuUUUUUUu",
+      "~~~~iiiiiiuffuuUUUUUUu",
+      "~~~~iiiiiiuuuuuuuuuuhh",
+      "~~~iiiiiiiuuuuuuUUUuhh",
+      "~~~bb......uuuuuUUUuhh",
+      "~~~bb......uuuuuUUUuhh",
+      "~~bbb......uuuuuUUUfff",
+      "~~bbb..ii.uuuuuuUUUuff",
+      "~~bbb..ii.uuuuUuuuuuuu",
+      "~~~bb..ii.uuuuUUuuuiii",
+      "~~~bb.....uuuUuuuuuiii",
+      "~~~bb....mmmmuu..uuiii",
+      "~~~bbbmmmmmmmuu...uiii",
+      "~~~bbbmmmmmmmuuuuuuiii"
     ],
     "edges": [
       {
-        "col": 5,
-        "row": 0,
-        "dir": 0,
-        "type": "stream"
-      },
-      {
-        "col": 5,
-        "row": 1,
-        "dir": 0,
-        "type": "stream"
-      },
-      {
-        "col": 5,
+        "col": 9,
         "row": 2,
         "dir": 0,
-        "type": "stream"
-      },
-      {
-        "col": 5,
-        "row": 3,
-        "dir": 0,
-        "type": "stream"
-      },
-      {
-        "col": 5,
-        "row": 4,
-        "dir": 0,
-        "type": "stream",
+        "type": "river",
         "crossing": "bridge"
       },
       {
-        "col": 5,
+        "col": 9,
+        "row": 3,
+        "dir": 0,
+        "type": "river"
+      },
+      {
+        "col": 9,
+        "row": 4,
+        "dir": 0,
+        "type": "river"
+      },
+      {
+        "col": 9,
         "row": 5,
         "dir": 0,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 5,
+        "col": 9,
         "row": 6,
         "dir": 0,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 5,
+        "col": 9,
         "row": 7,
         "dir": 0,
-        "type": "stream"
+        "type": "river",
+        "crossing": "bridge"
       },
       {
-        "col": 5,
+        "col": 9,
         "row": 8,
         "dir": 0,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 5,
+        "col": 9,
         "row": 9,
         "dir": 0,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 5,
-        "row": 1,
-        "dir": 5,
-        "type": "stream"
+        "col": 9,
+        "row": 10,
+        "dir": 0,
+        "type": "river"
       },
       {
-        "col": 6,
-        "row": 0,
-        "dir": 4,
-        "type": "stream"
+        "col": 9,
+        "row": 11,
+        "dir": 0,
+        "type": "river"
       },
       {
-        "col": 5,
-        "row": 3,
-        "dir": 5,
-        "type": "stream"
+        "col": 9,
+        "row": 12,
+        "dir": 0,
+        "type": "river"
       },
       {
-        "col": 6,
+        "col": 9,
+        "row": 13,
+        "dir": 0,
+        "type": "river"
+      },
+      {
+        "col": 9,
+        "row": 14,
+        "dir": 0,
+        "type": "river"
+      },
+      {
+        "col": 9,
+        "row": 15,
+        "dir": 0,
+        "type": "river"
+      },
+      {
+        "col": 10,
         "row": 2,
         "dir": 4,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 5,
-        "row": 5,
+        "col": 9,
+        "row": 3,
         "dir": 5,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 6,
+        "col": 10,
         "row": 4,
         "dir": 4,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 5,
-        "row": 7,
+        "col": 9,
+        "row": 5,
         "dir": 5,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 6,
+        "col": 10,
         "row": 6,
         "dir": 4,
-        "type": "stream"
+        "type": "river"
       },
       {
-        "col": 6,
+        "col": 9,
+        "row": 7,
+        "dir": 5,
+        "type": "river"
+      },
+      {
+        "col": 10,
         "row": 8,
         "dir": 4,
-        "type": "stream"
+        "type": "river"
+      },
+      {
+        "col": 9,
+        "row": 9,
+        "dir": 5,
+        "type": "river"
+      },
+      {
+        "col": 10,
+        "row": 10,
+        "dir": 4,
+        "type": "river"
+      },
+      {
+        "col": 9,
+        "row": 11,
+        "dir": 5,
+        "type": "river"
+      },
+      {
+        "col": 10,
+        "row": 12,
+        "dir": 4,
+        "type": "river"
+      },
+      {
+        "col": 9,
+        "row": 13,
+        "dir": 5,
+        "type": "river"
+      },
+      {
+        "col": 10,
+        "row": 14,
+        "dir": 4,
+        "type": "river"
+      },
+      {
+        "col": 15,
+        "row": 5,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 15,
+        "row": 6,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 15,
+        "row": 7,
+        "dir": 0,
+        "type": "wall",
+        "crossing": "gate"
+      },
+      {
+        "col": 15,
+        "row": 8,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 15,
+        "row": 9,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 15,
+        "row": 5,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 16,
+        "row": 6,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 15,
+        "row": 7,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 16,
+        "row": 8,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 5,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 6,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 7,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 8,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 9,
+        "dir": 0,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 5,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 19,
+        "row": 6,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 7,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 19,
+        "row": 8,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 16,
+        "row": 4,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 17,
+        "row": 4,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 17,
+        "row": 4,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 4,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 4,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 19,
+        "row": 4,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 16,
+        "row": 9,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 16,
+        "row": 9,
+        "dir": 5,
+        "type": "wall"
+      },
+      {
+        "col": 17,
+        "row": 9,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 17,
+        "row": 9,
+        "dir": 5,
+        "type": "wall",
+        "crossing": "gate"
+      },
+      {
+        "col": 18,
+        "row": 9,
+        "dir": 4,
+        "type": "wall"
+      },
+      {
+        "col": 18,
+        "row": 9,
+        "dir": 5,
+        "type": "wall"
       }
     ],
     "roads": [
       {
         "col": 3,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 4,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 5,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 6,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 7,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 8,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 9,
-        "row": 4,
+        "row": 7,
         "dir": 0
       },
       {
         "col": 10,
+        "row": 7,
+        "dir": 0
+      },
+      {
+        "col": 11,
+        "row": 7,
+        "dir": 0
+      },
+      {
+        "col": 12,
+        "row": 7,
+        "dir": 0
+      },
+      {
+        "col": 13,
+        "row": 7,
+        "dir": 0
+      },
+      {
+        "col": 14,
+        "row": 7,
+        "dir": 0
+      },
+      {
+        "col": 15,
+        "row": 7,
+        "dir": 0
+      },
+      {
+        "col": 13,
+        "row": 0,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 1,
+        "dir": 4
+      },
+      {
+        "col": 13,
+        "row": 2,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 3,
+        "dir": 4
+      },
+      {
+        "col": 13,
         "row": 4,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 5,
+        "dir": 4
+      },
+      {
+        "col": 13,
+        "row": 6,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 7,
+        "dir": 4
+      },
+      {
+        "col": 13,
+        "row": 8,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 9,
+        "dir": 4
+      },
+      {
+        "col": 13,
+        "row": 10,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 11,
+        "dir": 4
+      },
+      {
+        "col": 13,
+        "row": 12,
+        "dir": 5
+      },
+      {
+        "col": 13,
+        "row": 13,
+        "dir": 4
+      },
+      {
+        "col": 13,
+        "row": 14,
+        "dir": 5
+      },
+      {
+        "col": 7,
+        "row": 2,
+        "dir": 0
+      },
+      {
+        "col": 8,
+        "row": 2,
+        "dir": 0
+      },
+      {
+        "col": 9,
+        "row": 2,
+        "dir": 0
+      },
+      {
+        "col": 10,
+        "row": 2,
+        "dir": 0
+      },
+      {
+        "col": 11,
+        "row": 2,
+        "dir": 0
+      },
+      {
+        "col": 12,
+        "row": 2,
+        "dir": 0
+      },
+      {
+        "col": 13,
+        "row": 12,
+        "dir": 0
+      },
+      {
+        "col": 14,
+        "row": 12,
+        "dir": 0
+      },
+      {
+        "col": 15,
+        "row": 12,
+        "dir": 0
+      },
+      {
+        "col": 16,
+        "row": 12,
+        "dir": 0
+      },
+      {
+        "col": 17,
+        "row": 12,
+        "dir": 0
+      },
+      {
+        "col": 18,
+        "row": 12,
+        "dir": 0
+      },
+      {
+        "col": 19,
+        "row": 12,
         "dir": 0
       }
     ]
@@ -195,34 +603,74 @@
       "id": "lz",
       "name": "Red Beach",
       "kind": "beachhead",
-      "col": 3,
-      "row": 4,
+      "col": 4,
+      "row": 8,
       "note": "Landing zone. Halyard holds just offshore and takes everyone brought here."
+    },
+    {
+      "id": "port",
+      "name": "Harbor cranes",
+      "kind": "port",
+      "col": 6,
+      "row": 3,
+      "note": "Quays, sheds, and a fishing boat tied up at the slip."
+    },
+    {
+      "id": "lock",
+      "name": "Lock footbridge",
+      "kind": "utility",
+      "col": 9,
+      "row": 2,
+      "note": "One person wide. A stretcher won't fit."
     },
     {
       "id": "bridge",
       "name": "Canal bridge",
       "kind": "utility",
-      "col": 5,
-      "row": 4,
+      "col": 9,
+      "row": 7,
       "note": "The only crossing a stretcher can make."
+    },
+    {
+      "id": "police",
+      "name": "Police post",
+      "kind": "police",
+      "col": 11,
+      "row": 8,
+      "note": "Locked armory in the back."
+    },
+    {
+      "id": "plaza",
+      "name": "Plaza Mayor",
+      "kind": "shelter",
+      "col": 12,
+      "row": 2,
+      "note": "Trees, a fountain, a church on the north side."
     },
     {
       "id": "hospital",
       "name": "St. Ines Hospital",
       "kind": "hospital",
-      "col": 9,
-      "row": 4,
-      "note": "Distress beacon active."
+      "col": 17,
+      "row": 7,
+      "note": "Distress beacon active. Front gate on the avenue; ambulance bay round the back."
     },
     {
       "id": "pharmacy",
       "name": "Duarte's Pharmacy",
       "kind": "shelter",
-      "col": 8,
-      "row": 6,
+      "col": 14,
+      "row": 11,
       "hidden": true,
       "note": "Steel shutters, three people inside."
+    },
+    {
+      "id": "mast",
+      "name": "Signal Hill mast",
+      "kind": "relay",
+      "col": 21,
+      "row": 5,
+      "note": "The city's radio mast. No power."
     }
   ],
   "units": [
@@ -231,8 +679,8 @@
       "brief": "You have the squad and the radio. Halyard's pilot, Lt. Marsh, will hold for three hours and not a minute longer: after that the tide turns and the dropship has to lift. Company wants the beacon's source found. You have not told the squad that the beacon uses a staff code: whoever set it off works at the hospital, and Company wants them out above anyone else.",
       "name": "Sgt. Reyes",
       "class": "sergeant",
-      "col": 3,
-      "row": 4,
+      "col": 4,
+      "row": 8,
       "strength": 1
     },
     {
@@ -240,8 +688,8 @@
       "brief": "Your sister's girlfriend, Ana, is a nurse at St. Ines. You haven't heard from her in two days. Nobody in the squad knows, and you'd like it to stay that way. You know the old city a little from shore leave: the pharmacy on Calle Duarte has steel shutters and a back way through the alley.",
       "name": "LCpl. Okafor",
       "class": "rifleman",
-      "col": 3,
-      "row": 4,
+      "col": 4,
+      "row": 8,
       "strength": 1
     },
     {
@@ -249,8 +697,8 @@
       "brief": "You carry the gun and four belts. Belt-fed fire carries a long way in empty streets, and you've heard what the infected do when they hear it. You also carry the breaching charge: two of them, actually. The second one isn't on the manifest.",
       "name": "PFC Doyle",
       "class": "gunner",
-      "col": 3,
-      "row": 4,
+      "col": 4,
+      "row": 8,
       "strength": 1
     },
     {
@@ -258,16 +706,16 @@
       "brief": "You carry the squad's only medical kit and four doses of the antiviral the brass swear works if given within the hour of a bite. They've never told anyone it works after that. Company earmarked three of them for whoever set off the beacon. Who gets the fourth is up to you.",
       "name": "HM3 Lin",
       "class": "corpsman",
-      "col": 3,
-      "row": 4,
+      "col": 4,
+      "row": 8,
       "strength": 1
     },
     {
       "id": "z1",
       "name": "Shamblers by the canal",
       "class": "shamblers",
-      "col": 7,
-      "row": 2,
+      "col": 10,
+      "row": 6,
       "strength": 8,
       "known": true
     },
@@ -275,23 +723,23 @@
       "id": "z2",
       "name": "Shamblers at the pharmacy",
       "class": "shamblers",
-      "col": 8,
-      "row": 6,
+      "col": 14,
+      "row": 11,
       "strength": 12
     },
     {
       "id": "z3",
       "name": "Basement crawler",
       "class": "crawler",
-      "col": 9,
-      "row": 4,
+      "col": 17,
+      "row": 7,
       "strength": 1
     },
     {
       "id": "z4",
       "name": "Old town runners",
       "class": "runners",
-      "col": 12,
+      "col": 19,
       "row": 1,
       "strength": 4
     },
@@ -299,16 +747,16 @@
       "id": "c1",
       "name": "Hospital survivors",
       "class": "civilians",
-      "col": 9,
-      "row": 4,
+      "col": 17,
+      "row": 7,
       "strength": 9
     },
     {
       "id": "c2",
       "name": "Pharmacy holdouts",
       "class": "civilians",
-      "col": 8,
-      "row": 6,
+      "col": 14,
+      "row": 11,
       "strength": 3
     }
   ]

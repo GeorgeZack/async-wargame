@@ -11,14 +11,14 @@ import (
 
 func TestScaleAndGridRefs(t *testing.T) {
 	r, _, _, _ := testRoom(t)
-	if got := r.Board.ScaleText(); got != "1 hex = 50 m · 1 turn = 10 minutes" {
+	if got := r.Board.ScaleText(); got != "1 hex = 15 m · 1 turn = 2 minutes" {
 		t.Errorf("St. Ines scale: %q", got)
 	}
-	bridge := center(5, 4)
-	if got := r.Where(bridge, false); got != "0605, at Canal bridge" {
+	bridge := center(9, 7)
+	if got := r.Where(bridge, false); got != "1008, at Canal bridge" {
 		t.Errorf("where: %q", got)
 	}
-	if got := r.DistanceText(center(3, 4), center(5, 4)); got != "about 100 m" {
+	if got := r.DistanceText(center(3, 8), center(5, 8)); got != "about 30 m" {
 		t.Errorf("two hexes: %q", got)
 	}
 	if (Measure{1, "minutes"}).String() != "1 minute" || (Measure{2.5, "km"}).String() != "2.5 km" {
@@ -149,7 +149,7 @@ func TestOldSavesMoveToPoints(t *testing.T) {
 		if u.Reported == nil || *u.Reported != center(3, 4) {
 			t.Errorf("reported %v", u.Reported)
 		}
-		if got.Board.ScaleText() != "1 hex = 50 m · 1 turn = 10 minutes" {
+		if got.Board.ScaleText() != "1 hex = 15 m · 1 turn = 2 minutes" {
 			t.Errorf("board %+v", got.Board)
 		}
 	})

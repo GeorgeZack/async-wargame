@@ -636,7 +636,7 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 	ref.post(base+"/start", nil)
 
 	order := "Okafor goes up the stairwell slow and tosses a grenade into the lobby, then lays down suppressing fire."
-	res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {order}, "mark_x": {"265"}, "mark_y": {"126"}, "submit": {"commit"}})
+	res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {order}, "mark_x": {"561.2"}, "mark_y": {"207"}, "submit": {"commit"}})
 	if res.StatusCode != 200 {
 		t.Fatalf("commit order: %d", res.StatusCode)
 	}
@@ -644,7 +644,7 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 		t.Errorf("ordered someone else's marine: %d", res.StatusCode)
 	}
 	_, body := hicks.room(base)
-	mustContain(t, body, "committed", "tosses a grenade", `class="order-mark s-committed mine"`, "0905, near St. Ines Hospital")
+	mustContain(t, body, "committed", "tosses a grenade", `class="order-mark s-committed mine"`, "1808, at St. Ines Hospital")
 	// The referee is blind to it until the lock.
 	_, body = ref.room(base)
 	mustNotContain(t, body, "tosses a grenade")
@@ -685,13 +685,13 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 
 	// The referee moves Okafor and writes it up; the player still sees the
 	// board as it was at the lock.
-	ref.post(base+"/units/m2/edit", url.Values{"hex": {"0905"}, "status": {"ears ringing"}})
+	ref.post(base+"/units/m2/edit", url.Values{"x": {"561.2"}, "y": {"207"}, "status": {"ears ringing"}})
 	ref.post(base+"/desk/outcome", url.Values{"order": {orderID}, "seen": {"all"},
 		"text": {"The grenade goes off in the lobby. Something small shrieks and goes still."}})
 	ref.post(base+"/desk/outcome", url.Values{"title": {"Behind the lines"}, "seen": {"referee"},
 		"text": {"The runners stir."}})
 	_, body = hicks.get(base)
-	mustContain(t, body, "0405") // where Okafor stood at the lock
+	mustContain(t, body, "0509, at Red Beach") // where Okafor stood at the lock
 	mustNotContain(t, body, "ears ringing")
 
 	ref.post(base+"/turn/next", nil)
@@ -701,7 +701,7 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 	_, body = ref.get(base)
 	mustContain(t, body, "Do the runners hear it", "The runners stir", "secret")
 	_, body = hicks.get(base)
-	mustContain(t, body, "0905", "ears ringing")
+	mustContain(t, body, "1808, at St. Ines Hospital", "ears ringing")
 }
 
 func TestOrdersOverHTTPAndClosing(t *testing.T) {

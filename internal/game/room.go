@@ -36,55 +36,59 @@ type Phase string
 const (
 	PhaseSetup    Phase = "setup"
 	PhasePlanning Phase = "planning"
+	// PhaseResolving: orders are locked and the referee is adjudicating.
+	PhaseResolving Phase = "resolving"
 )
 
 // Room is one hosted campaign: its membership, canonical state, and history.
 type Room struct {
-	Code          string              `json:"code"`
-	Name          string              `json:"name"`
-	ScenarioID    string              `json:"scenario"`
-	ModuleID      string              `json:"module"`
-	ModuleVersion string              `json:"moduleVersion"`
-	CreatedAt     time.Time           `json:"createdAt"`
-	Turn          int                 `json:"turn"`
-	Phase         Phase               `json:"phase"`
-	Closed        bool                `json:"closed,omitempty"`
-	CommsOff      bool                `json:"commsOff,omitempty"` // the referee switched comms rules off
-	ClosedAt      time.Time           `json:"closedAt,omitzero"`
-	Schedule      Schedule            `json:"schedule"`
-	Deadline      time.Time           `json:"deadline,omitzero"`  // when planning locks
-	Deferred      bool                `json:"deferred,omitempty"` // the referee moved the deadline off the schedule
-	LockedAt      time.Time           `json:"lockedAt,omitzero"`
-	Threat        int                 `json:"threat"`
-	Members       []*Member           `json:"members"`
-	Units         []*Unit             `json:"units"`
-	Features      []Feature           `json:"features"`
-	Map           *HexMap             `json:"map"`
-	Briefing      []string            `json:"briefing"`
-	RefereeNotes  string              `json:"refereeNotes"`
-	Events        []*GameEvent        `json:"events,omitempty"`
-	Invites       []*Invite           `json:"invites,omitempty"`
-	Orders        []*Order            `json:"orders,omitempty"`
-	Operation     int                 `json:"operation,omitempty"` // current operation number, from 1
-	Operations    []OperationRecord   `json:"operations,omitempty"`
-	Resolution    *Resolution         `json:"resolution,omitempty"` // the current or last turn's resolution
-	Reports       []*TurnReport       `json:"reports,omitempty"`
-	Stats         OpStats             `json:"stats"`               // this operation so far
-	Sightings     map[string]Sighting `json:"sightings,omitempty"` // unit id -> where players last saw it
-	Log           []LogEntry          `json:"log"`
-	Messages      []*Message          `json:"messages,omitempty"`
-	Assistant     Assistant           `json:"assistant,omitzero"`    // the referee's AI assistant
-	Undo          *Undo               `json:"undo,omitempty"`        // the game just before the last publish
-	RemindAt      time.Time           `json:"remindAt,omitzero"`     // when to remind players their orders are due
-	AllInTurn     int                 `json:"allInTurn,omitempty"`   // last turn the referee was told every order was in
-	Corrections   []Correction        `json:"corrections,omitempty"` // turns reopened, and why
+	Code          string            `json:"code"`
+	Name          string            `json:"name"`
+	ScenarioID    string            `json:"scenario"`
+	ModuleID      string            `json:"module"`
+	ModuleVersion string            `json:"moduleVersion"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	Turn          int               `json:"turn"`
+	Phase         Phase             `json:"phase"`
+	Closed        bool              `json:"closed,omitempty"`
+	ClosedAt      time.Time         `json:"closedAt,omitzero"`
+	Schedule      Schedule          `json:"schedule"`
+	Deadline      time.Time         `json:"deadline,omitzero"`  // when planning locks
+	Deferred      bool              `json:"deferred,omitempty"` // the referee moved the deadline off the schedule
+	LockedAt      time.Time         `json:"lockedAt,omitzero"`
+	Threat        int               `json:"threat"`
+	Members       []*Member         `json:"members"`
+	Units         []*Unit           `json:"units"`
+	Features      []Feature         `json:"features"`
+	Map           *HexMap           `json:"map"`
+	Briefing      []string          `json:"briefing"`
+	RefereeNotes  string            `json:"refereeNotes"`
+	Events        []*GameEvent      `json:"events,omitempty"`
+	Invites       []*Invite         `json:"invites,omitempty"`
+	Orders        []*Order          `json:"orders,omitempty"`
+	Operation     int               `json:"operation,omitempty"` // current operation number, from 1
+	Operations    []OperationRecord `json:"operations,omitempty"`
+	// Desk is the referee's work on the turn being adjudicated.
+	Desk *Desk `json:"desk,omitempty"`
+	// LockedUnits is the board as it stood at the lock: what players see
+	// while the referee adjudicates, so nothing leaks before publishing.
+	LockedUnits []*Unit       `json:"lockedUnits,omitempty"`
+	Reports     []*TurnReport `json:"reports,omitempty"`
+	Facts       []*Fact       `json:"facts,omitempty"`
+	Log         []LogEntry    `json:"log"`
+	Messages    []*Message    `json:"messages,omitempty"`
+	Assistant   Assistant     `json:"assistant,omitzero"`    // the referee's AI assistant
+	Undo        *Undo         `json:"undo,omitempty"`        // the game just before the last publish
+	RemindAt    time.Time     `json:"remindAt,omitzero"`     // when to remind players their orders are due
+	AllInTurn   int           `json:"allInTurn,omitempty"`   // last turn the referee was told every order was in
+	Corrections []Correction  `json:"corrections,omitempty"` // turns reopened, and why
 	// Outbox collects notifications raised during an update; the store
 	// hands them to the sender once the update is saved.
 	Outbox []Notice `json:"-"`
 	// ReadMarks is, per member and channel, how many of the channel's
 	// messages they have seen.
 	ReadMarks map[string]map[string]int `json:"readMarks,omitempty"`
-	Seq       int                       `json:"seq"` // numbering for units created during play
+	Seq       int                       `json:"seq"` // numbering for things created during play
 	Version   int64                     `json:"version"`
 }
 
@@ -109,28 +113,32 @@ type Member struct {
 	Push []PushSub `json:"push,omitempty"`
 }
 
-// Unit is a class instance placed on the map. Known controls whether
-// non-referee players are aware of it; friendly units are always known.
+// Unit is a marine, a group of survivors, or a pack of infected on the map.
+// Its class is the template it started from; everything on it can be
+// changed by the referee as the story goes.
 type Unit struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Class        string         `json:"class"`
-	Side         string         `json:"side"`
-	Col          int            `json:"col"`
-	Row          int            `json:"row"`
-	Strength     int            `json:"strength"`
-	Known        bool           `json:"known"`
-	AssignedTo   string         `json:"assignedTo,omitempty"`
-	Operations   int            `json:"operations,omitempty"`   // operations survived in this campaign
-	Record       []string       `json:"record,omitempty"`       // service record
-	Supply       map[string]int `json:"supply,omitempty"`       // ammunition left, by kind; missing kinds are full
-	Suppressed   bool           `json:"suppressed,omitempty"`   // pinned by the last fight
-	Radio        string         `json:"radio,omitempty"`        // referee override: "", "up", or "down"
-	OutOfContact bool           `json:"outOfContact,omitempty"` // off the command net (worked out by RefreshComms)
-	LastContact  int            `json:"lastContact,omitempty"`  // last turn it was on the net
-	JammedUntil  int            `json:"jammedUntil,omitempty"`  // radio jammed through this turn
-	Reported     *[2]int        `json:"reported,omitempty"`     // where it was when last on the net
-	Aboard       string         `json:"aboard,omitempty"`       // transport unit id while riding one
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Class      string         `json:"class"`
+	Side       string         `json:"side"`
+	Col        int            `json:"col"`
+	Row        int            `json:"row"`
+	Strength   int            `json:"strength"`             // headcount
+	Skills     map[string]int `json:"skills,omitempty"`     // overrides of the class's skills
+	Kit        *string        `json:"kit,omitempty"`        // overrides the class's kit
+	Notes      string         `json:"notes,omitempty"`      // the referee's notes, shown on the card
+	Status     string         `json:"status,omitempty"`     // "pinned", "wounded: left arm"
+	Known      bool           `json:"known"`                // players know it's there
+	Identified bool           `json:"identified,omitempty"` // players know what it is
+	AssignedTo string         `json:"assignedTo,omitempty"`
+	Operations int            `json:"operations,omitempty"` // operations survived in this campaign
+	Record     []string       `json:"record,omitempty"`     // service record
+	// Radio contact, set by the referee and by events.
+	RadioDown    bool    `json:"radioDown,omitempty"`
+	OutOfContact bool    `json:"outOfContact,omitempty"` // worked out by RefreshComms
+	LastContact  int     `json:"lastContact,omitempty"`  // last turn it was in contact
+	JammedUntil  int     `json:"jammedUntil,omitempty"`  // radio jammed through this turn
+	Reported     *[2]int `json:"reported,omitempty"`     // where it was when last in contact
 }
 
 type Feature struct {
@@ -302,10 +310,14 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 	for _, su := range sc.Units {
 		cl := mod.Class(su.Class)
 		side := mod.Side(cl.Side)
+		str := su.Strength
+		if str == 0 {
+			str = max(1, cl.Strength)
+		}
 		r.Units = append(r.Units, &Unit{
 			ID: su.ID, Name: su.Name, Class: su.Class, Side: cl.Side,
-			Col: su.Col, Row: su.Row, Strength: su.Strength,
-			Known: su.Known || side.Playable,
+			Col: su.Col, Row: su.Row, Strength: str,
+			Known: su.Known || side.Playable, Identified: su.Known || side.Playable,
 		})
 	}
 	r.logf(VisAll, "%s opened the campaign as referee.", refName)

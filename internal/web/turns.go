@@ -22,7 +22,6 @@ func (s *Server) setSchedule(w http.ResponseWriter, r *http.Request) {
 			sched.Days = append(sched.Days, n)
 		}
 	}
-	sched.Takeover, _ = strconv.Atoi(r.FormValue("takeover"))
 	if len(sched.Days) == 7 {
 		sched.Days = nil
 	}
@@ -108,14 +107,4 @@ func (s *Server) adminMode(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
 		return room.SetAdminMode(me, r.FormValue("on") == "1", time.Now())
 	})
-}
-
-func (s *Server) setRadio(w http.ResponseWriter, r *http.Request) {
-	s.act(w, r, func(room *game.Room, me *game.Member) error {
-		return room.SetRadio(me, s.store.Cat.Modules[room.ModuleID], r.PathValue("id"), r.FormValue("radio"))
-	})
-}
-
-func (s *Server) commsRules(w http.ResponseWriter, r *http.Request) {
-	s.act(w, r, func(room *game.Room, me *game.Member) error { return room.SetCommsRules(me, r.FormValue("on") == "1") })
 }

@@ -33,8 +33,8 @@
     {{if eq .Phase "planning"}}<span class="sb-cell">Locks <time datetime="{{iso .Clock.Deadline}}" data-countdown>{{.Clock.DeadlineText}}</time></span>
       {{if .IsReferee}}<span class="sb-cell{{if .Clock.AllIn}} good{{end}}">Orders {{.Clock.OrdersIn}}/{{.Clock.OrdersTotal}}</span>
       {{else if .MyOrders}}<span class="sb-cell">Your orders {{.CommittedCount}}/{{len .MyOrders}}</span>{{end}}
-    {{else if eq .Phase "resolving"}}<span class="sb-cell{{if .Clock.Unsettled}} warn{{end}}">{{if .IsReferee}}{{if .Clock.Unsettled}}{{.Clock.Unsettled}} to settle{{else}}Ready to publish{{end}}{{else}}Being resolved{{end}}</span>{{end}}
-    {{if .Stats.CiviliansStart}}<span class="sb-cell good">Evacuated {{.Stats.Evacuated}}/{{.Stats.CiviliansStart}}</span>{{end}}
+    {{else if eq .Phase "resolving"}}<span class="sb-cell{{if .Clock.Unwritten}} warn{{end}}">{{if .IsReferee}}{{if .Clock.Unwritten}}{{.Clock.Unwritten}} to write up{{else}}Ready to publish{{end}}{{else}}Referee judging{{end}}</span>{{end}}
+    {{if .OpenFacts}}<span class="sb-cell warn">{{.OpenFacts}} {{if eq .OpenFacts 1}}fact{{else}}facts{{end}} to decide</span>{{end}}
     {{if .IsReferee}}<span class="sb-cell">{{if .AdminMode}}Admin view{{else}}Blind{{end}}</span>{{end}}
   </div>
   <span class="sb-live" id="sb-live" aria-live="polite">offline</span>

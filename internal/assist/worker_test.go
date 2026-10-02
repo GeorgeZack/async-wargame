@@ -16,7 +16,7 @@ import (
 	"asyncwargame/internal/game"
 )
 
-func TestWorkerReviewsOrdersAndDraftsNarrative(t *testing.T) {
+func TestWorkerSuggestsRollsDraftsOutcomesAndNarrative(t *testing.T) {
 	var prompts []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Messages []struct{ Role, Content string } }
@@ -24,9 +24,21 @@ func TestWorkerReviewsOrdersAndDraftsNarrative(t *testing.T) {
 		json.Unmarshal(b, &req)
 		system, user := req.Messages[0].Content, req.Messages[1].Content
 		prompts = append(prompts, user)
-		reply := `The bridge is the 1st Rifle Squad's problem.`
-		if strings.Contains(system, `"issues"`) {
-			reply = "```json\n" + `{"issues":[{"unit":"m1","severity":"judgment","issue":"The intent says hold the bridge but the squad is sent past it.","suggestion":"Ask what the player meant."},{"unit":"ghost","severity":"weird","issue":"A unit that doesn't exist."}]}` + "\n```"
+		var orderID string
+		var in struct {
+			Orders []struct{ Order string } `json:"orders"`
+		}
+		json.Unmarshal([]byte(user), &in)
+		if len(in.Orders) > 0 {
+			orderID = in.Orders[0].Order
+		}
+		reply := "Okafor's grenade lands true; the lobby goes quiet."
+		switch {
+		case strings.Contains(system, `"contests"`):
+			reply = "```json\n" + `{"contests":[{"order":"` + orderID + `","title":"The grenade","a":{"unit":"m2","skill":"shoot","advantage":20,"why":"surprise"},"b":{"unit":"z3","skill":"sneak","advantage":0}},` +
+				`{"order":"nope","title":"bogus","a":{"unit":"m2","skill":"shoot"}},{"order":"` + orderID + `","title":"ghost","a":{"unit":"ghost","skill":"shoot"}}]}` + "\n```"
+		case strings.Contains(system, "radio operator"):
+			reply = "Grenade in the lobby. Quiet after."
 		}
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": reply}}},
 			"usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
@@ -41,95 +53,98 @@ func TestWorkerReviewsOrdersAndDraftsNarrative(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, err := store.Create("Lantern", "dark-coast-rescue", "Ref", game.HashToken("ref"))
+	code, err := store.Create("Lantern", "st-ines", "Ref", game.HashToken("ref"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := &Worker{Store: store, Client: ai.New(ai.Config{BaseURL: srv.URL + "/v1", Model: "big-pickle", Name: "test"})}
 	ctx := context.Background()
 	now := time.Now()
-
-	// The referee orders the 1st Rifle Squad somewhere, switches the assistant on, and locks.
 	update := func(fn func(r *game.Room, mod *game.Module, ref *game.Member) error) {
 		t.Helper()
 		if err := store.Update(code, func(r *game.Room) error { return fn(r, cat.Modules[r.ModuleID], r.Referee()) }); err != nil {
 			t.Fatal(err)
 		}
 	}
+	var orderID string
 	update(func(r *game.Room, mod *game.Module, ref *game.Member) error {
 		if err := r.StartOperation(ref, mod, now); err != nil {
 			return err
 		}
-		u := r.Unit("m1")
-		var dest string
-		for h, st := range r.Reach(mod, u) {
-			if st.Cost > 0 {
-				dest = game.HexID(h[0], h[1])
-				break
-			}
-		}
-		if _, err := r.SaveOrder(ref, mod, game.OrderInput{Unit: "m1", Task: "move", Dest: dest, Intent: "Hold the bridge", Risk: "balanced", Fallback: "hold", Commit: true}, now); err != nil {
+		o, err := r.SaveOrder(ref, mod, "m2", "Okafor tosses a grenade into the lobby.", "", true, now)
+		if err != nil {
 			return err
 		}
+		orderID = o.ID
 		if err := r.SetAssistant(ref, true, true, true); err != nil {
 			return err
 		}
 		return r.LockNow(ref, mod, now)
 	})
+
+	// At the lock: suggestions, unrolled.
 	if !w.Once(ctx) {
-		t.Fatal("no run picked up after lock")
+		t.Fatal("no run after lock")
 	}
-	if len(prompts) != 1 || !strings.Contains(prompts[0], `"unit": "m1"`) || !strings.Contains(prompts[0], "Hold the bridge") {
-		t.Fatalf("review prompt: %s", prompts)
+	if !strings.Contains(prompts[0], "tosses a grenade") || !strings.Contains(prompts[0], `"id": "m2"`) {
+		t.Fatalf("suggest prompt: %s", prompts[0])
 	}
-	var issues []*game.Issue
-	var run game.Run
+	var contests []game.Contest
 	store.Read(code, func(r *game.Room) {
-		for _, is := range r.Assistant.Issues {
-			if is.Source == "ai" {
-				issues = append(issues, is)
-			}
+		for _, c := range r.Desk.Contests {
+			contests = append(contests, *c)
 		}
-		run = *r.Assistant.Runs[0]
 	})
-	if len(issues) != 2 || issues[0].Unit != "m1" || issues[0].UnitName != "1st Rifle Squad" || issues[0].Model != "big-pickle" ||
-		issues[1].Unit != "" || issues[1].Severity != game.SeverityInfo {
-		t.Fatalf("issues: %+v %+v", issues[0], issues[1])
-	}
-	if run.Status != game.RunDone || run.Tokens != 120 || run.Prompt == "" || run.Provider != "test" {
-		t.Errorf("run %+v", run)
+	if len(contests) != 1 || contests[0].Source != "ai" || contests[0].Result != nil || contests[0].A.Value != 60 ||
+		contests[0].A.Advantage != 20 || contests[0].B == nil || contests[0].B.Value != 70 {
+		t.Fatalf("suggested contests: %+v", contests)
 	}
 
-	// Publishing queues a narrative, drafted only from the players' lines.
+	// Roll it, then have the assistant draft the outcome.
 	update(func(r *game.Room, mod *game.Module, ref *game.Member) error {
-		if err := r.SettleAll(ref, mod); err != nil {
+		if err := r.RollContest(ref, contests[0].ID, 10, 90, now); err != nil {
 			return err
 		}
-		return r.PublishTurn(ref, mod, now)
+		return r.RunNow(ref, game.RunOutcome, orderID, now)
 	})
+	if !w.Once(ctx) {
+		t.Fatal("no outcome run")
+	}
+	if !strings.Contains(prompts[1], "The grenade") || !strings.Contains(prompts[1], "rolled 10") {
+		t.Errorf("outcome prompt lacks the roll: %s", prompts[1])
+	}
+	var oc game.Outcome
+	store.Read(code, func(r *game.Room) { oc = *r.Desk.Outcomes[0] })
+	if oc.Text != "Okafor's grenade lands true; the lobby goes quiet." || oc.Source != "ai" || oc.Model != "big-pickle" {
+		t.Fatalf("outcome %+v", oc)
+	}
+	// Once the referee rewrites it, a new draft goes beside it, not over it.
+	update(func(r *game.Room, mod *game.Module, ref *game.Member) error {
+		if err := r.SetOutcome(ref, orderID, "", "", "My own words.", game.SeenByAll); err != nil {
+			return err
+		}
+		return r.RunNow(ref, game.RunOutcome, orderID, now)
+	})
+	w.Once(ctx)
+	store.Read(code, func(r *game.Room) { oc = *r.Desk.Outcomes[0] })
+	if oc.Text != "My own words." || oc.Draft == "" {
+		t.Errorf("referee text overwritten: %+v", oc)
+	}
+
+	// Publishing queues a narrative from the players' lines only.
+	update(func(r *game.Room, mod *game.Module, ref *game.Member) error { return r.PublishTurn(ref, mod, now) })
 	if !w.Once(ctx) {
 		t.Fatal("no narrative run")
 	}
 	var rep game.TurnReport
 	store.Read(code, func(r *game.Room) { rep = *r.Reports[0] })
-	if rep.Narrative != "The bridge is the 1st Rifle Squad's problem." || rep.NarrativeStatus != game.NarrativeDraft {
+	if rep.Narrative != "Grenade in the lobby. Quiet after." || rep.NarrativeStatus != game.NarrativeDraft {
 		t.Fatalf("narrative %q %s", rep.Narrative, rep.NarrativeStatus)
 	}
-	for _, line := range rep.Referee {
-		if !contains(rep.Players, line) && strings.Contains(prompts[1], line) {
-			t.Errorf("a referee-only line reached the narrative prompt: %q", line)
-		}
+	if !strings.Contains(prompts[len(prompts)-1], "My own words.") {
+		t.Errorf("narrative prompt: %s", prompts[len(prompts)-1])
 	}
 	if w.Once(ctx) {
 		t.Error("worked with nothing queued")
 	}
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

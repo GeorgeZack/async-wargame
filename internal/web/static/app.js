@@ -285,6 +285,7 @@
       this.dragStart = null;
       if (s && !this.moved) {
         if (editor.click(this.toSvg(e.clientX, e.clientY))) return;
+        if (mover.unit) { mover.click(this.toSvg(e.clientX, e.clientY)); return; }
         if (orders.click(this.toSvg(e.clientX, e.clientY))) return;
         const hit = s.target.closest && s.target.closest("[data-h]");
         if (hit) this.select(hit.dataset.h, false);
@@ -333,13 +334,7 @@
     const body = [el("h3", {}, `Hex ${id}`, t ? ` · ${t.name}` : "")];
     const sec = sectorLabel(id, data);
     if (sec) body.push(el("p", { class: "small sector-tag" }, `Sector ${sec}`));
-    const st = data.stack?.[id];
-    if (st) body.push(el("p", { class: `small stack-line${st[0] >= st[1] ? " full" : ""}` }, `Stacking: ${st[0]} of ${st[1]} points used${st[0] >= st[1] ? " (full)" : ""}.`));
-    if (t) {
-      body.push(el("p", { class: "muted small" },
-        t.move === 0 ? "Impassable to ground units." : `Move cost ${t.move}, cover ${t.cover}.`,
-        t.note ? " " + t.note : ""));
-    }
+    if (t && t.note) body.push(el("p", { class: "muted small" }, t.note));
     const sides = data.sides[id] || [];
     const edges = sides.filter((s) => s.edge);
     if (edges.length) {
@@ -362,14 +357,14 @@
         ul.append(el("li", {},
           el("div", {}, el("span", { class: `abbr side-${u.side}`, "aria-hidden": "true" }, u.abbr),
             el("a", { href: `${main().dataset.base}/units/${u.id}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
-            u.level && u.level !== "Green" ? el("span", { class: "tag tag-xp" }, u.level) : null,
-            u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.ghost ? " (out of sight)" : "",
-          u.aboard ? ` (aboard ${u.aboard})` : ""),
+            u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.stale ? " (where they last called in)" : ""),
           el("div", { class: "muted small" }, [u.class, u.strength, u.commander].filter(Boolean).join(" · ")),
-          u.stats ? el("div", { class: "muted small" }, u.stats + (u.supply ? " · " + u.supply : "")) : null,
-          u.traits ? el("div", { class: "small" }, u.traits) : null,
-          data.orders?.open && data.orders.reach?.[u.id]
-            ? el("button", { type: "button", class: "link small", "data-order-unit": u.id }, data.orders.orders?.[u.id] ? "Edit order" : "Give order") : null));
+          u.status ? el("div", { class: "small unit-status" }, u.status) : null,
+          el("div", { class: "row tight" },
+            data.orders?.open && data.orders.units?.some((x) => x.id === u.id)
+              ? el("button", { type: "button", class: "link small", "data-order-unit": u.id }, data.orders.orders?.[u.id] ? "Edit order" : "Write order") : null,
+            document.getElementById("main")?.dataset.referee === "1" && !document.querySelector("[data-tool]")
+              ? el("button", { type: "button", class: "link small", "data-move-counter": u.id, "data-name": u.name }, "Move") : null)));
       }
       body.push(ul);
     } else {
@@ -611,9 +606,9 @@
 
   // ---------- order entry ----------
   //
-  // The server sends each orderable unit's reach: every hex it can get to
-  // this turn, with the movement it costs and the previous hex on the
-  // cheapest path. The client only draws that; the server re-checks on save.
+  // An order is what the player says their marine does, in their own words,
+  // plus an optional spot on the map. With script, the form opens in a
+  // lightbox, and the spot can be picked by clicking the map.
 
   const orders = {
     box: null,
@@ -625,8 +620,6 @@
     init() {
       this.box = document.getElementById("order-box");
       if (!this.box) return;
-      // With script, the form lives in a lightbox; the details element in the
-      // info column becomes its launcher.
       this.form = document.getElementById("order-form");
       const close = el("button", { type: "button", class: "secondary small-btn", "aria-label": "Close" }, "Close");
       this.dialog = el("dialog", { id: "order-dialog", class: "order-dialog", "aria-labelledby": "od-title" },
@@ -634,15 +627,13 @@
       document.body.append(this.dialog);
       close.addEventListener("click", () => this.dialog.close());
       this.dialog.addEventListener("close", () => {
-        if (this.mode === "dialog") { this.mode = "closed"; this.sync(); }
+        if (this.mode === "dialog") { this.mode = "closed"; this.drawMark(); }
       });
       const back = el("button", { type: "button", class: "small-btn" }, "Back to the order");
-      const cancel = el("button", { type: "button", class: "secondary small-btn" }, "Cancel");
       this.pickbar = el("div", { class: "pick-bar", role: "status", hidden: "" },
-        el("span", { id: "pick-hint" }, "Click a highlighted hex for the destination."), back, cancel);
+        el("span", { id: "pick-hint" }, "Click the map to mark a spot."), back);
       document.body.append(this.pickbar);
       back.addEventListener("click", () => this.backToDialog());
-      cancel.addEventListener("click", () => { this.pickbar.hidden = true; this.mode = "closed"; this.sync(); });
       document.addEventListener("keydown", (e) => { if (e.key === "Escape" && this.mode === "picking") this.backToDialog(); });
       this.box.addEventListener("click", (e) => {
         if (!e.target.closest("summary")) return;
@@ -651,17 +642,13 @@
       });
       document.addEventListener("click", (e) => {
         if (e.target.closest("#of-pick")) this.pick();
+        if (e.target.closest("#of-unmark")) { this.$("of-mark").value = ""; this.drawMark(); }
+        const b = e.target.closest("[data-order-unit]");
+        if (b) { e.preventDefault(); this.open(b.dataset.orderUnit); }
       });
       document.addEventListener("change", (e) => {
         if (e.target.id === "of-unit") this.load();
-        else if (e.target.id === "of-task" || e.target.id === "of-transport") this.sync();
-        else if (e.target.id === "of-dest") this.setDest(e.target.value.trim());
-      });
-      document.addEventListener("click", (e) => {
-        const b = e.target.closest("[data-order-unit]");
-        if (!b) return;
-        e.preventDefault();
-        this.open(b.dataset.orderUnit);
+        else if (e.target.id === "of-mark") this.drawMark();
       });
       this.load();
     },
@@ -669,50 +656,18 @@
     data() { return mapData()?.orders; },
     $(id) { return document.getElementById(id); },
     unit() { return this.$("of-unit")?.value; },
-    active() { return !!this.box && this.mode !== "closed" && !!this.data()?.open; },
-    needsDest() { return !!this.data()?.needDest[this.$("of-task").value]; },
-    needsTransport() { return !!this.data()?.needTransport?.[this.$("of-task").value]; },
 
-    // transports fills the transport picker for the current unit and draws
-    // the way to the chosen one.
-    transports() {
-      const row = this.$("of-transport-row");
-      if (!row) return;
-      row.hidden = !this.needsTransport();
-      if (row.hidden) return;
-      const d = this.data();
-      const list = d.transports?.[this.unit()] || [];
-      const sel = this.$("of-transport");
-      const keep = sel.value || d.orders[this.unit()]?.transport;
-      sel.replaceChildren(...list.map((t) => el("option", { value: t.id }, `${t.name} · ${t.hex} · room for ${Math.max(0, t.room)}`)));
-      if (list.some((t) => t.id === keep)) sel.value = keep;
-      const t = list.find((x) => x.id === sel.value);
-      const hint = this.$("of-transport-hint");
-      if (!t) {
-        hint.textContent = "No transport this unit can reach this turn.";
-        hint.classList.add("bad");
-        this.route(null);
-        return;
-      }
-      hint.classList.remove("bad");
-      hint.textContent = t.cost ? `Moves to ${t.board} (${t.cost} movement) and climbs aboard ${t.name}.` : `Climbs aboard ${t.name} from where it stands.`;
-      const reach = d.reach[this.unit()] || {};
-      const path = [t.board];
-      for (let h = t.board; reach[h] && reach[h][0] > 0; h = reach[h][1]) path.push(reach[h][1]);
-      this.route(path.length > 1 ? path.reverse() : null);
-    },
-
-    // syncUnits rebuilds the unit list from live data: units can be assigned
-    // or taken away while the page is open. It keeps the current choice.
+    // syncUnits rebuilds the unit list from live data: marines can be
+    // assigned or taken away while the page is open. It keeps the choice.
     syncUnits() {
       const d = this.data();
       const sel = this.$("of-unit");
-      if (!d || !sel) return;
+      if (!d || !sel) return false;
       const units = d.units || [];
       const keep = sel.value;
-      const same = sel.options.length === units.length && units.every((u, i) => sel.options[i].value === u.id && sel.options[i].text === u.label);
+      const same = sel.options.length === units.length && units.every((u, i) => sel.options[i].value === u.id);
       if (!same) {
-        sel.replaceChildren(...units.map((u) => el("option", { value: u.id }, u.label)));
+        sel.replaceChildren(...units.map((u) => el("option", { value: u.id, "data-hex": u.hex }, u.label)));
         if (units.some((u) => u.id === keep)) sel.value = keep;
       }
       this.box.hidden = !d.open || units.length === 0;
@@ -725,29 +680,26 @@
       if (unitId && [...this.$("of-unit").options].some((o) => o.value === unitId)) this.$("of-unit").value = unitId;
       if (!this.unit()) return;
       this.load();
-      const start = this.startHex();
-      if (start) map.select(start, true);
+      const hex = this.$("of-unit").selectedOptions[0]?.dataset.hex;
+      if (hex && map.svg) map.select(hex, true);
       this.mode = "dialog";
       this.pickbar.hidden = true;
       if (!this.dialog.open) this.dialog.showModal();
-      this.sync();
+      this.$("of-text").focus();
     },
 
-    // pick tucks the lightbox away so a destination can be clicked on the map.
     pick() {
       this.mode = "picking";
       this.dialog.close();
       this.pickbar.hidden = false;
-      this.$("pick-hint").textContent = "Click a highlighted hex for the destination. The number in each is the movement it costs.";
       map.svg?.scrollIntoView({ block: "center", behavior: "smooth" });
-      this.sync();
     },
 
     backToDialog() {
       this.pickbar.hidden = true;
       this.mode = "dialog";
       this.dialog.showModal();
-      this.sync();
+      this.drawMark();
     },
 
     // close is called after a commit goes through.
@@ -755,171 +707,117 @@
       this.mode = "closed";
       this.pickbar.hidden = true;
       if (this.dialog.open) this.dialog.close();
-      this.sync();
+      this.drawMark();
     },
 
-    // load fills the form from the unit's saved order, or defaults.
+    // load fills the form from the unit's saved order.
     load() {
       const d = this.data();
       if (!d || !this.$("of-unit")) return;
       this.syncUnits();
       const o = d.orders[this.unit()];
-      this.$("of-task").value = o?.task || this.$("of-task").options[0].value;
-      this.$("of-dest").value = o?.dest || "";
-      this.$("of-intent").value = o?.intent || "";
-      const risk = o ? this.form.querySelector(`input[name=risk][value="${o.risk}"]`)
-        : this.form.querySelector("input[name=risk][data-default]") || this.form.querySelector("input[name=risk]");
-      this.$("od-title").textContent = `Orders: ${(d.units.find((u) => u.id === this.unit())?.label || "").split(" · ")[0]}`;
-      if (risk) risk.checked = true;
-      this.$("of-fallback").value = o?.fallback || this.$("of-fallback").options[0].value;
-      if (this.$("of-then")) this.$("of-then").value = o?.then || "";
-      if (this.$("of-standing")) this.$("of-standing").checked = !!o?.standing;
+      this.$("of-text").value = o?.text || "";
+      this.$("of-mark").value = o?.mark || "";
+      this.$("od-title").textContent = `Orders: ${d.units.find((u) => u.id === this.unit())?.label || ""}`;
       this.status();
-      this.sync();
-      if (o?.dest) this.setDest(o.dest);
-    },
-
-    stackMates() {
-      const d = this.data();
-      const start = this.startHex();
-      const names = [];
-      for (const [id, r] of Object.entries(d?.reach || {})) {
-        if (id === this.unit()) continue;
-        if (r[start] && r[start][0] === 0) names.push(d.units.find((u) => u.id === id)?.label.split(" · ")[0]);
-      }
-      const row = this.$("of-stack-row");
-      if (row) {
-        row.hidden = names.length === 0;
-        this.$("of-stack-names").textContent = names.length ? `(${names.join(", ")})` : "";
-        if (!names.length) this.$("of-stack").checked = false;
-      }
+      this.drawMark();
     },
 
     status() {
-      this.stackMates();
-      const d = this.data();
-      const o = d?.orders[this.unit()];
+      const o = this.data()?.orders[this.unit()];
       const w = this.$("of-withdraw");
-      this.$("of-status").textContent = !o ? "No order yet for this unit."
-        : `${o.status[0].toUpperCase()}${o.status.slice(1)} (version ${o.version}${o.author ? `, by ${o.author}` : ""}): ${o.summary}.`;
+      this.$("of-status").textContent = !o ? "No order yet."
+        : `${o.status[0].toUpperCase()}${o.status.slice(1)} (version ${o.version}${o.author ? `, by ${o.author}` : ""}).`;
       if (w) {
         w.hidden = !(o && o.editable);
         if (o) w.setAttribute("formaction", `${main().dataset.base}/orders/${o.id}/withdraw`);
       }
     },
 
-    startHex() {
-      const reach = this.data()?.reach[this.unit()] || {};
-      return Object.keys(reach).find((h) => reach[h][0] === 0);
-    },
-
-    // sync redraws the reachable hexes and task help for the current form.
-    sync() {
-      const task = this.$("of-task");
-      if (!task) return;
-      this.$("of-task-note").textContent = task.selectedOptions[0]?.dataset.note || "";
-      this.$("of-dest-row").hidden = !this.needsDest();
-      const then = this.$("of-then-row");
-      if (then) then.hidden = !this.needsDest();
-      this.transports();
-      if (this.needsTransport()) { this.$("reach-layer")?.replaceChildren(); return; }
+    // drawMark shows the spot being marked while the form is open.
+    drawMark() {
       const layer = this.$("reach-layer");
-      layer?.replaceChildren();
-      if (!this.active() || !this.needsDest()) { this.route(null); return; }
-      const reach = this.data().reach[this.unit()] || {};
-      const need = this.data().need?.[this.unit()] || 0;
-      for (const [hex, [cost, , free]] of Object.entries(reach)) {
-        const { col, row } = parseHex(hex);
-        const c = hexCenter(col, row);
-        const use = document.createElementNS(SVGNS, "use");
-        use.setAttribute("href", "#hx");
-        use.setAttribute("x", c.x.toFixed(1));
-        use.setAttribute("y", c.y.toFixed(1));
-        use.setAttribute("class", cost === 0 ? "reach-start" : free < need ? "reach full" : "reach");
-        layer.append(use);
-        if (cost > 0) {
-          const t = document.createElementNS(SVGNS, "text");
-          t.setAttribute("class", "reach-cost");
-          t.setAttribute("x", c.x.toFixed(1));
-          t.setAttribute("y", (c.y + 12.5).toFixed(1));
-          t.textContent = cost;
-          layer.append(t);
-        }
-      }
-      const dest = this.$("of-dest").value.trim();
-      if (dest) this.setDest(dest); else this.route(null);
-    },
-
-    setDest(hex) {
-      const d = this.data();
-      const hint = this.$("of-dest-hint");
-      if (!d || !hint) return;
-      const reach = d.reach[this.unit()] || {};
-      this.$("of-dest").value = hex;
-      if (!hex) { this.route(null); return; }
-      const step = reach[hex];
-      hint.classList.toggle("bad", !step || step[0] === 0);
-      if (!step) {
-        hint.textContent = `${hex} is beyond this unit's movement this turn (${d.movement[this.unit()] || 0}), or the way is blocked.`;
-        this.route(null);
-        return;
-      }
-      if (step[0] === 0) {
-        hint.textContent = "That's where the unit already is. Pick another hex, or choose Hold position.";
-        this.route(null);
-        return;
-      }
-      const need = d.need?.[this.unit()] || 0;
-      if (step[2] < need) {
-        hint.classList.add("bad");
-        hint.textContent = `${hex} is full: it has room for ${Math.max(0, step[2])} more stacking points and this unit needs ${need}. Units can pass through but not stop there.`;
-        this.route(null);
-        return;
-      }
-      const sector = sectorLabel(hex, mapData());
-      hint.textContent = `Destination ${hex}${sector ? ` · sector ${sector}` : ""} · costs ${step[0]} of ${d.movement[this.unit()]} movement.`;
-      const path = [hex];
-      for (let h = hex; reach[h] && reach[h][0] > 0; h = reach[h][1]) path.push(reach[h][1]);
-      this.route(path.reverse());
-    },
-
-    route(path) {
-      const line = this.$("route-preview");
-      if (!line) return;
-      line.setAttribute("points", (path || []).map((h) => {
-        const { col, row } = parseHex(h);
-        const c = hexCenter(col, row);
-        return `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
-      }).join(" "));
+      if (!layer) return;
+      layer.replaceChildren();
+      const hex = this.$("of-mark")?.value.trim();
+      if (this.mode === "closed" || !hex) return;
+      const { col, row } = parseHex(hex);
+      if (Number.isNaN(col)) return;
+      const c = hexCenter(col, row);
+      const use = document.createElementNS(SVGNS, "use");
+      use.setAttribute("href", "#hx");
+      use.setAttribute("x", c.x.toFixed(1));
+      use.setAttribute("y", c.y.toFixed(1));
+      use.setAttribute("class", "reach-start");
+      layer.append(use);
     },
 
     click(p) {
-      if (this.mode !== "picking" || !this.needsDest()) return false;
+      if (this.mode !== "picking") return false;
       const data = mapData();
       const h = data && hexAt(p.x, p.y, data);
       if (!h) return false;
       const hex = hexId(h.col, h.row);
-      this.setDest(hex);
+      this.$("of-mark").value = hex;
       map.select(hex, false);
-      const hint = this.$("of-dest-hint");
-      if (hint.classList.contains("bad")) {
-        this.$("pick-hint").textContent = hint.textContent; // explain, and stay in picking mode
-      } else {
-        this.backToDialog();
-      }
+      this.backToDialog();
       return true;
     },
 
-    // After a live update: refresh the drawing and status, but keep what
-    // the player is typing.
+    // After a live update: keep what the player is typing.
     afterRefresh() {
       if (!this.box) return;
-      // If the chosen unit was taken away, start over on the first one.
       if (this.syncUnits()) { this.load(); return; }
       this.status();
-      this.sync();
     },
   };
+
+  // ---------- referee: moving counters during play ----------
+  //
+  // From the hex inspector, Move picks a counter up; the next click on the
+  // map puts it down. During adjudication players don't see it move until
+  // the turn is published.
+
+  const mover = {
+    unit: null, name: "",
+    start(id, name) {
+      this.unit = id;
+      this.name = name;
+      orders.pickbar && (orders.pickbar.hidden = true);
+      let bar = document.getElementById("move-bar");
+      if (!bar) {
+        const cancel = el("button", { type: "button", class: "secondary small-btn" }, "Cancel");
+        cancel.addEventListener("click", () => this.stop());
+        bar = el("div", { class: "pick-bar", id: "move-bar", role: "status" }, el("span", { id: "move-hint" }), cancel);
+        document.body.append(bar);
+      }
+      bar.hidden = false;
+      document.getElementById("move-hint").textContent = `Click the hex to move ${name} to.`;
+    },
+    stop() {
+      this.unit = null;
+      const bar = document.getElementById("move-bar");
+      if (bar) bar.hidden = true;
+    },
+    async click(p) {
+      if (!this.unit) return false;
+      const data = mapData();
+      const h = data && hexAt(p.x, p.y, data);
+      if (!h) return false;
+      const id = this.unit;
+      this.stop();
+      const body = new URLSearchParams({ hex: hexId(h.col, h.row) });
+      const res = await fetch(`${main().dataset.base}/units/${id}/edit`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
+      if (!res.ok) alert((await res.text()) || "That didn't work.");
+      await refresh();
+      map.select(hexId(h.col, h.row), false);
+      return true;
+    },
+  };
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-move-counter]");
+    if (b) mover.start(b.dataset.moveCounter, b.dataset.name);
+  });
 
   // ---------- unit cards ----------
   // Links to a unit's card open it in a dialog over the map; without
@@ -1114,184 +1012,6 @@
     }
   });
 
-  // Replays: a report line's Replay link plays the move or fight back on a
-  // close-up of the board in a dialog. Only here, only when asked: the live
-  // map never animates.
-  const replay = {
-    run: 0, // bumped to cancel a replay in progress
-    still: matchMedia("(prefers-reduced-motion: reduce)").matches,
-    $(id) { return document.getElementById(id); },
-    data(key) {
-      try { return JSON.parse(this.$("replay-data")?.textContent || "{}")?.[key]; } catch { return null; }
-    },
-    open(key) {
-      const d = this.data(key);
-      const dialog = this.$("replay-dialog");
-      if (!d || !dialog) return;
-      this.current = d;
-      if (!dialog.dataset.wired) {
-        dialog.dataset.wired = "1";
-        dialog.addEventListener("click", (e) => { if (e.target === dialog || e.target.closest("[data-close]")) dialog.close(); });
-        dialog.addEventListener("close", () => this.run++);
-        this.$("replay-again").addEventListener("click", () => this.play(this.current));
-      }
-      this.$("replay-title").textContent = d.title;
-      dialog.showModal();
-      this.play(d);
-    },
-    frame(d) {
-      const pts = d.units.flatMap((u) => [...u.points, ...(u.endAt ? [u.endAt] : [])]);
-      pts.push(d.focus);
-      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-      let x0 = Math.min(...xs) - 34, x1 = Math.max(...xs) + 34, y0 = Math.min(...ys) - 34, y1 = Math.max(...ys) + 34;
-      const w = Math.max(x1 - x0, 150), h = Math.max(y1 - y0, 110);
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      this.$("replay-svg").setAttribute("viewBox", `${(cx - w / 2).toFixed(1)} ${(cy - h / 2).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
-    },
-    counter(u) {
-      const g = document.createElementNS(SVGNS, "g");
-      g.setAttribute("class", `counter side-${u.side}${u.contact ? " contact" : ""}`);
-      const add = (tag, attrs, text) => {
-        const n = document.createElementNS(SVGNS, tag);
-        for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
-        if (text != null) n.textContent = text;
-        g.append(n);
-        return n;
-      };
-      add("title", {}, u.name);
-      add("rect", { class: "ctr-edge", x: -8.4, y: -8.4, width: 18, height: 18, rx: 1 });
-      add("rect", { class: "ctr", x: -9, y: -9, width: 18, height: 18, rx: 1 });
-      add("rect", { class: "ctr-line", x: -8.2, y: -8.2, width: 16.4, height: 16.4, rx: 0.6 });
-      if (u.contact) {
-        add("text", { class: "ctr-q", y: 4.2 }, u.abbr || "?");
-      } else {
-        add("text", { class: "ctr-id", y: -5 }, u.abbr);
-        if (u.symbol) add("use", { href: `#s-${u.symbol}`, y: -0.2 });
-        u.strengthText = add("text", { class: "ctr-f", y: 7.6 }, u.before ? String(u.before) : "");
-      }
-      return g;
-    },
-    place(g, p) { g.setAttribute("transform", `translate(${p[0].toFixed(1)} ${(p[1] + 1.5).toFixed(1)})`); },
-    sleep(ms, run) {
-      return new Promise((ok) => setTimeout(() => ok(run === this.run), this.still ? 0 : ms));
-    },
-    slide(g, a, b, ms, run) {
-      if (this.still) { this.place(g, b); return Promise.resolve(run === this.run); }
-      return new Promise((ok) => {
-        const t0 = performance.now();
-        const step = (t) => {
-          if (run !== this.run) return ok(false);
-          const k = Math.min(1, (t - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-          this.place(g, [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e]);
-          k < 1 ? requestAnimationFrame(step) : ok(true);
-        };
-        requestAnimationFrame(step);
-      });
-    },
-    caption(text) { this.$("replay-caption").textContent = text; },
-    async play(d) {
-      const run = ++this.run;
-      const svg = this.$("replay-svg");
-      const trails = svg.querySelector(".replay-trails"), units = svg.querySelector(".replay-units"), marks = svg.querySelector(".replay-marks");
-      trails.replaceChildren(); units.replaceChildren(); marks.replaceChildren();
-      this.$("replay-dice").hidden = true;
-      this.$("replay-result").textContent = "";
-      this.frame(d);
-      const list = d.units.map((u) => ({ ...u }));
-      for (const u of list) {
-        if (u.points.length > 1) {
-          const line = document.createElementNS(SVGNS, "polyline");
-          line.setAttribute("class", `replay-trail ${u.enemy ? "enemy" : "friend"}`);
-          line.setAttribute("points", u.points.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" "));
-          trails.append(line);
-        }
-        u.g = this.counter(u);
-        this.place(u.g, u.points[0]);
-        // Contacts appear only at contact.
-        if (u.contact && d.kind === "fight") u.g.classList.add("replay-hidden");
-        units.append(u.g);
-      }
-      // 1. Movement, every unit a hex at a time.
-      const steps = Math.max(0, ...list.map((u) => u.points.length - 1));
-      const movers = list.filter((u) => u.points.length > 1);
-      this.caption(movers.length ? (d.kind === "move" ? `${list[0].name} moves out from ${list[0].hexes[0]}.` : "The approach.") : "Positions at the start.");
-      if (!await this.sleep(500, run)) return;
-      for (let i = 0; i < steps; i++) {
-        const legs = list.filter((u) => u.points.length - 1 > i).map((u) => this.slide(u.g, u.points[i], u.points[i + 1], 420, run));
-        const ok = (await Promise.all(legs)).every(Boolean);
-        if (!ok || run !== this.run) return;
-      }
-      if (d.kind === "move") {
-        const u = list[0];
-        this.caption(`${u.name} moved ${u.hexes[0]} → ${u.hexes[u.hexes.length - 1]}.`);
-        return;
-      }
-      // 2. Contact.
-      const f = d.fight;
-      for (const u of list) u.g.classList.remove("replay-hidden");
-      const burst = document.createElementNS(SVGNS, "circle");
-      burst.setAttribute("class", "replay-burst");
-      burst.setAttribute("cx", d.focus[0]); burst.setAttribute("cy", d.focus[1]); burst.setAttribute("r", 16);
-      marks.append(burst);
-      this.caption(`Contact at ${list.find((u) => u.enemy)?.hexes.at(-1) || ""}: ${f.sides[0]} against ${f.sides[1]}.`);
-      if (!await this.sleep(900, run)) return;
-      // 3. Dice.
-      this.$("replay-dice").hidden = false;
-      this.caption(`Each die showing ${f.success} or better is a hit.`);
-      for (const side of [0, 1]) {
-        this.$(`replay-side-${side}`).textContent = f.sides[side];
-        this.$(`replay-hits-${side}`).textContent = "";
-        const tray = this.$(`replay-dice-${side}`);
-        tray.replaceChildren();
-        const faces = f.faces?.[side] || [];
-        for (const face of faces) {
-          const die = el("span", { class: "die rolling" }, "·");
-          tray.append(die);
-          die.dataset.face = face;
-        }
-        if (!faces.length) tray.append(el("span", { class: "muted small" }, `${f.dice[side]} dice`));
-      }
-      const all = [...document.querySelectorAll("#replay-dice .die")];
-      const spin = this.still ? null : setInterval(() => { for (const die of all) if (die.classList.contains("rolling")) die.textContent = 1 + Math.floor(Math.random() * 6); }, 70);
-      for (const die of all) {
-        if (!await this.sleep(110, run)) { clearInterval(spin); return; }
-        die.classList.remove("rolling");
-        die.textContent = die.dataset.face;
-        if (+die.dataset.face >= f.success) die.classList.add("hit");
-      }
-      clearInterval(spin);
-      for (const side of [0, 1]) this.$(`replay-hits-${side}`).textContent = `${f.hits[side]} ${f.hits[side] === 1 ? "hit" : "hits"}`;
-      if (!await this.sleep(700, run)) return;
-      // 4. Results.
-      this.caption(f.verdict);
-      this.$("replay-result").textContent = f.result || "";
-      const after = [];
-      for (const u of list) {
-        if (u.lost) {
-          u.g.classList.add("replay-lost");
-          continue;
-        }
-        if (u.before && u.after < u.before) {
-          if (u.strengthText) u.strengthText.textContent = String(u.after);
-          const p = u.endAt || u.points.at(-1);
-          const t = document.createElementNS(SVGNS, "text");
-          t.setAttribute("class", "replay-loss");
-          t.setAttribute("x", p[0] + 9); t.setAttribute("y", p[1] - 8);
-          t.textContent = `−${u.before - u.after}`;
-          marks.append(t);
-        }
-        if (u.endAt) after.push(this.slide(u.g, u.points.at(-1), u.endAt, 600, run));
-      }
-      await Promise.all(after);
-    },
-  };
-
-  document.addEventListener("click", (e) => {
-    const a = e.target.closest("[data-replay]");
-    if (!a) return;
-    e.preventDefault();
-    replay.open(a.dataset.replay);
-  });
 
   // Web push: the Notifications panel turns this device on or off for the
   // room. The service worker shows them; the page tells it which seat

@@ -214,7 +214,7 @@ func (r *Room) propose(def *EventDef, rng *rand.Rand, mod *Module) *GameEvent {
 func (r *Room) marinePositions(mod *Module) [][2]int {
 	var out [][2]int
 	for _, u := range r.Units {
-		if s := mod.Side(u.Side); s != nil && s.Playable && mod.Class(u.Class).Domain == "land" {
+		if s := mod.Side(u.Side); s != nil && s.Playable {
 			out = append(out, [2]int{u.Col, u.Row})
 		}
 	}
@@ -373,9 +373,7 @@ func (r *Room) proposeDrift(fd EffectDef, rng *rand.Rand, mod *Module, marines [
 	}
 	var movers []*Unit
 	for _, u := range r.unitsOf(fd.Classes) {
-		if mod.Class(u.Class).Movement > 0 {
-			movers = append(movers, u)
-		}
+		movers = append(movers, u)
 	}
 	var out []Effect
 	for _, u := range pick(rng, movers, fd.Count) {
@@ -552,7 +550,7 @@ func (r *Room) SetThreat(actor *Member, delta int) error {
 func (r *Room) proposeJam(fd EffectDef, rng *rand.Rand, mod *Module) []Effect {
 	var friendly []*Unit
 	for _, u := range r.Units {
-		if mod.Side(u.Side).Playable && mod.Class(u.Class).Domain == "land" {
+		if mod.Side(u.Side).Playable {
 			friendly = append(friendly, u)
 		}
 	}

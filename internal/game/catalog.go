@@ -123,16 +123,11 @@ func (s *Scenario) validate(m *Module) error {
 			return fmt.Errorf("duplicate unit id %q", u.ID)
 		}
 		seen[u.ID] = true
-		cl := m.Class(u.Class)
-		if cl == nil {
+		if m.Class(u.Class) == nil {
 			return fmt.Errorf("unit %q: unknown class %q", u.ID, u.Class)
 		}
 		if !s.Map.InBounds(u.Col, u.Row) {
 			return fmt.Errorf("unit %q is off the map", u.ID)
-		}
-		water := m.TerrainAt(s.Map.TerrainCode(u.Col, u.Row)).Water()
-		if water != (cl.Domain == "water") {
-			return fmt.Errorf("unit %q (%s) cannot start on %s", u.ID, cl.Domain, m.TerrainAt(s.Map.TerrainCode(u.Col, u.Row)).Name)
 		}
 	}
 	return nil

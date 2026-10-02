@@ -1,12 +1,16 @@
 package game
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestLeavingHandsUnitsOn(t *testing.T) {
 	r, mod, ref, cmd, hicks := orderRoom(t)
 	vasq := r.Member("v")
 	now := central(t, "2026-09-30 13:00")
-	o, err := r.SaveOrder(hicks, mod, OrderInput{Unit: "m1", Task: "dig_in", Risk: "cautious", Fallback: "hold"}, now)
+	o, err := r.SaveOrder(hicks, mod, "m1", "Dig in by the ambulance.", "", false, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,5 +50,28 @@ func TestLeavingHandsUnitsOn(t *testing.T) {
 	}
 	if err := r.Remove(ref, ref.ID, ""); err == nil {
 		t.Error("the referee removed themselves")
+	}
+}
+
+func TestRoomsFromAnOlderVersionAreKept(t *testing.T) {
+	cat := testCatalog(t)
+	path := t.TempDir() + "/state.json"
+	old := `[{"code":"OLDOLD","name":"Lantern","scenario":"dark-coast-rescue","module":"dark-coast-tactical","members":[],"units":[],"log":[]}]`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := OpenStore(path, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Read("OLDOLD", func(*Room) {}); err != ErrNotFound {
+		t.Errorf("served a room from an older version: %v", err)
+	}
+	if _, err := s.Create("New", "st-ines", "Ref", HashToken("x")); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), `"OLDOLD"`) || !strings.Contains(string(b), `"New"`) {
+		t.Errorf("state file lost a room: %s", b)
 	}
 }

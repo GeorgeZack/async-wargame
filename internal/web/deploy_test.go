@@ -36,7 +36,7 @@ func TestHostPassword(t *testing.T) {
 	b := newBrowser(t, ts)
 	_, body := b.get("/")
 	mustContain(t, body, "Host password")
-	form := url.Values{"campaign": {"Lantern"}, "scenario": {"dark-coast-rescue"}, "name": {"Ref"}, "password": {"wrong"}}
+	form := url.Values{"campaign": {"Lantern"}, "scenario": {"st-ines"}, "name": {"Ref"}, "password": {"wrong"}}
 	if res, _ := b.post("/rooms", form); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("wrong password: %d", res.StatusCode)
 	}
@@ -58,7 +58,7 @@ func TestHostPassword(t *testing.T) {
 func TestSecureCookiesBehindProxy(t *testing.T) {
 	for _, trust := range []bool{false, true} {
 		srv, _ := serverWith(t, Options{TrustProxy: trust})
-		req := httptest.NewRequest("POST", "/rooms", strings.NewReader(url.Values{"campaign": {"Lantern"}, "scenario": {"dark-coast-rescue"}, "name": {"Ref"}}.Encode()))
+		req := httptest.NewRequest("POST", "/rooms", strings.NewReader(url.Values{"campaign": {"Lantern"}, "scenario": {"st-ines"}, "name": {"Ref"}}.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("X-Forwarded-Proto", "https")
 		req.Header.Set("Origin", "http://example.com")

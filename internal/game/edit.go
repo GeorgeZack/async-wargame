@@ -62,20 +62,6 @@ func (r *Room) feature(id string) *Feature {
 	return nil
 }
 
-// canStand checks that a unit of this class may occupy the hex.
-func (r *Room) canStand(mod *Module, class string, col, row int, name string) error {
-	cl := mod.Class(class)
-	water := mod.TerrainAt(r.Map.TerrainCode(col, row)).Water()
-	if water != (cl.Domain == "water") {
-		where := "land"
-		if water {
-			where = "water"
-		}
-		return bad("%s (%s) can't be on %s at %s", name, strings.ToLower(cl.Name), where, HexID(col, row))
-	}
-	return nil
-}
-
 func cleanText(s string, max int) (string, error) {
 	s = strings.TrimSpace(s)
 	if utf8.RuneCountInString(s) > max {
@@ -122,20 +108,7 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 		if code == 0 {
 			return bad("unknown terrain %q", op.Terrain)
 		}
-		before := r.Map.TerrainCode(col, row)
 		r.Map.SetTerrain(col, row, code)
-		for _, u := range r.Units {
-			if u.Col == col && u.Row == row {
-				if err := r.canStand(mod, u.Class, col, row, u.Name); err != nil {
-					r.Map.SetTerrain(col, row, before)
-					return err
-				}
-			}
-		}
-		if used, limit := r.Load(mod)[[2]int{col, row}], r.StackLimit(mod, col, row); used > limit {
-			r.Map.SetTerrain(col, row, before)
-			return bad("the units in %s use %d stacking points; that terrain holds %d", HexID(col, row), used, limit)
-		}
 		return nil
 
 	case "edge", "crossing", "road":
@@ -211,16 +184,13 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 		if name, err = CleanName(name); err != nil {
 			return err
 		}
-		if err := r.canStand(mod, cl.ID, col, row, name); err != nil {
-			return err
-		}
-		probe := &Unit{Name: name, Class: cl.ID, Side: cl.Side}
-		if load := r.Load(mod); !r.fits(mod, probe, [2]int{col, row}, load) {
-			return bad("%s is full: %d of %d stacking points used", HexID(col, row), load[[2]int{col, row}], r.StackLimit(mod, col, row))
-		}
 		known := mod.Side(cl.Side).Playable || (op.Known != nil && *op.Known)
+		str := op.Strength
+		if str <= 0 {
+			str = max(1, cl.Strength)
+		}
 		r.Units = append(r.Units, &Unit{ID: fmt.Sprintf("s%d", r.Seq), Name: name, Class: cl.ID, Side: cl.Side,
-			Col: col, Row: row, Strength: max(1, min(100000, op.Strength)), Known: known})
+			Col: col, Row: row, Strength: min(100000, str), Known: known, Identified: known})
 		return nil
 
 	case "unit-move", "unit-update", "unit-delete":
@@ -236,14 +206,6 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			col, row, err := r.hex(op.Hex)
 			if err != nil {
 				return err
-			}
-			if err := r.canStand(mod, u.Class, col, row, u.Name); err != nil {
-				return err
-			}
-			load := r.Load(mod)
-			load[[2]int{u.Col, u.Row}] -= stackPoints(mod, u)
-			if !r.fits(mod, u, [2]int{col, row}, load) {
-				return bad("%s is full: %d of %d stacking points used", HexID(col, row), load[[2]int{col, row}], r.StackLimit(mod, col, row))
 			}
 			u.Col, u.Row = col, row
 			return nil
@@ -262,11 +224,11 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 			u.Strength = op.Strength
 		}
 		if op.Known != nil && !mod.Side(u.Side).Playable {
-			u.Known = *op.Known
+			u.Known, u.Identified = *op.Known, *op.Known
 		}
 		if op.Operations != nil {
 			if !mod.Side(u.Side).Playable || *op.Operations < 0 || *op.Operations > 50 {
-				return bad("experience is 0 to 50 operations, for friendly units")
+				return bad("operations survived is 0 to 50, for friendly units")
 			}
 			u.Operations = *op.Operations
 		}
@@ -379,7 +341,6 @@ func (r *Room) StartOperation(actor *Member, mod *Module, now time.Time) error {
 	if r.Phase != PhaseSetup {
 		return bad("the operation has already started")
 	}
-	r.Stats = OpStats{CiviliansStart: r.civilianTotal(mod)}
 	r.logf(VisAll, "The operation has begun.")
 	r.openTurn(1, now)
 	return nil
@@ -473,7 +434,6 @@ type ClassOption struct {
 type EditUnit struct {
 	ID, Name, ClassName, Side, SideName, Hex string
 	Strength, Operations                     int
-	Level                                    string
 	Known, Playable                          bool
 }
 
@@ -506,8 +466,7 @@ func BuildEditor(r *Room, sc *Scenario, mod *Module, me *Member) *Editor {
 			if u.Side == s.ID {
 				e.Units = append(e.Units, EditUnit{ID: u.ID, Name: u.Name, ClassName: mod.Class(u.Class).Name,
 					Side: u.Side, SideName: s.Name, Hex: HexID(u.Col, u.Row), Strength: u.Strength,
-					Operations: u.Operations, Level: ExperienceOf(mod, u).Name,
-					Known: u.Known, Playable: s.Playable})
+					Operations: u.Operations, Known: u.Known, Playable: s.Playable})
 			}
 		}
 	}
@@ -647,6 +606,8 @@ func describeEffect(f EffectDef, mod *Module) string {
 		return fmt.Sprintf("Reveal %s hidden %s%s", count, mod.Side(f.Side).Name, within)
 	case "threat":
 		return fmt.Sprintf("Threat %+d", f.Amount)
+	case "jam":
+		return fmt.Sprintf("Jam %s radios for %s turns", count, rangeText(f.Turns))
 	}
 	return f.Op
 }

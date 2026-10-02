@@ -28,7 +28,6 @@
         <button type="button" class="secondary" data-zoom="reset">Fit</button>
         <label class="toggle"><input type="checkbox" id="labels-toggle" checked> Labels</label>
         <label class="toggle"><input type="checkbox" id="sectors-toggle" checked> Sectors</label>
-        {{if .IsReferee}}<label class="toggle" title="Show what players can't see"><input type="checkbox" id="fog-toggle"> Player fog</label>{{end}}
       </div>
     </div>
 
@@ -112,7 +111,7 @@
           <div class="row small">
             <span class="muted">{{.ClassName}} · <a href="#map" data-goto="{{.Hex}}" class="mono">{{.Hex}}</a></span>
             {{if not .Playable}}<label class="toggle"><input type="checkbox" data-field="known"{{if .Known}} checked{{end}}> Known</label>
-            {{else}}<label class="inline small" title="Operations survived">XP <input type="number" class="num-xs" data-field="operations" value="{{.Operations}}" min="0" max="50" aria-label="Operations survived by {{.Name}}"></label> <span class="muted">{{.Level}}</span>{{end}}
+            {{else}}<label class="inline small" title="Operations survived">Ops <input type="number" class="num-xs" data-field="operations" value="{{.Operations}}" min="0" max="50" aria-label="Operations survived by {{.Name}}"></label>{{end}}
             <button type="button" class="link" data-move-unit="{{.ID}}" data-name="{{.Name}}">Move</button>
             <button type="button" class="link danger" data-delete-unit="{{.ID}}" data-name="{{.Name}}">Delete</button>
           </div>

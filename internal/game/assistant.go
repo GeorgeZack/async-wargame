@@ -6,19 +6,15 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 )
 
-// The referee's assistant ("Jev"). It turns a locked turn into a short
-// queue of issue cards for the referee, and drafts a narrative for each
-// published report. Some checks are plain rules and always run. With an AI
-// model configured on the server and switched on for the room, the model
-// also reviews every order against the situation, and drafts narratives.
-//
-// The assistant advises; it never changes the game. Every card says whether
-// a rule or the model raised it (and which model), and the referee decides
-// what to do with it. Narratives are drafted only from the lines players
-// already get, and players see one only after the referee approves it.
+// The referee's assistant ("Jev"). It reads the locked orders and suggests
+// contests (who rolls what, with which advantages, and why); once the dice
+// are rolled, it drafts what happened; after publishing, it drafts an
+// opening narrative from what players were told. Everything it writes is a
+// suggestion: contests sit unrolled until the referee rolls them, outcome
+// drafts until the referee keeps or rewrites them, and narratives until
+// the referee approves them for players. It never changes the game.
 //
 // Model work runs in the background (see internal/assist): game code queues
 // a run here, the worker builds the prompt from the room, calls the model
@@ -26,8 +22,9 @@ import (
 
 // Run kinds.
 const (
-	RunOrderReview = "order-review"
-	RunNarrative   = "narrative"
+	RunSuggest   = "suggest"   // contests for every locked order
+	RunOutcome   = "outcome"   // what happened, for one order
+	RunNarrative = "narrative" // the report's opening
 )
 
 // Run statuses.
@@ -38,34 +35,19 @@ const (
 	RunFailed  = "failed"
 )
 
-// Issue severities, most urgent first.
-const (
-	SeverityBlocking = "blocking" // decide before publishing
-	SeverityJudgment = "judgment" // needs the referee's eye
-	SeverityInfo     = "info"     // worth knowing
-)
-
-// Issue statuses.
-const (
-	IssueOpen      = "open"
-	IssueNoted     = "noted"
-	IssueDismissed = "dismissed"
-	IssueSent      = "sent" // forwarded to the player
-)
-
 // Assistant is a room's assistant settings and work.
 type Assistant struct {
-	On        bool     `json:"on,omitempty"`        // the model may be used in this room
-	Review    bool     `json:"review,omitempty"`    // review orders at lock
-	Narrative bool     `json:"narrative,omitempty"` // draft report narratives
-	Runs      []*Run   `json:"runs,omitempty"`
-	Issues    []*Issue `json:"issues,omitempty"`
+	On        bool   `json:"on,omitempty"`        // the model may be used in this room
+	Suggest   bool   `json:"suggest,omitempty"`   // suggest contests when a turn locks
+	Narrative bool   `json:"narrative,omitempty"` // draft a narrative when a turn is published
+	Runs      []*Run `json:"runs,omitempty"`
 }
 
 // Run is one piece of model work.
 type Run struct {
 	ID        string    `json:"id"`
 	Kind      string    `json:"kind"`
+	Target    string    `json:"target,omitempty"` // the order, for an outcome
 	Operation int       `json:"operation"`
 	Turn      int       `json:"turn"`
 	Status    string    `json:"status"`
@@ -79,278 +61,318 @@ type Run struct {
 	Prompt    string    `json:"prompt,omitempty"` // prompt version, for the record
 }
 
-// Issue is one card for the referee.
-type Issue struct {
-	ID         string    `json:"id"`
-	Operation  int       `json:"operation"`
-	Turn       int       `json:"turn"`
-	Unit       string    `json:"unit,omitempty"`
-	UnitName   string    `json:"unitName,omitempty"`
-	Severity   string    `json:"severity"`
-	Text       string    `json:"text"`
-	Suggestion string    `json:"suggestion,omitempty"`
-	Source     string    `json:"source"` // "rules" or "ai"
-	Model      string    `json:"model,omitempty"`
-	Status     string    `json:"status"`
-	Note       string    `json:"note,omitempty"`
-	DecidedAt  time.Time `json:"decidedAt,omitzero"`
-}
-
 // Prompt versions, recorded on each run so results can be compared later.
-const (
-	promptOrderReview = "order-review/1"
-	promptNarrative   = "narrative/1"
-)
+var promptVersions = map[string]string{RunSuggest: "suggest/1", RunOutcome: "outcome/1", RunNarrative: "narrative/1"}
 
-// queueRun adds a run, replacing a pending or failed one of the same kind
-// and turn.
-func (r *Room) queueRun(kind string, turn int, now time.Time) {
+func (r *Room) queueRun(kind, target string, turn int, now time.Time) {
 	op := max(r.Operation, 1)
 	r.Assistant.Runs = slices.DeleteFunc(r.Assistant.Runs, func(x *Run) bool {
-		return x.Kind == kind && x.Turn == turn && x.Operation == op && (x.Status == RunPending || x.Status == RunFailed)
+		return x.Kind == kind && x.Target == target && x.Turn == turn && x.Operation == op && (x.Status == RunPending || x.Status == RunFailed)
 	})
-	r.Assistant.Runs = append(r.Assistant.Runs, &Run{ID: newID(), Kind: kind, Operation: op, Turn: turn, Status: RunPending, Queued: now.UTC()})
-	if n := len(r.Assistant.Runs); n > 40 {
-		r.Assistant.Runs = r.Assistant.Runs[n-40:]
+	r.Assistant.Runs = append(r.Assistant.Runs, &Run{ID: newID(), Kind: kind, Target: target, Operation: op, Turn: turn, Status: RunPending, Queued: now.UTC()})
+	if n := len(r.Assistant.Runs); n > 60 {
+		r.Assistant.Runs = r.Assistant.Runs[n-60:]
 	}
 }
 
-// assistAtLock raises rule-based cards and queues the model's review.
-func (r *Room) assistAtLock(mod *Module, now time.Time) {
-	r.ruleIssues(mod)
-	if r.Assistant.On && r.Assistant.Review {
-		r.queueRun(RunOrderReview, r.Turn, now)
+func (r *Room) assistAtLock(now time.Time) {
+	if r.Assistant.On && r.Assistant.Suggest && len(r.LockedOrders()) > 0 {
+		r.queueRun(RunSuggest, "", r.Turn, now)
 	}
 }
 
-// assistAtPublish queues a narrative for the report just published.
 func (r *Room) assistAtPublish(now time.Time) {
 	if r.Assistant.On && r.Assistant.Narrative {
-		r.queueRun(RunNarrative, r.Turn, now)
+		r.queueRun(RunNarrative, "", r.Turn, now)
 	}
 }
 
-func (r *Room) addIssue(is *Issue) {
-	is.ID, is.Operation, is.Turn, is.Status = newID(), max(r.Operation, 1), r.Turn, IssueOpen
-	if u := r.Unit(is.Unit); u != nil {
-		is.UnitName = u.Name
-	}
-	r.Assistant.Issues = append(r.Assistant.Issues, is)
-	if n := len(r.Assistant.Issues); n > 200 {
-		r.Assistant.Issues = r.Assistant.Issues[n-200:]
-	}
+// --- What the model sees ---
+
+type promptUnit struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Kind     string   `json:"kind"`
+	Side     string   `json:"side"`
+	Count    int      `json:"count,omitempty"`
+	Where    string   `json:"where"`
+	Skills   string   `json:"skills"`
+	Kit      string   `json:"kit,omitempty"`
+	Status   string   `json:"status,omitempty"`
+	Notes    string   `json:"notes,omitempty"`
+	Facts    []string `json:"facts,omitempty"`
+	Hidden   bool     `json:"hiddenFromPlayers,omitempty"`
+	Distance int      `json:"hexesAway,omitempty"`
 }
 
-// ruleIssues are the checks that need no model.
-func (r *Room) ruleIssues(mod *Module) {
-	for _, o := range r.Orders {
-		if o.Turn != r.Turn || o.Status != OrderLocked {
+func (r *Room) where(mod *Module, col, row int) string {
+	s := fmt.Sprintf("%s (%s, %s)", HexID(col, row), r.Map.SectorAt(col, row), mod.TerrainAt(r.Map.TerrainCode(col, row)).Name)
+	for _, f := range r.Features {
+		if f.Col == col && f.Row == row {
+			s += ", at " + f.Name
+		}
+	}
+	return s
+}
+
+func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
+	cl := mod.Class(u.Class)
+	p := promptUnit{ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Col, u.Row),
+		Skills: skillsText(mod, u), Kit: KitOf(mod, u), Status: u.Status, Notes: u.Notes, Facts: r.acceptedFacts(u.ID),
+		Hidden: !r.VisibleToPlayers(mod, u)}
+	if cl.IsGroup() || u.Strength > 1 {
+		p.Count = u.Strength
+	}
+	return p
+}
+
+func (r *Room) nearby(mod *Module, u *Unit, within int) []promptUnit {
+	var out []promptUnit
+	for _, x := range r.Units {
+		if x == u {
 			continue
 		}
+		if d := HexDistance(u.Col, u.Row, x.Col, x.Row); d <= within {
+			p := r.promptUnit(mod, x)
+			p.Distance = d
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (r *Room) settingText(mod *Module) string {
+	var skills []string
+	for _, s := range mod.Skills {
+		skills = append(skills, fmt.Sprintf("%s (id %s): %s", s.Name, s.ID, s.Note))
+	}
+	var adv []string
+	for _, a := range mod.Advantages {
+		adv = append(adv, fmt.Sprintf("%s %+d%%", a.Name, a.Value))
+	}
+	return fmt.Sprintf(`The game: %s. %s Each map hex is %s; each turn is %s.
+Skills are percentages: %s.
+Contests: each side's chance is skill + advantage (5%%-95%%); each rolls d100 and succeeds at or under its chance; if both succeed the bigger margin wins; if both fail, nobody gets what they wanted and something complicates things. A check is one side rolling alone.
+Typical advantages: %s.`, mod.Name, mod.Intro, mod.Scale.Hex, mod.Scale.Turn, strings.Join(skills, "; "), strings.Join(adv, ", "))
+}
+
+// PromptFor builds a run's prompts. It reports false if there's nothing to do.
+func (r *Room) PromptFor(mod *Module, run *Run) (system, user string, ok bool) {
+	switch run.Kind {
+	case RunSuggest:
+		return r.suggestPrompt(mod, run)
+	case RunOutcome:
+		return r.outcomePrompt(mod, run)
+	case RunNarrative:
+		return r.narrativePrompt(mod, run)
+	}
+	return "", "", false
+}
+
+func (r *Room) suggestPrompt(mod *Module, run *Run) (string, string, bool) {
+	if run.Turn != r.Turn || r.Phase != PhaseResolving {
+		return "", "", false
+	}
+	type item struct {
+		Order  string       `json:"order"`
+		Text   string       `json:"orderText"`
+		Mark   string       `json:"markedHex,omitempty"`
+		Unit   promptUnit   `json:"unit"`
+		Nearby []promptUnit `json:"nearby,omitempty"`
+	}
+	var items []item
+	for _, o := range r.LockedOrders() {
 		u := r.Unit(o.Unit)
 		if u == nil {
 			continue
 		}
-		t := mod.Orders.Task(o.Task)
-		switch {
-		case t != nil && t.Offensive && outOfAmmo(mod.Class(u.Class), u):
-			r.addIssue(&Issue{Unit: u.ID, Severity: SeverityJudgment, Source: "rules",
-				Text:       fmt.Sprintf("%s is ordered to %s with no ammunition left.", u.Name, strings.ToLower(t.Name)),
-				Suggestion: "It fights at half strength; consider whether it should even try."})
-		case o.Unconfirmed:
-			r.addIssue(&Issue{Unit: u.ID, Severity: SeverityInfo, Source: "rules",
-				Text: fmt.Sprintf("%s is running an unconfirmed standing order (%s), defensively only.", u.Name, r.orderSummary(mod, o))})
-		case t != nil && (t.Destination || t.Offensive) && strings.TrimSpace(o.Intent) == "":
-			r.addIssue(&Issue{Unit: u.ID, Severity: SeverityInfo, Source: "rules",
-				Text: fmt.Sprintf("%s's order (%s) gives no intent, so there's nothing to judge a surprise against.", u.Name, r.orderSummary(mod, o))})
+		it := item{Order: o.ID, Text: o.Text, Unit: r.promptUnit(mod, u), Nearby: r.nearby(mod, u, 3)}
+		if o.Mark != nil {
+			it.Mark = r.where(mod, o.Mark[0], o.Mark[1])
 		}
+		items = append(items, it)
 	}
-}
-
-// --- Order review ---
-
-// reviewOrder is one order as the model sees it.
-type reviewOrder struct {
-	Unit      string   `json:"unit"`
-	Name      string   `json:"name"`
-	Class     string   `json:"class"`
-	Strength  int      `json:"strength"`
-	Ammo      string   `json:"ammo,omitempty"`
-	Hex       string   `json:"hex"`
-	Terrain   string   `json:"terrain"`
-	Radio     string   `json:"radio,omitempty"`
-	Task      string   `json:"task"`
-	TaskNote  string   `json:"taskNote,omitempty"`
-	Dest      string   `json:"destination,omitempty"`
-	Steps     int      `json:"routeHexes,omitempty"`
-	Cost      string   `json:"movementUsed,omitempty"`
-	Intent    string   `json:"intent,omitempty"`
-	Risk      string   `json:"risk"`
-	Fallback  string   `json:"fallback"`
-	Standing  string   `json:"standing,omitempty"`
-	Outcome   string   `json:"outcome"`
-	NearEnemy []string `json:"enemiesWithin4Hexes,omitempty"`
-}
-
-// OrderReviewPrompt builds the system and user prompts for a run. It reports
-// false if there's nothing to review.
-func (r *Room) OrderReviewPrompt(mod *Module, run *Run) (system, user string, ok bool) {
-	where := func(c, row int) string {
-		return fmt.Sprintf("%s (%s, %s)", HexID(c, row), r.Map.SectorAt(c, row), mod.TerrainAt(r.Map.TerrainCode(c, row)).Name)
-	}
-	opt := func(list []Option, id string) string {
-		for _, o := range list {
-			if o.ID == id {
-				return o.Name
-			}
-		}
-		return id
-	}
-	var orders []reviewOrder
-	for _, o := range r.Orders {
-		if o.Turn != run.Turn || o.Status != OrderLocked {
-			continue
-		}
-		u := r.Unit(o.Unit)
-		if u == nil || !mod.Side(u.Side).Playable {
-			continue
-		}
-		cl := mod.Class(u.Class)
-		ro := reviewOrder{Unit: u.ID, Name: u.Name, Class: cl.Name, Strength: u.Strength, Ammo: ammoText(cl, u),
-			Hex: where(o.FromCol, o.FromRow), Terrain: mod.TerrainAt(r.Map.TerrainCode(o.FromCol, o.FromRow)).Name,
-			Task: o.Task, Intent: o.Intent, Risk: opt(mod.Orders.Risks, o.Risk), Fallback: opt(mod.Orders.Fallbacks, o.Fallback)}
-		if u.OutOfContact {
-			ro.Radio = "out of contact"
-		}
-		if t := mod.Orders.Task(o.Task); t != nil {
-			ro.Task, ro.TaskNote = t.Name, t.Note
-		}
-		if o.HasDest {
-			ro.Dest, ro.Steps, ro.Cost = where(o.DestCol, o.DestRow), len(o.Route), fmt.Sprintf("%d of %d", o.Cost, cl.Movement)
-		}
-		switch {
-		case o.Unconfirmed:
-			ro.Standing = "standing order nobody confirmed this turn: runs defensively only"
-		case o.Standing:
-			ro.Standing = "standing order, confirmed"
-		}
-		ro.Outcome = r.outcomeFor(u, o)
-		for _, e := range r.Units {
-			if mod.Side(e.Side).Enemy && HexDistance(e.Col, e.Row, o.FromCol, o.FromRow) <= 4 {
-				ro.NearEnemy = append(ro.NearEnemy, fmt.Sprintf("%s (%s, %d) at %s", e.Name, mod.Class(e.Class).Name, e.Strength, HexID(e.Col, e.Row)))
-			}
-		}
-		orders = append(orders, ro)
-	}
-	if len(orders) == 0 {
+	if len(items) == 0 {
 		return "", "", false
 	}
-	var tasks []string
-	for _, t := range mod.Orders.Tasks {
-		tasks = append(tasks, fmt.Sprintf("- %s: %s", t.Name, t.Note))
-	}
-	system = fmt.Sprintf(`You are Jev, the assistant to the referee of a turn-based wargame (%s, rules %s). Each hex is %s and each turn is %s.
-Orders for the turn are locked and the rules engine has already worked out movement and fights. Your job is to read every order against the situation and flag what the referee should look at before publishing. You advise the referee only; you never decide.
+	system := `You are Jev, assistant to the referee of a referee-led, old-school roleplaying wargame. Players write free-text orders for their characters; the referee decides what happens, calling for dice only where the outcome is genuinely in doubt and the stakes matter.
 
-Flag things like: an intent the task or destination doesn't serve; a route into or next to known enemies under a cautious risk setting; a fallback that contradicts the plan; offensive orders from weak, out-of-ammo, or out-of-contact units; two orders that conflict or depend on each other; vague intent where the outcome could reasonably be read two ways. Don't repeat what an outcome already plainly says, don't invent units or facts, and don't flag an order that's simply sensible. Saying nothing is fine.
+` + r.settingText(mod) + `
 
-Severity: "blocking" when the referee should decide something before publishing; "judgment" when a ruling could reasonably go either way; "info" when it's merely worth knowing.
+For each order, suggest the contests or checks the referee might roll, in the order they'd happen. Most orders need zero to three. Don't roll for things that would simply work (walking down an empty street) or simply fail. Pick the skill that fits; for an opponent, use the unit's own skill if it's listed nearby, or give a value for something not on the map (a locked door, a frightened survivor). Give advantages only with a reason grounded in the order or the situation; a good plan in the order deserves a bonus. Mark a contest secret when players shouldn't see the numbers (a hidden enemy's stealth, say). Use only the unit ids given.
 
-Tasks in this game:
-%s
-
-Reply with only a JSON object, no prose:
-{"issues":[{"unit":"<unit id from the list>","severity":"blocking|judgment|info","issue":"<one or two sentences>","suggestion":"<what the referee might do, one sentence>"}]}`,
-		mod.Name, mod.Version, mod.Scale.Hex, mod.Scale.Turn, strings.Join(tasks, "\n"))
-	b, _ := json.MarshalIndent(map[string]any{"turn": run.Turn, "threat": r.Threat, "orders": orders}, "", " ")
+Reply with only a JSON object:
+{"contests":[{"order":"<order id>","title":"<short label>","a":{"unit":"<unit id>","skill":"<skill id>","advantage":<percent>,"why":"<reason for the advantage>"},"b":{"unit":"<unit id, or empty>","name":"<who, if not a unit>","skill":"<skill id>","value":<percent, if not a unit>,"advantage":<percent>,"why":"<reason>"},"secret":false}]}
+Leave "b" out for a check against no one.`
+	b, _ := json.MarshalIndent(map[string]any{"turn": run.Turn, "threat": r.Threat, "facts": r.acceptedFacts(""), "orders": items}, "", " ")
 	return system, string(b), true
 }
 
-// outcomeFor says what resolution did with a unit this turn.
-func (r *Room) outcomeFor(u *Unit, o *Order) string {
-	res := r.Resolution
-	if res == nil || res.Turn != o.Turn {
-		return "not yet resolved"
+func (r *Room) outcomePrompt(mod *Module, run *Run) (string, string, bool) {
+	o := r.lockedOrder(run.Target)
+	if o == nil || r.Desk == nil {
+		return "", "", false
 	}
-	var parts []string
-	for _, m := range res.Moves {
-		if m.Unit == u.ID {
-			reason := map[string]string{"engaged": "stopped by contact", "stacking": "stopped short: the hex was full", "stopped": "stopped short of its goal", "cautious": "stopped short to stay out of contact"}[m.Reason]
-			if reason == "" {
-				reason = "arrived"
+	u := r.Unit(o.Unit)
+	if u == nil {
+		return "", "", false
+	}
+	var rolls []string
+	for _, c := range r.Desk.Contests {
+		if c.Order == o.ID && c.Result != nil {
+			line := c.Title + ": " + c.Result.Text()
+			if c.A.Why != "" {
+				line += fmt.Sprintf(" (%s's advantage: %s)", c.A.Name, c.A.Why)
 			}
-			parts = append(parts, fmt.Sprintf("moved %s → %s, %s", HexID(m.From()[0], m.From()[1]), HexID(m.To()[0], m.To()[1]), reason))
+			if c.B != nil && c.B.Why != "" {
+				line += fmt.Sprintf(" (%s's advantage: %s)", c.B.Name, c.B.Why)
+			}
+			rolls = append(rolls, line)
 		}
 	}
-	for _, e := range res.Encounters {
-		if slices.Contains(e.Friend, u.ID) {
-			f := fmt.Sprintf("in a fight at %s against %d enemy units", HexID(e.Col, e.Row), len(e.Enemy))
-			if e.Settled {
-				f += fmt.Sprintf(" (%s %s)", strings.TrimSuffix(winnerText(e), "."), e.Outcome.Result)
-			}
-			parts = append(parts, f)
-		}
-	}
-	if len(parts) == 0 {
-		return "held its position"
-	}
-	return strings.Join(parts, "; ")
+	system := `You are Jev, assistant to the referee of a referee-led, old-school roleplaying wargame. The referee has rolled the dice for one player's order. Draft what happened, for the referee to edit before players read it.
+
+` + r.settingText(mod) + `
+
+Write 40 to 130 words, past tense, plain and concrete, like a tough after-action report, about the player's marine by name. Follow the dice faithfully: a narrow win costs something, a decisive one doesn't; both failing means a complication, not nothing. Where nothing was rolled, what the order tried simply happens as far as the situation allows. Don't invent new units, deaths, or facts that change the scenario; don't reveal hidden enemies the marine couldn't perceive, beyond what they'd see or hear. End with where the marine is and what state they're in if that changed. No headings or lists.`
+	b, _ := json.MarshalIndent(map[string]any{
+		"order": o.Text, "unit": r.promptUnit(mod, u), "rolls": rolls, "nearby": r.nearby(mod, u, 2),
+		"facts": r.acceptedFacts(""), "refereeNotes": r.RefereeNotes}, "", " ")
+	return system, string(b), true
 }
 
-// ApplyOrderReview turns the model's reply into issue cards.
-func (r *Room) ApplyOrderReview(run *Run, reply string, decode func(string, any) error) error {
-	var out struct {
-		Issues []struct {
-			Unit       string `json:"unit"`
-			Severity   string `json:"severity"`
-			Issue      string `json:"issue"`
-			Suggestion string `json:"suggestion"`
-		} `json:"issues"`
+func (r *Room) narrativePrompt(mod *Module, run *Run) (string, string, bool) {
+	rep := r.report(run.Operation, run.Turn)
+	if rep == nil {
+		return "", "", false
 	}
-	if err := decode(reply, &out); err != nil {
-		return err
-	}
-	inTurn := map[string]bool{}
-	for _, o := range r.Orders {
-		if o.Turn == run.Turn && o.Status == OrderLocked {
-			inTurn[o.Unit] = true
+	var lines []string
+	for _, e := range rep.Entries {
+		if e.Seen == SeenByAll && e.Text != "" {
+			lines = append(lines, e.Title+": "+e.Text)
 		}
 	}
-	n := 0
-	for _, is := range out.Issues {
-		if n >= 15 || strings.TrimSpace(is.Issue) == "" {
-			continue
-		}
-		if !slices.Contains([]string{SeverityBlocking, SeverityJudgment, SeverityInfo}, is.Severity) {
-			is.Severity = SeverityInfo
-		}
-		if !inTurn[is.Unit] {
-			is.Unit = "" // the model named a unit that has no order: keep the point, drop the link
-		}
-		r.addIssue(&Issue{Unit: is.Unit, Severity: is.Severity, Source: "ai", Model: run.Model,
-			Text: clip(is.Issue, 400), Suggestion: clip(is.Suggestion, 300)})
-		n++
+	if len(lines) == 0 {
+		return "", "", false
+	}
+	system := fmt.Sprintf(`You write the short situation report that opens each turn's report in a wargame (%s). Each turn is %s.
+Write 60 to 120 words in the voice of a terse radio operator summing up the turn for the squad. Use only the facts in the lines you're given: don't add units, casualties, places, or anything the squad wasn't told. Plain prose; no headings, lists, or sign-off.`, mod.Name, mod.Scale.Turn)
+	return system, fmt.Sprintf("Turn %d:\n- %s", rep.Turn, strings.Join(lines, "\n- ")), true
+}
+
+// --- Applying replies ---
+
+// ApplyReply turns the model's reply into suggestions or drafts.
+func (r *Room) ApplyReply(mod *Module, run *Run, reply string, decode func(string, any) error) error {
+	switch run.Kind {
+	case RunSuggest:
+		return r.applySuggestions(mod, run, reply, decode)
+	case RunOutcome:
+		return r.applyOutcomeDraft(run, reply)
+	case RunNarrative:
+		return r.applyNarrative(run, reply)
 	}
 	return nil
 }
 
-// --- Narrative ---
-
-// NarrativePrompt builds the prompts for a report's narrative, from the
-// players' version of the report only.
-func (r *Room) NarrativePrompt(mod *Module, run *Run) (system, user string, ok bool) {
-	rep := r.report(run.Operation, run.Turn)
-	if rep == nil || len(rep.Players) == 0 {
-		return "", "", false
+func (r *Room) applySuggestions(mod *Module, run *Run, reply string, decode func(string, any) error) error {
+	if r.Desk == nil || r.Desk.Turn != run.Turn || r.Phase != PhaseResolving {
+		return fmt.Errorf("turn %d is no longer being adjudicated", run.Turn)
 	}
-	system = fmt.Sprintf(`You write the situation report that opens each turn of a wargame (%s). Each turn is %s.
-Write 80 to 150 words in the voice of a terse radio operator summing up the turn for the players' side. Use only the facts in the report lines you're given: don't add units, casualties, places, enemy identities, or anything players weren't told. Enemy units are "contacts" unless the lines say otherwise. No headings, no lists, no sign-off; plain prose only.`, mod.Name, mod.Scale.Turn)
-	user = fmt.Sprintf("Turn %d report lines:\n- %s", rep.Turn, strings.Join(rep.Players, "\n- "))
-	return system, user, true
+	type side struct {
+		Unit      string `json:"unit"`
+		Name      string `json:"name"`
+		Skill     string `json:"skill"`
+		Value     int    `json:"value"`
+		Advantage int    `json:"advantage"`
+		Why       string `json:"why"`
+	}
+	var out struct {
+		Contests []struct {
+			Order  string `json:"order"`
+			Title  string `json:"title"`
+			A      side   `json:"a"`
+			B      *side  `json:"b"`
+			Secret bool   `json:"secret"`
+		} `json:"contests"`
+	}
+	if err := decode(reply, &out); err != nil {
+		return err
+	}
+	toParty := func(s side) (PartyInput, bool) {
+		if r.Unit(s.Unit) == nil {
+			s.Unit = ""
+		}
+		if mod.Skill(s.Skill) == nil {
+			s.Skill = ""
+		}
+		if s.Unit != "" && s.Skill != "" {
+			s.Value = 0 // take it from the unit
+		}
+		in := PartyInput{Unit: s.Unit, Name: s.Name, Skill: s.Skill, Value: min(100, max(0, s.Value)),
+			Advantage: min(90, max(-90, s.Advantage)), Why: s.Why}
+		return in, s.Unit != "" || s.Name != ""
+	}
+	added := 0
+	for _, c := range out.Contests {
+		if added >= 20 || r.lockedOrder(c.Order) == nil {
+			continue
+		}
+		a, ok := toParty(c.A)
+		if !ok || r.Unit(a.Unit) == nil {
+			continue
+		}
+		var b *PartyInput
+		if c.B != nil {
+			if pb, ok := toParty(*c.B); ok {
+				b = &pb
+			}
+		}
+		ref := &Member{Role: RoleReferee}
+		ct, err := r.AddContest(ref, mod, c.Order, c.Title, a, b, c.Secret)
+		if err != nil {
+			continue
+		}
+		ct.Source, ct.Model = "ai", run.Model
+		added++
+	}
+	return nil
 }
 
-// ApplyNarrative stores a drafted narrative on its report for the referee.
-func (r *Room) ApplyNarrative(run *Run, reply string) error {
+func (r *Room) applyOutcomeDraft(run *Run, reply string) error {
+	if r.Desk == nil || r.Desk.Turn != run.Turn || r.Phase != PhaseResolving {
+		return fmt.Errorf("turn %d is no longer being adjudicated", run.Turn)
+	}
+	o := r.lockedOrder(run.Target)
+	if o == nil {
+		return fmt.Errorf("that order is gone")
+	}
+	text := clip(strings.Trim(strings.TrimSpace(reply), "`"), 3000)
+	if text == "" {
+		return fmt.Errorf("the model returned nothing")
+	}
+	oc := r.Desk.outcomeFor(o.ID)
+	if oc != nil && oc.Text != "" && (oc.Source != "ai" || oc.Edited) {
+		// The referee has written their own; keep it, and offer the draft beside it.
+		oc.Draft = text
+		return nil
+	}
+	seen := SeenByAll
+	if u := r.Unit(o.Unit); u != nil && u.OutOfContact {
+		seen = SeenByHolder
+	}
+	if oc == nil {
+		oc = &Outcome{ID: newID(), Order: o.ID}
+		r.Desk.Outcomes = append(r.Desk.Outcomes, oc)
+	}
+	if oc.Seen != "" {
+		seen = oc.Seen
+	}
+	oc.Text, oc.Seen, oc.Source, oc.Model, oc.Edited, oc.Draft = text, seen, "ai", run.Model, false, ""
+	return nil
+}
+
+func (r *Room) applyNarrative(run *Run, reply string) error {
 	rep := r.report(run.Operation, run.Turn)
 	if rep == nil {
 		return fmt.Errorf("the report for turn %d is gone", run.Turn)
@@ -378,18 +400,10 @@ const (
 	NarrativeApproved = "approved"
 )
 
-func clip(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n-1]) + "…"
-}
-
 // --- Worker hooks ---
 
 // NextRun marks the oldest pending run in the room as running and returns
-// a copy, or nil. model and provider are recorded on it.
+// a copy, or nil.
 func (r *Room) NextRun(model, provider string, now time.Time) *Run {
 	if !r.Assistant.On {
 		return nil
@@ -397,7 +411,7 @@ func (r *Room) NextRun(model, provider string, now time.Time) *Run {
 	for _, run := range r.Assistant.Runs {
 		if run.Status == RunPending {
 			run.Status, run.Started, run.Model, run.Provider, run.Error = RunRunning, now.UTC(), model, provider, ""
-			run.Prompt = map[string]string{RunOrderReview: promptOrderReview, RunNarrative: promptNarrative}[run.Kind]
+			run.Prompt = promptVersions[run.Kind]
 			c := *run
 			return &c
 		}
@@ -407,13 +421,10 @@ func (r *Room) NextRun(model, provider string, now time.Time) *Run {
 
 // HasPendingRun reports whether the worker has anything to do here.
 func (r *Room) HasPendingRun() bool {
-	if !r.Assistant.On {
-		return false
-	}
-	return slices.ContainsFunc(r.Assistant.Runs, func(x *Run) bool { return x.Status == RunPending })
+	return r.Assistant.On && slices.ContainsFunc(r.Assistant.Runs, func(x *Run) bool { return x.Status == RunPending })
 }
 
-// FinishRun records a run's result. apply turns the reply into changes.
+// FinishRun records a run's result. apply turns the reply into changes;
 // quiet means there was nothing to do, so nobody is told.
 func (r *Room) FinishRun(id string, tokens int, runErr error, apply func(*Run) error, quiet bool, now time.Time) {
 	i := slices.IndexFunc(r.Assistant.Runs, func(x *Run) bool { return x.ID == id })
@@ -438,14 +449,16 @@ func (r *Room) FinishRun(id string, tokens int, runErr error, apply func(*Run) e
 		return
 	}
 	switch run.Kind {
-	case RunOrderReview:
+	case RunSuggest:
 		n := 0
-		for _, is := range r.Assistant.Issues {
-			if is.Turn == run.Turn && is.Source == "ai" && is.Status == IssueOpen {
-				n++
+		if r.Desk != nil {
+			for _, c := range r.Desk.Contests {
+				if c.Source == "ai" && c.Result == nil {
+					n++
+				}
 			}
 		}
-		r.notify(ref.ID, fmt.Sprintf("Turn %d orders reviewed", run.Turn), fmt.Sprintf("The assistant raised %s.", plural(n, "issue", "issues")), "turn")
+		r.notify(ref.ID, fmt.Sprintf("Turn %d: rolls suggested", run.Turn), fmt.Sprintf("The assistant suggested %s. Check them, then roll.", plural(n, "roll", "rolls")), "turn")
 	case RunNarrative:
 		r.notify(ref.ID, fmt.Sprintf("Turn %d narrative drafted", run.Turn), "Read it, edit it if you like, and approve it for players.", "reports")
 	}
@@ -463,27 +476,29 @@ func (r *Room) ResetRunning() bool {
 }
 
 func runLabel(kind string) string {
-	return map[string]string{RunOrderReview: "Order review", RunNarrative: "Narrative"}[kind]
+	return map[string]string{RunSuggest: "Suggesting rolls", RunOutcome: "Drafting an outcome", RunNarrative: "Drafting the narrative"}[kind]
 }
 
 // --- Referee actions ---
 
 // SetAssistant changes the room's assistant settings.
-func (r *Room) SetAssistant(actor *Member, on, review, narrative bool) error {
+func (r *Room) SetAssistant(actor *Member, on, suggest, narrative bool) error {
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
 	was := r.Assistant.On
-	r.Assistant.On, r.Assistant.Review, r.Assistant.Narrative = on, review, narrative
+	r.Assistant.On, r.Assistant.Suggest, r.Assistant.Narrative = on, suggest, narrative
 	if on != was {
 		r.logKind(VisReferee, "", "AI assistant switched %s.", map[bool]string{true: "on", false: "off"}[on])
 	}
 	return nil
 }
 
-// RunNow queues a review of the turn being resolved, or a narrative for the
-// last report, on the referee's request.
-func (r *Room) RunNow(actor *Member, kind string, now time.Time) error {
+// RunNow queues assistant work on the referee's request: suggestions for
+// the turn being adjudicated, an outcome draft for one order (or every
+// order with rolls and no outcome yet, if target is "all"), or a narrative
+// for the last report.
+func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
@@ -491,64 +506,52 @@ func (r *Room) RunNow(actor *Member, kind string, now time.Time) error {
 		return bad("switch the AI assistant on for this room first (Room screen)")
 	}
 	switch kind {
-	case RunOrderReview:
+	case RunSuggest:
 		if r.Phase != PhaseResolving {
-			return bad("orders can be reviewed once the turn is locked")
+			return bad("rolls can be suggested once the turn is locked")
 		}
-		r.queueRun(RunOrderReview, r.Turn, now)
+		r.queueRun(RunSuggest, "", r.Turn, now)
+	case RunOutcome:
+		if r.Phase != PhaseResolving || r.Desk == nil {
+			return bad("outcomes can be drafted once the turn is locked")
+		}
+		if target != "all" {
+			if r.lockedOrder(target) == nil {
+				return ErrNotFound
+			}
+			r.queueRun(RunOutcome, target, r.Turn, now)
+			return nil
+		}
+		for _, o := range r.LockedOrders() {
+			if oc := r.Desk.outcomeFor(o.ID); oc == nil || oc.Text == "" {
+				r.queueRun(RunOutcome, o.ID, r.Turn, now)
+			}
+		}
 	case RunNarrative:
 		if len(r.Reports) == 0 {
 			return bad("there's no report to write a narrative for yet")
 		}
-		r.queueRun(RunNarrative, r.Reports[len(r.Reports)-1].Turn, now)
+		r.queueRun(RunNarrative, "", r.Reports[len(r.Reports)-1].Turn, now)
 	default:
 		return bad("unknown assistant task")
 	}
 	return nil
 }
 
-// DecideIssue is the referee noting, dismissing, or forwarding a card.
-func (r *Room) DecideIssue(actor *Member, id, action, note string, now time.Time) error {
+// UseDraft swaps the assistant's draft in for the referee's outcome text.
+func (r *Room) UseDraft(actor *Member, orderID string) error {
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
-	i := slices.IndexFunc(r.Assistant.Issues, func(x *Issue) bool { return x.ID == id })
-	if i < 0 {
+	d, err := r.desk()
+	if err != nil {
+		return err
+	}
+	oc := d.outcomeFor(orderID)
+	if oc == nil || oc.Draft == "" {
 		return ErrNotFound
 	}
-	is := r.Assistant.Issues[i]
-	note = clip(note, 300)
-	switch action {
-	case "noted":
-		is.Status = IssueNoted
-	case "dismiss":
-		is.Status = IssueDismissed
-	case "send":
-		u := r.Unit(is.Unit)
-		holder := (*Member)(nil)
-		if u != nil {
-			holder = r.memberOrNil(u.AssignedTo)
-		}
-		if holder == nil || holder.Status != StatusApproved {
-			return bad("there's no player holding that unit to send it to")
-		}
-		text := note
-		if text == "" {
-			text = fmt.Sprintf("About %s's order for turn %d: %s", is.UnitName, is.Turn, is.Text)
-			if is.Suggestion != "" {
-				text += " " + is.Suggestion
-			}
-		}
-		if err := r.Post(actor, "ref-"+holder.ID, text, now); err != nil {
-			return err
-		}
-		is.Status = IssueSent
-	case "reopen":
-		is.Status = IssueOpen
-	default:
-		return bad("note, dismiss, or send")
-	}
-	is.Note, is.DecidedAt = note, now.UTC()
+	oc.Text, oc.Draft, oc.Source, oc.Edited = oc.Draft, "", "ai", false
 	return nil
 }
 
@@ -558,13 +561,13 @@ func (r *Room) DecideNarrative(actor *Member, op, turn int, action, text string)
 		return ErrForbidden
 	}
 	rep := r.report(op, turn)
-	if rep == nil || rep.Narrative == "" && action != "save" {
+	if rep == nil || rep.Narrative == "" && action != "save" && action != "approve" {
 		return ErrNotFound
 	}
 	switch action {
 	case "approve", "save":
 		if t := strings.TrimSpace(text); t != "" {
-			if t != rep.Narrative {
+			if t != rep.Narrative && rep.NarrativeModel != "" {
 				rep.NarrativeEdited = true
 			}
 			rep.Narrative = clip(t, 1500)
@@ -594,56 +597,23 @@ type AIView struct {
 	Provider  string // where game data goes
 	Model     string
 	On        bool
-	Review    bool
+	Suggest   bool
 	Narrative bool
-	Runs      []Run       // latest first
-	Issues    []IssueView // this turn's and the last, open first
-	Open      int      // open cards
-	Blocking  int      // open blocking cards
-}
-
-// IssueView is a card as shown, with whether it can go to a player.
-type IssueView struct {
-	Issue
-	CanSend bool
+	Runs      []Run // latest first
+	Busy      map[string]bool
 }
 
 func assistantView(r *Room) AIView {
 	a := r.Assistant
-	v := AIView{On: a.On, Review: a.Review, Narrative: a.Narrative}
-	for i := len(a.Runs) - 1; i >= 0 && len(v.Runs) < 5; i-- {
-		v.Runs = append(v.Runs, *a.Runs[i])
-	}
-	op := max(r.Operation, 1)
-	for _, is := range a.Issues {
-		if is.Operation == op && is.Turn >= r.Turn-1 {
-			iv := IssueView{Issue: *is}
-			if u := r.Unit(is.Unit); u != nil {
-				if m := r.memberOrNil(u.AssignedTo); m != nil && m.Status == StatusApproved {
-					iv.CanSend = true
-				}
-			}
-			v.Issues = append(v.Issues, iv)
-			if is.Status == IssueOpen {
-				v.Open++
-				if is.Severity == SeverityBlocking {
-					v.Blocking++
-				}
-			}
+	v := AIView{On: a.On, Suggest: a.Suggest, Narrative: a.Narrative, Busy: map[string]bool{}}
+	for i := len(a.Runs) - 1; i >= 0; i-- {
+		run := a.Runs[i]
+		if len(v.Runs) < 6 {
+			v.Runs = append(v.Runs, *run)
+		}
+		if run.Status == RunPending || run.Status == RunRunning {
+			v.Busy[run.Kind+"/"+run.Target] = true
 		}
 	}
-	rank := map[string]int{SeverityBlocking: 0, SeverityJudgment: 1, SeverityInfo: 2}
-	slices.SortStableFunc(v.Issues, func(x, y IssueView) int {
-		if (x.Status == IssueOpen) != (y.Status == IssueOpen) {
-			if x.Status == IssueOpen {
-				return -1
-			}
-			return 1
-		}
-		if x.Turn != y.Turn {
-			return y.Turn - x.Turn
-		}
-		return rank[x.Severity] - rank[y.Severity]
-	})
 	return v
 }

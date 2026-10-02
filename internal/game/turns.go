@@ -10,11 +10,8 @@ import (
 
 // The turn clock. Each turn's orders lock at a scheduled time in the room's
 // time zone (say 6 PM and midnight Central), so people with day jobs know
-// when to show up. At lock the enemy AI plans the infected's moves as a
-// proposal for the referee. If the referee hasn't opened the next turn by the
-// takeover time, the AI applies its plan and opens the next turn itself.
-
-const PhaseResolving Phase = "resolving"
+// when to show up. At the lock the referee adjudicates the turn and
+// publishes it when they're done; the next turn opens then.
 
 // minPlanning is the least time players get once a turn opens; a slot closer
 // than this is skipped in favor of the following one.
@@ -24,16 +21,11 @@ type Schedule struct {
 	TimeZone string   `json:"tz"`
 	Times    []string `json:"times"` // "18:00", "00:00"
 	Days     []int    `json:"days"`  // time.Weekday values; empty means every day
-	// Takeover is how many hours after lock the AI acts if the referee
-	// hasn't resolved the turn: -1 never, 0 immediately.
-	Takeover int `json:"takeover"`
 }
 
 func DefaultSchedule() Schedule {
-	return Schedule{TimeZone: "America/Chicago", Times: []string{"18:00"}, Takeover: 6}
+	return Schedule{TimeZone: "America/Chicago", Times: []string{"18:00"}}
 }
-
-var TakeoverChoices = []int{-1, 0, 1, 2, 3, 6, 12, 24, 48}
 
 type ZoneOption struct{ ID, Label string }
 
@@ -78,9 +70,6 @@ func (s Schedule) validate() error {
 			return bad("unknown weekday")
 		}
 	}
-	if !slices.Contains(TakeoverChoices, s.Takeover) {
-		return bad("unknown AI takeover setting")
-	}
 	return nil
 }
 
@@ -110,14 +99,6 @@ func (s Schedule) Next(t time.Time) time.Time {
 // nextDeadline is the next slot that leaves players at least minPlanning.
 func (r *Room) nextDeadline(now time.Time) time.Time {
 	return r.Schedule.Next(now.Add(minPlanning))
-}
-
-// TakeoverAt is when the AI resolves a locked turn on its own; zero for never.
-func (r *Room) TakeoverAt() time.Time {
-	if r.Phase != PhaseResolving || r.Schedule.Takeover < 0 {
-		return time.Time{}
-	}
-	return r.LockedAt.Add(time.Duration(r.Schedule.Takeover) * time.Hour)
 }
 
 // FormatInZone renders a time the way the room's schedule reads it.
@@ -230,44 +211,30 @@ func (r *Room) LockNow(actor *Member, mod *Module, now time.Time) error {
 	return nil
 }
 
-// lock closes planning: orders freeze, and the server resolves the turn
-// (see resolution.go) for the referee to review.
+// lock closes planning: orders freeze, the board players see freezes with
+// them, and the referee's desk opens.
 func (r *Room) lock(mod *Module, now time.Time) {
 	r.Phase, r.LockedAt = PhaseResolving, now.UTC()
 	r.Undo = nil // the previous turn can't be reopened once this one locks
 	r.RemindAt = time.Time{}
-	r.logf(VisAll, "Turn %d is locked. The referee is resolving it.", r.Turn)
-	r.lockOrders(mod, now)
-	rng, seed := newResolutionRNG()
-	r.Resolution = r.resolve(mod, now, rng, seed)
-	if t := r.TakeoverAt(); !t.IsZero() && !now.Before(t) {
-		r.takeover(mod, now)
-		return
+	r.logf(VisAll, "Turn %d is locked. The referee is working out what happens.", r.Turn)
+	r.lockOrders()
+	r.Desk = &Desk{Turn: r.Turn}
+	r.LockedUnits = make([]*Unit, len(r.Units))
+	for i, u := range r.Units {
+		c := *u
+		r.LockedUnits[i] = &c
 	}
-	r.assistAtLock(mod, now)
+	r.assistAtLock(now)
 	if ref := r.Referee(); ref != nil {
-		body := "Every move is worked out and ready to publish."
-		if n := len(r.Resolution.Encounters); n > 0 {
-			body = fmt.Sprintf("%s to settle, then publish.", capitalize(plural(n, "fight", "fights")))
-		}
-		r.notify(ref.ID, fmt.Sprintf("Turn %d locked", r.Turn), body, "turn")
+		r.notify(ref.ID, fmt.Sprintf("Turn %d locked", r.Turn),
+			fmt.Sprintf("%s to read. Work out what happens, then publish.", capitalize(plural(len(r.LockedOrders()), "order", "orders"))), "turn")
 	}
 }
 
-// NextTurn is the referee publishing the resolved turn and opening the next.
+// NextTurn is the referee publishing the turn and opening the next.
 func (r *Room) NextTurn(actor *Member, mod *Module, now time.Time) error {
 	return r.PublishTurn(actor, mod, now)
-}
-
-// takeover is the AI acting for an absent referee: the rules settle every
-// open fight, and the turn is published.
-func (r *Room) takeover(mod *Module, now time.Time) {
-	r.settleRemaining(mod)
-	r.logf(VisAll, "The referee was away, so the rules settled turn %d's fights and published it.", r.Turn)
-	if ref := r.Referee(); ref != nil {
-		r.notify(ref.ID, fmt.Sprintf("Turn %d published without you", r.Turn), "You were away, so the rules settled its fights and published it.", "reports")
-	}
-	r.publish(mod, now)
 }
 
 // Due reports whether the clock needs to act on this room at time now.
@@ -278,15 +245,12 @@ func (r *Room) Due(now time.Time) bool {
 	switch r.Phase {
 	case PhasePlanning:
 		return !r.Deadline.IsZero() && !now.Before(r.Deadline) || r.reminderDue(now)
-	case PhaseResolving:
-		t := r.TakeoverAt()
-		return !t.IsZero() && !now.Before(t)
 	}
 	return false
 }
 
-// Tick advances the clock: locks a turn whose deadline passed, and lets the
-// AI take over a locked turn the referee left unresolved.
+// Tick advances the clock: reminds players, and locks a turn whose deadline
+// passed.
 func (r *Room) Tick(mod *Module, now time.Time) {
 	switch {
 	case !r.Due(now):
@@ -294,7 +258,5 @@ func (r *Room) Tick(mod *Module, now time.Time) {
 		r.remind()
 	case r.Phase == PhasePlanning:
 		r.lock(mod, now)
-	case r.Phase == PhaseResolving:
-		r.takeover(mod, now)
 	}
 }

@@ -9,26 +9,32 @@ import (
 
 // MapView is precomputed SVG geometry for a pointy-top, odd-row-offset hex grid.
 type MapView struct {
-	ViewBox         string
-	Width           float64
-	Height          float64
-	HexPoints       string
-	Cols            int
-	Rows            int
-	Cells           []Cell
-	Coast           string     // path data along every sea/land hex side
-	EdgePaths       []EdgePath // one path per edge type (river, ridge, ...)
-	Crossings       []CrossingMark
-	Roads           string // path data joining hex centers
-	SectorLines     string // path data along sector boundaries
-	Fog             string // path data covering hexes no friendly unit can see
-	SectorLabels    []SectorLabel
-	Features        []FeatureMark
-	Stacks          []Stack
-	Proposed        []ProposedMark // referee only: hexes a pending event would change
-	OrderLines      []OrderLine
-	ResolutionLines []ResolutionLine // referee: this turn\'s moves
-	EncounterMarks  []EncounterMark
+	ViewBox      string
+	Width        float64
+	Height       float64
+	HexPoints    string
+	Cols         int
+	Rows         int
+	Cells        []Cell
+	Coast        string     // path data along every sea/land hex side
+	EdgePaths    []EdgePath // one path per edge type (river, ridge, ...)
+	Crossings    []CrossingMark
+	Roads        string // path data joining hex centers
+	SectorLines  string // path data along sector boundaries
+	SectorLabels []SectorLabel
+	Features     []FeatureMark
+	Stacks       []Stack
+	Proposed     []ProposedMark // referee only: hexes a pending event would change
+	OrderMarks   []OrderMark    // spots players marked in their orders
+}
+
+// OrderMark is a spot a player marked in an order.
+type OrderMark struct {
+	X, Y   float64
+	Hex    string
+	Label  string
+	Status string
+	Mine   bool
 }
 
 type Cell struct {
@@ -55,16 +61,6 @@ type CrossingMark struct {
 	Label          string
 }
 
-type ResolutionLine struct {
-	Points, Role, Label string
-}
-
-type EncounterMark struct {
-	X, Y    float64
-	Label   string
-	Settled bool
-}
-
 type ProposedMark struct {
 	X, Y  float64
 	Hex   string
@@ -83,7 +79,6 @@ type Stack struct {
 	Top   UnitView
 	Count int
 	Label string // accessible description of the stack
-	Full  bool   // friendly stack at its limit
 }
 
 // InspectorData is the JSON the client uses to describe a selected hex.
@@ -96,7 +91,6 @@ type InspectorData struct {
 	Sides    map[string][]SideInfo    `json:"sides"` // edges and roads, listed from each hex's point of view
 	Sectors  SectorGrid               `json:"sectors"`
 	Orders   OrderData                `json:"orders"`
-	Stack    map[string][2]int        `json:"stack"` // hex -> [friendly stacking points used, limit]
 }
 
 type SideInfo struct {
@@ -106,7 +100,7 @@ type SideInfo struct {
 	EdgeName  string `json:"edgeName,omitempty"`
 	Crossing  string `json:"crossing,omitempty"`
 	CrossName string `json:"crossingName,omitempty"`
-	Blocks    bool   `json:"blocks,omitempty"` // impassable to ground units here
+	Blocks    bool   `json:"blocks,omitempty"` // an obstacle here
 	Road      bool   `json:"road,omitempty"`
 	Note      string `json:"note,omitempty"`
 }
@@ -145,7 +139,7 @@ var featureGlyphs = map[string]string{
 // FeatureKinds lists the place kinds the editor offers.
 var FeatureKinds = []string{"beachhead", "hospital", "port", "utility", "police", "shelter", "relay", "hive"}
 
-func buildMap(r *Room, mod *Module, me *Member, units []UnitView, local []observer) (MapView, []Terrain, InspectorData) {
+func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Terrain, InspectorData) {
 	ref := me.Role == RoleReferee
 	m := r.Map
 	rows := m.NumRows()
@@ -179,20 +173,6 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView, local []observ
 		}
 	}
 	mv.Coast = coast.String()
-
-	observed := r.observedBy(append(r.observers(mod), local...))
-	var fog strings.Builder
-	for row := range rows {
-		for col := 0; col < m.Cols; col++ {
-			if observed[[2]int{col, row}] {
-				continue
-			}
-			x, y := HexCenter(col, row)
-			fmt.Fprintf(&fog, "M%.1f %.1fl%.2f %.1fv%.1fl%.2f %.1fl%.2f %.1fv%.1fz",
-				x, y-hexSize, hexW/2, hexSize/2, hexSize, -hexW/2, hexSize/2, -hexW/2, -hexSize/2, -hexSize)
-		}
-	}
-	mv.Fog = fog.String()
 
 	// Sector boundaries run along hex sides between blocks.
 	var sectors strings.Builder
@@ -313,13 +293,6 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView, local []observ
 		}
 		byHex[u.Hex] = append(byHex[u.Hex], u)
 	}
-	data.Stack = map[string][2]int{}
-	load := r.LoadFor(mod, me)
-	for h, used := range load {
-		if used > 0 {
-			data.Stack[HexID(h[0], h[1])] = [2]int{used, r.StackLimit(mod, h[0], h[1])}
-		}
-	}
 	for _, hx := range order {
 		us := byHex[hx]
 		sort.SliceStable(us, func(i, j int) bool { return stackRank(us[i]) < stackRank(us[j]) })
@@ -329,15 +302,11 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView, local []observ
 		names := make([]string, len(us))
 		for i, u := range us {
 			names[i] = u.Name
-			switch {
-			case u.Stale:
-				names[i] += fmt.Sprintf(" (off the net: last reported here, turn %d)", u.SeenTurn)
-			case u.LocalSight:
-				names[i] += " (seen by your unit off the net)"
+			if u.Stale {
+				names[i] += fmt.Sprintf(" (out of contact: last called in from here, turn %d)", u.SeenTurn)
 			}
 		}
-		st := data.Stack[hx]
-		mv.Stacks = append(mv.Stacks, Stack{X: x, Y: y, Hex: hx, Top: us[0], Count: len(us), Full: st[1] > 0 && st[0] >= st[1],
+		mv.Stacks = append(mv.Stacks, Stack{X: x, Y: y, Hex: hx, Top: us[0], Count: len(us),
 			Label: fmt.Sprintf("Hex %s: %s", hx, strings.Join(names, ", "))})
 	}
 	return mv, legend, data

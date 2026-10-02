@@ -25,7 +25,7 @@ func (s *Server) setAssistant(w http.ResponseWriter, r *http.Request) {
 		if s.ai == nil {
 			return game.ErrBadRequest
 		}
-		return room.SetAssistant(me, r.FormValue("on") == "on", r.FormValue("review") == "on", r.FormValue("narrative") == "on")
+		return room.SetAssistant(me, r.FormValue("on") == "on", r.FormValue("suggest") == "on", r.FormValue("narrative") == "on")
 	})
 }
 
@@ -34,13 +34,7 @@ func (s *Server) assistantRun(w http.ResponseWriter, r *http.Request) {
 		if s.ai == nil {
 			return game.ErrBadRequest
 		}
-		return room.RunNow(me, r.FormValue("kind"), time.Now())
-	})
-}
-
-func (s *Server) decideIssue(w http.ResponseWriter, r *http.Request) {
-	s.act(w, r, func(room *game.Room, me *game.Member) error {
-		return room.DecideIssue(me, r.PathValue("id"), r.FormValue("action"), r.FormValue("note"), time.Now())
+		return room.RunNow(me, r.FormValue("kind"), r.FormValue("target"), time.Now())
 	})
 }
 

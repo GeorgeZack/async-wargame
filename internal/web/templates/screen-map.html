@@ -1,5 +1,5 @@
 {{define "content"}}{{template "shell-top" .}}
-<main id="main" class="screen screen-map" data-base="{{.Base}}" data-version="{{.Version}}">
+<main id="main" class="screen screen-map" data-base="{{.Base}}" data-version="{{.Version}}"{{if .IsReferee}} data-referee="1"{{end}}>
   {{template "sec-next" .}}
   <div class="map-layout">
     {{template "map-window" .}}

@@ -109,12 +109,12 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 	ref := newBrowser(t, ts)
 	player := newBrowser(t, ts)
 
-	res, body := ref.post("/rooms", url.Values{"campaign": {"Lantern"}, "scenario": {"dark-coast-rescue"}, "name": {"Ref"}})
+	res, body := ref.post("/rooms", url.Values{"campaign": {"Lantern"}, "scenario": {"st-ines"}, "name": {"Ref"}})
 	if res.StatusCode != 200 {
 		t.Fatalf("create room: %d", res.StatusCode)
 	}
 	code := strings.TrimPrefix(res.Request.URL.Path, "/r/")
-	mustContain(t, body, "Horde A", "Suspected hive")
+	mustContain(t, body, "Shamblers by the canal", "Duarte")
 	_, body = ref.room("/r/" + code)
 	mustContain(t, body, "Access requests", "Referee notes")
 
@@ -122,7 +122,7 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 	lower := strings.ToLower(code[:3] + "-" + code[3:])
 	_, body = player.post("/join", url.Values{"code": {lower}, "name": {"Vasquez"}})
 	mustContain(t, body, "Waiting for the referee")
-	mustNotContain(t, body, "Horde", "St. Ines Hospital")
+	mustNotContain(t, body, "Shamblers", "St. Ines Hospital")
 
 	// Duplicate display names are rejected.
 	other := newBrowser(t, ts)
@@ -163,15 +163,15 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 
 	ref.post("/r/"+code+"/units/"+unitID+"/assign", url.Values{"member": {playerID}})
 	_, body = player.room("/r/" + code)
-	mustContain(t, body, "Standing by", "1st Rifle Squad")
+	mustContain(t, body, "Standing by", "Sgt. Reyes")
 	if res, _ := player.post("/r/"+code+"/start", nil); res.StatusCode != 403 {
 		t.Errorf("player started the operation: %d", res.StatusCode)
 	}
 	ref.post("/r/"+code+"/start", nil)
 	_, body = player.room("/r/" + code)
-	mustContain(t, body, "Give your units orders: 0 of 1 committed", "1st Rifle Squad", "Contact at 1111", "Hospital survivors")
+	mustContain(t, body, "Say what your marine does: 0 of 1 orders committed", "Sgt. Reyes", "Shamblers by the canal")
 	// Hidden state stays on the server.
-	mustNotContain(t, body, "Horde", "Stragglers", "School shelter", "Suspected hive", "Referee notes", "hive", "requested access")
+	mustNotContain(t, body, "Hospital survivors", "Basement crawler", "Old town runners", "Duarte", "Referee notes", "requested access")
 
 	// Infected units can't be assigned.
 	res, _ = ref.post("/r/"+code+"/units/z1/assign", url.Values{"member": {playerID}})
@@ -215,7 +215,7 @@ func TestStatePersists(t *testing.T) {
 	cat, _ := game.LoadCatalog(content.FS)
 	path := filepath.Join(t.TempDir(), "state.json")
 	s1, _ := game.OpenStore(path, cat)
-	code, err := s1.Create("Lantern", "dark-coast-rescue", "Ref", game.HashToken("tok"))
+	code, err := s1.Create("Lantern", "st-ines", "Ref", game.HashToken("tok"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestStatePersists(t *testing.T) {
 // joinRoom creates a room as ref and returns its code.
 func createRoom(t *testing.T, ref *browser) string {
 	t.Helper()
-	res, _ := ref.post("/rooms", url.Values{"campaign": {"Lantern"}, "scenario": {"dark-coast-rescue"}, "name": {"Ref"}})
+	res, _ := ref.post("/rooms", url.Values{"campaign": {"Lantern"}, "scenario": {"st-ines"}, "name": {"Ref"}})
 	return strings.TrimPrefix(res.Request.URL.Path, "/r/")
 }
 
@@ -342,7 +342,7 @@ func TestEditorOps(t *testing.T) {
 	path := "/r/" + code + "/edit/ops"
 
 	_, body := ref.get("/r/" + code + "/edit")
-	mustContain(t, body, "Random event tables", "Horde wave", "Brood Mother", "Rivers &amp; ridges")
+	mustContain(t, body, "Random event tables", "Stragglers drift in", "The brute", "Rivers &amp; ridges")
 
 	ok := func(ops string) {
 		t.Helper()
@@ -362,8 +362,8 @@ func TestEditorOps(t *testing.T) {
 	     {"op":"edge","hex":"1010","dir":1,"type":"stream"},
 	     {"op":"crossing","hex":"1010","dir":1,"crossing":"ford"},
 	     {"op":"road","hex":"1010","dir":0,"on":true},
-	     {"op":"unit-add","class":"brute","hex":"1212","strength":1},
-	     {"op":"feature-add","kind":"shelter","hex":"1313","name":"Chapel","hidden":true}]`)
+	     {"op":"unit-add","class":"brute","hex":"0909","strength":1},
+	     {"op":"feature-add","kind":"shelter","hex":"0808","name":"Chapel","hidden":true}]`)
 	store.Read(code, func(r *game.Room) {
 		if c := r.Map.TerrainCode(9, 9); c != 'f' {
 			t.Errorf("terrain = %c", c)
@@ -378,15 +378,13 @@ func TestEditorOps(t *testing.T) {
 		}
 	})
 	fail(`[{"op":"crossing","hex":"1010","dir":1,"crossing":"pass"}]`, "can't have a pass")
-	fail(`[{"op":"unit-add","class":"rifle_squad","hex":"0101"}]`, "can't be on water")
-	fail(`[{"op":"terrain","hex":"0308","terrain":"open"}]`, "can't be on land") // a dropship's hex
 	fail(`[{"op":"edge","hex":"0101","dir":2,"type":"river"}]`, "boundary")
 	fail(`[{"op":"road","hex":"1010","dir":9,"on":true}]`, "boundary")
-	fail(`[{"op":"road","hex":"0408","dir":3,"on":true}]`, "land on both sides")
+	fail(`[{"op":"road","hex":"0307","dir":3,"on":true}]`, "land on both sides")
 	// A failing batch changes nothing.
-	fail(`[{"op":"terrain","hex":"1111","terrain":"marsh"},{"op":"unit-delete","unit":"nope"}]`, "")
+	fail(`[{"op":"terrain","hex":"0809","terrain":"marsh"},{"op":"unit-delete","unit":"nope"}]`, "")
 	store.Read(code, func(r *game.Room) {
-		if r.Map.TerrainCode(10, 10) == 'm' {
+		if r.Map.TerrainCode(7, 8) == 'm' {
 			t.Error("partial batch was applied")
 		}
 	})
@@ -507,7 +505,7 @@ func TestInvitesAndChainOfCommand(t *testing.T) {
 	ref.post(base+"/start", nil)
 	cmd.post(base+"/briefed", nil)
 	_, body = cmd.room(base)
-	mustContain(t, body, "Your command", "Hicks", "Hudson", "Give your units orders: 0 of 2 committed")
+	mustContain(t, body, "Your command", "Hicks", "Hudson", "Say what your marine does: 0 of 2 orders committed")
 	mustNotContain(t, body, "/i/"+code, "Create invite link", "Promote to commander")
 	if res, _ := cmd.post(base+"/invites", url.Values{"role": {"player"}, "uses": {"1"}}); res.StatusCode != 403 {
 		t.Errorf("commander created an invite: %d", res.StatusCode)
@@ -563,22 +561,31 @@ func TestInviteDoesNotStrandExistingSeat(t *testing.T) {
 	mustContain(t, body, "Create invite link") // still the referee in this browser
 }
 
-func TestTurnClockRoutes(t *testing.T) {
+// setupSquad makes a started room with Hicks holding Okafor (m2).
+func setupSquad(t *testing.T) (*httptest.Server, *game.Store, *browser, *browser, string, game.Member) {
+	t.Helper()
 	ts, store := newTestServer(t)
 	ref := newBrowser(t, ts)
 	code := createRoom(t, ref)
 	base := "/r/" + code
-	player := newBrowser(t, ts)
-	player.post("/join", url.Values{"code": {code}, "name": {"Hicks"}})
-	ref.post(base+"/members/"+memberByName(store, code, "Hicks").ID+"/approve", nil)
-	player.post(base+"/briefed", nil)
+	hicks := newBrowser(t, ts)
+	hicks.post("/join", url.Values{"code": {code}, "name": {"Hicks"}})
+	h := memberByName(store, code, "Hicks")
+	ref.post(base+"/members/"+h.ID+"/approve", nil)
+	hicks.post(base+"/briefed", nil)
+	ref.post(base+"/units/m2/assign", url.Values{"member": {h.ID}})
+	return ts, store, ref, hicks, code, h
+}
 
+func TestTurnClockRoutes(t *testing.T) {
+	_, store, ref, player, code, _ := setupSquad(t)
+	base := "/r/" + code
 	res, body := ref.post(base+"/turn/schedule", url.Values{"tz": {"America/New_York"}, "time": {"18:00", "", "23:30", ""},
-		"day": {"1", "2", "3", "4", "5"}, "takeover": {"12"}})
+		"day": {"1", "2", "3", "4", "5"}})
 	if res.StatusCode != 200 {
 		t.Fatalf("schedule: %d %s", res.StatusCode, body)
 	}
-	if res, body := ref.post(base+"/turn/schedule", url.Values{"tz": {"Mars/Olympus"}, "time": {"18:00"}, "day": {"1"}, "takeover": {"6"}}); res.StatusCode != 400 {
+	if res, body := ref.post(base+"/turn/schedule", url.Values{"tz": {"Mars/Olympus"}, "time": {"18:00"}, "day": {"1"}}); res.StatusCode != 400 {
 		t.Errorf("bad zone accepted: %d %s", res.StatusCode, body)
 	}
 	if res, _ := player.post(base+"/turn/lock", nil); res.StatusCode != 403 {
@@ -590,101 +597,27 @@ func TestTurnClockRoutes(t *testing.T) {
 	if wd := deadline.In(mustZone(t, "America/New_York")); wd.Weekday() == time.Saturday || wd.Weekday() == time.Sunday {
 		t.Errorf("weekday schedule locks on %s", wd.Weekday())
 	}
-
-	_, body = player.room(base)
-	mustContain(t, body, "locks", "Orders lock")
 	ref.post(base+"/turn/defer", url.Values{"preset": {"3"}})
 	store.Read(code, func(r *game.Room) {
 		if !r.Deferred || !r.Deadline.Equal(deadline.Add(3*time.Hour)) {
 			t.Errorf("defer +3h: %s", r.Deadline)
 		}
+		deadline = r.Deadline
 	})
-
-	// The store's clock locks the turn once its deadline passes.
-	store.Read(code, func(r *game.Room) { deadline = r.Deadline })
+	// The store's clock locks the turn once its deadline passes, and the
+	// turn waits for the referee.
 	store.Tick(deadline.Add(time.Second))
+	store.Tick(deadline.Add(72 * time.Hour))
 	_, body = player.room(base)
 	mustContain(t, body, "Turn 1 is locked")
 	_, body = ref.room(base)
-	mustContain(t, body, "Turn 1 resolution", "Publish turn 1 and open turn 2")
-	var unsettled int
-	store.Read(code, func(r *game.Room) { unsettled = r.Unsettled() })
-	if unsettled > 0 {
-		if res, _ := ref.post(base+"/turn/next", nil); res.StatusCode != 400 {
-			t.Errorf("published with fights unsettled: %d", res.StatusCode)
-		}
-	}
-	ref.post(base+"/encounters/settle-all", nil)
+	mustContain(t, body, "Turn 1: what happens", "Publish turn 1 and open turn 2")
 	ref.post(base+"/turn/next", nil)
 	store.Read(code, func(r *game.Room) {
 		if r.Turn != 2 || r.Phase != game.PhasePlanning || len(r.Reports) != 1 {
 			t.Errorf("after publishing: turn %d %s, %d reports", r.Turn, r.Phase, len(r.Reports))
 		}
 	})
-	_, body = player.room(base)
-	mustContain(t, body, "Turn 1:", `id="reports"`)
-}
-
-func TestSettlingAFight(t *testing.T) {
-	ts, store := newTestServer(t)
-	ref := newBrowser(t, ts)
-	code := createRoom(t, ref)
-	base := "/r/" + code
-	hicks := newBrowser(t, ts)
-	hicks.post("/join", url.Values{"code": {code}, "name": {"Hicks"}})
-	h := memberByName(store, code, "Hicks")
-	ref.post(base+"/members/"+h.ID+"/approve", nil)
-	hicks.post(base+"/briefed", nil)
-	ref.post(base+"/start", nil)
-	// A squad, civilians, and stragglers about to meet.
-	store.Update(code, func(r *game.Room) error {
-		r.Units = []*game.Unit{
-			{ID: "m", Name: "Squad", Class: "rifle_squad", Side: "marines", Col: 22, Row: 2, Strength: 10, Known: true, AssignedTo: h.ID},
-			{ID: "c", Name: "Hikers", Class: "civilian_group", Side: "civilians", Col: 22, Row: 2, Strength: 12, Known: true},
-			{ID: "z", Name: "Stragglers", Class: "horde", Side: "infected", Col: 22, Row: 4, Strength: 30},
-		}
-		return nil
-	})
-	ref.post(base+"/turn/lock", nil)
-	var encID string
-	store.Read(code, func(r *game.Room) {
-		if len(r.Resolution.Encounters) != 1 {
-			t.Fatalf("encounters: %d", len(r.Resolution.Encounters))
-		}
-		encID = r.Resolution.Encounters[0].ID
-	})
-	_, body := ref.room(base)
-	mustContain(t, body, "Fight at", "Suggested pool", "Roll suggested pools", "1 to settle")
-	// Hits from the table make it a referee ruling.
-	res, msg := ref.post(base+"/encounters/"+encID+"/settle", url.Values{"mode": {"hits"}, "dice_f": {"5"}, "dice_e": {"6"},
-		"hits_f": {"4"}, "hits_e": {"1"}, "reason": {"Rolled at the table"}})
-	if res.StatusCode != 200 {
-		t.Fatalf("settle: %d %s", res.StatusCode, msg)
-	}
-	store.Read(code, func(r *game.Room) {
-		e := r.Resolution.Encounters[0]
-		if !e.Settled || e.Source != "referee" || e.Winner != "friend" || e.Margin != 3 || e.Reason != "Rolled at the table" {
-			t.Errorf("encounter %+v", e)
-		}
-	})
-	if res, _ := hicks.post(base+"/encounters/"+encID+"/settle", url.Values{"mode": {"rules"}}); res.StatusCode != 403 {
-		t.Errorf("player settled a fight: %d", res.StatusCode)
-	}
-	ref.post(base+"/turn/next", nil)
-	store.Read(code, func(r *game.Room) {
-		z := r.Unit("z")
-		if z == nil || z.Strength >= 30 {
-			t.Errorf("the stragglers took no casualties: %+v", z)
-		}
-		if r.Stats.Won != 1 || r.Stats.Encounters != 1 {
-			t.Errorf("stats %+v", r.Stats)
-		}
-	})
-	_, body = hicks.room(base)
-	mustContain(t, body, "Fight at", "We came out on top")
-	mustNotContain(t, body, "Stragglers")
-	_, body = ref.room(base)
-	mustContain(t, body, "Stragglers (")
 }
 
 func mustZone(t *testing.T, name string) *time.Location {
@@ -695,49 +628,91 @@ func mustZone(t *testing.T, name string) *time.Location {
 	return loc
 }
 
-func TestOrdersOverHTTPAndClosing(t *testing.T) {
-	ts, store := newTestServer(t)
-	ref := newBrowser(t, ts)
-	code := createRoom(t, ref)
+func TestAFullTurnAtTheDesk(t *testing.T) {
+	_, store, ref, hicks, code, _ := setupSquad(t)
 	base := "/r/" + code
-	hicks := newBrowser(t, ts)
-	hicks.post("/join", url.Values{"code": {code}, "name": {"Hicks"}})
-	h := memberByName(store, code, "Hicks")
-	ref.post(base+"/members/"+h.ID+"/approve", nil)
-	hicks.post(base+"/briefed", nil)
-	ref.post(base+"/units/m1/assign", url.Values{"member": {h.ID}})
-
-	// No orders during setup.
-	if res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m1"}, "task": {"hold"}, "risk": {"balanced"}, "fallback": {"hold"}}); res.StatusCode != 400 {
-		t.Errorf("order during setup: %d", res.StatusCode)
-	}
 	ref.post(base+"/start", nil)
 
-	_, body := hicks.room(base)
-	mustContain(t, body, "Orders, turn 1", "Give order", "Write an order", `"reach":{"m1":`)
-	mustNotContain(t, body, `"m2":{"`) // only your own units' reach
-
-	res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m1"}, "task": {"move"}, "dest": {"0708"},
-		"intent": {"Link up with the sappers"}, "risk": {"balanced"}, "fallback": {"hold"}, "submit": {"commit"}})
+	order := "Okafor goes up the stairwell slow and tosses a grenade into the lobby, then lays down suppressing fire."
+	res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {order}, "mark": {"0905"}, "submit": {"commit"}})
 	if res.StatusCode != 200 {
 		t.Fatalf("commit order: %d", res.StatusCode)
 	}
-	if res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "task": {"hold"}, "risk": {"balanced"}, "fallback": {"hold"}}); res.StatusCode != 403 {
-		t.Errorf("ordered someone else's unit: %d", res.StatusCode)
+	if res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m1"}, "text": {"Reyes waves."}}); res.StatusCode != 403 {
+		t.Errorf("ordered someone else's marine: %d", res.StatusCode)
 	}
-	_, body = hicks.room(base)
-	mustContain(t, body, "committed", "move to 0708", `class="order-line s-committed mine"`)
-	// The referee is blind to player orders during planning...
+	_, body := hicks.room(base)
+	mustContain(t, body, "committed", "tosses a grenade", `class="order-mark s-committed mine"`)
+	// The referee is blind to it until the lock.
 	_, body = ref.room(base)
-	mustNotContain(t, body, "Link up with the sappers", "order-line", "move to 0708")
-	mustContain(t, body, "Orders in: 1 of 1", "refereeing blind")
-	if res, _ := ref.post(base+"/orders", url.Values{"unit": {"m1"}, "task": {"hold"}, "risk": {"balanced"}, "fallback": {"hold"}}); res.StatusCode != 400 {
-		t.Errorf("blind referee overwrote a player's order: %d", res.StatusCode)
+	mustNotContain(t, body, "tosses a grenade")
+	mustContain(t, body, "Orders in: 1 of 1")
+
+	ref.post(base+"/turn/lock", nil)
+	var orderID string
+	store.Read(code, func(r *game.Room) { orderID = r.LockedOrders()[0].ID })
+	_, body = ref.get(base + "/turn")
+	mustContain(t, body, "Turn 1: what happens", "tosses a grenade", "Add a roll", "What happened")
+
+	// A grenade into the lobby: Okafor's Shoot against the crawler's Sneak.
+	res, msg := ref.post(base+"/desk/contests", url.Values{"order": {orderID}, "title": {"The grenade"},
+		"a_unit": {"m2"}, "a_skill": {"shoot"}, "a_adv": {"20"}, "a_why": {"Surprise"},
+		"b_unit": {"z3"}, "b_skill": {"sneak"}, "submit": {"roll"}})
+	if res.StatusCode != 200 {
+		t.Fatalf("roll: %d %s", res.StatusCode, msg)
 	}
-	// ...until they switch to admin view, which players are told about.
+	// And a secret check for the runners hearing it.
+	ref.post(base+"/desk/contests", url.Values{"order": {orderID}, "title": {"Do the runners hear it?"},
+		"a_unit": {"z4"}, "a_skill": {"spot"}, "a_adv": {"30"}, "secret": {"on"}, "submit": {"roll"}})
+	if res, _ := hicks.post(base+"/desk/contests", url.Values{"order": {orderID}, "a_unit": {"m2"}, "a_skill": {"shoot"}}); res.StatusCode != 403 {
+		t.Errorf("a player added a roll: %d", res.StatusCode)
+	}
+	var c1 *game.Contest
+	store.Read(code, func(r *game.Room) { c := *r.Desk.Contests[0]; c1 = &c })
+	if c1.Result == nil || c1.A.Value != 60 || c1.A.Chance() != 80 || c1.B == nil || c1.B.Value != 70 {
+		t.Fatalf("contest %+v", c1)
+	}
+	// Table dice override the server's.
+	ref.post(base+"/desk/contests/"+c1.ID+"/roll", url.Values{"die_a": {"12"}, "die_b": {"85"}})
+	store.Read(code, func(r *game.Room) {
+		if c := r.Desk.Contests[0]; !c.Manual || c.Result.A.Die != 12 || c.Result.Winner != "a" {
+			t.Errorf("table dice: %+v", c.Result)
+		}
+	})
+
+	// The referee moves Okafor and writes it up; the player still sees the
+	// board as it was at the lock.
+	ref.post(base+"/units/m2/edit", url.Values{"hex": {"0905"}, "status": {"ears ringing"}})
+	ref.post(base+"/desk/outcome", url.Values{"order": {orderID}, "seen": {"all"},
+		"text": {"The grenade goes off in the lobby. Something small shrieks and goes still."}})
+	ref.post(base+"/desk/outcome", url.Values{"title": {"Behind the lines"}, "seen": {"referee"},
+		"text": {"The runners stir."}})
+	_, body = hicks.get(base + "/forces")
+	mustContain(t, body, "0405") // where Okafor stood at the lock
+	mustNotContain(t, body, "ears ringing")
+
+	ref.post(base+"/turn/next", nil)
+	_, body = hicks.get(base + "/reports")
+	mustContain(t, body, "Something small shrieks", "The grenade: LCpl. Okafor 60%", "= 80%, rolled 12")
+	mustNotContain(t, body, "Do the runners hear it", "The runners stir")
+	_, body = ref.get(base + "/reports")
+	mustContain(t, body, "Do the runners hear it", "The runners stir", "secret")
+	_, body = hicks.get(base + "/forces")
+	mustContain(t, body, "0905", "ears ringing")
+}
+
+func TestOrdersOverHTTPAndClosing(t *testing.T) {
+	ts, store, ref, hicks, code, _ := setupSquad(t)
+	base := "/r/" + code
+	if res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {"Wait"}}); res.StatusCode != 400 {
+		t.Errorf("order during setup: %d", res.StatusCode)
+	}
+	ref.post(base+"/start", nil)
+	hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {"Link up with the doc"}, "submit": {"commit"}})
+	// Admin view shows the referee player orders, and players are told.
 	ref.post(base+"/admin-mode", url.Values{"on": {"1"}})
-	_, body = ref.room(base)
-	mustContain(t, body, "Link up with the sappers", `class="order-line s-committed`, "Admin view")
+	_, body := ref.room(base)
+	mustContain(t, body, "Link up with the doc", "Admin view")
 	_, body = hicks.room(base)
 	mustContain(t, body, "The referee switched to admin view")
 	ref.post(base+"/admin-mode", url.Values{"on": {"0"}})
@@ -746,7 +721,7 @@ func TestOrdersOverHTTPAndClosing(t *testing.T) {
 	ref.post(base+"/close", nil)
 	_, body = hicks.room(base)
 	mustContain(t, body, "is closed")
-	if res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m1"}, "task": {"hold"}, "risk": {"balanced"}, "fallback": {"hold"}}); res.StatusCode != 400 {
+	if res, _ := hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {"Hold"}}); res.StatusCode != 400 {
 		t.Errorf("order in a closed room: %d", res.StatusCode)
 	}
 	if res, _ := newBrowser(t, ts).post("/join", url.Values{"code": {code}, "name": {"Late"}}); res.StatusCode != 400 {
@@ -773,77 +748,69 @@ func TestOrdersOverHTTPAndClosing(t *testing.T) {
 	}
 }
 
-func TestRulesCardsAndLiveOrderForm(t *testing.T) {
-	ts, store := newTestServer(t)
-	ref := newBrowser(t, ts)
-	code := createRoom(t, ref)
+func TestRulesCardsAndFacts(t *testing.T) {
+	ts, store, ref, hicks, code, _ := setupSquad(t)
 	base := "/r/" + code
-	hicks := newBrowser(t, ts)
-	hicks.post("/join", url.Values{"code": {code}, "name": {"Hicks"}})
-	h := memberByName(store, code, "Hicks")
-	ref.post(base+"/members/"+h.ID+"/approve", nil)
-	hicks.post(base+"/briefed", nil)
 	ref.post(base+"/start", nil)
 
-	// No units yet: the order form and panel are still in the page, hidden,
-	// so a live update can fill them when units are assigned.
-	_, body := hicks.room(base)
-	mustContain(t, body, `id="order-box"`, `id="orders-panel"`)
-	ref.post(base+"/units/m1/assign", url.Values{"member": {h.ID}})
-	_, body = hicks.room(base)
-	mustContain(t, body, `"units":[{"id":"m1"`)
-
-	_, body = hicks.get(base + "/rules")
-	mustContain(t, body, "How to play", "No order, no attack", "Stacking", "Marine rifle squad", "Experience")
-	mustNotContain(t, body, "Brood Mother", "Referee notes")
+	_, body := hicks.get(base + "/rules")
+	mustContain(t, body, "How to play", "Facts: building the world together", "both sides roll", "Cover", "Automatic rifleman")
+	mustNotContain(t, body, "Everyone else", "Brute")
 	_, body = ref.get(base + "/rules")
-	mustContain(t, body, "Brood Mother", "Referee notes")
+	mustContain(t, body, "Everyone else", "Brute")
 
-	_, body = hicks.get(base + "/units/m1")
-	mustContain(t, body, `id="unit-card"`, "1st Rifle Squad", "Movement", "Experience: Green")
-	if res, _ := hicks.get(base + "/units/z1"); res.StatusCode != 404 {
-		t.Errorf("player read an enemy card: %d", res.StatusCode)
+	_, body = hicks.get(base + "/units/m2")
+	mustContain(t, body, `id="unit-card"`, "LCpl. Okafor", "Shoot", "60%", "Kit", "underslung light", "Propose")
+	mustNotContain(t, body, "Change this unit")
+	if res, _ := hicks.get(base + "/units/z3"); res.StatusCode != 404 {
+		t.Errorf("player read a hidden enemy's card: %d", res.StatusCode)
 	}
 	if res, _ := newBrowser(t, ts).get(base + "/rules"); res.StatusCode != 403 {
 		t.Errorf("stranger read the rules: %d", res.StatusCode)
 	}
 
+	// Co-creation: Hicks proposes, the referee amends and accepts.
+	hicks.post(base+"/facts", url.Values{"unit": {"m2"}, "text": {"Okafor carries a breaching charge"}})
+	var id string
+	store.Read(code, func(r *game.Room) { id = r.Facts[0].ID })
+	_, body = ref.get(base + "/facts")
+	mustContain(t, body, "Okafor carries a breaching charge", "Accept", "Turn down")
+	ref.post(base+"/facts/"+id, url.Values{"action": {"accept"}, "text": {"Okafor carries one breaching charge"}, "reply": {"Just the one."}})
+	_, body = hicks.get(base + "/units/m2")
+	mustContain(t, body, "Okafor carries one breaching charge", "Just the one.")
+	_, body = hicks.get(base + "/facts")
+	mustContain(t, body, "originally: “Okafor carries a breaching charge”")
+
+	// The referee edits a marine from the card.
+	ref.post(base+"/units/m2/edit", url.Values{"status": {"limping"}, "skill_move": {"35"}})
+	_, body = hicks.get(base + "/units/m2")
+	mustContain(t, body, "limping", "35%")
+
 	ref.post(base+"/operation/end", nil)
-	_, body = ref.get(base + "/units/m1")
-	mustContain(t, body, "Experience: Seasoned", "Operation 1")
+	_, body = ref.get(base + "/units/m2")
+	mustContain(t, body, "Operation 1", "Came out limping")
 }
 
 func TestRefereeSeesWhenAllOrdersAreIn(t *testing.T) {
-	ts, store := newTestServer(t)
-	ref := newBrowser(t, ts)
-	code := createRoom(t, ref)
+	_, store, ref, hicks, code, h := setupSquad(t)
 	base := "/r/" + code
-	hicks := newBrowser(t, ts)
-	hicks.post("/join", url.Values{"code": {code}, "name": {"Hicks"}})
-	h := memberByName(store, code, "Hicks")
-	ref.post(base+"/members/"+h.ID+"/approve", nil)
-	hicks.post(base+"/briefed", nil)
-	ref.post(base+"/units/m1/assign", url.Values{"member": {h.ID}})
 	ref.post(base+"/units/m3/assign", url.Values{"member": {h.ID}})
 	ref.post(base+"/start", nil)
-
 	order := func(unit string) {
-		res, body := hicks.post(base+"/orders", url.Values{"unit": {unit}, "task": {"hold"}, "risk": {"balanced"}, "fallback": {"hold"}, "submit": {"commit"}})
+		res, body := hicks.post(base+"/orders", url.Values{"unit": {unit}, "text": {"Hold the doorway."}, "submit": {"commit"}})
 		if res.StatusCode != 200 {
 			t.Fatalf("order %s: %d %s", unit, res.StatusCode, body)
 		}
 	}
-	order("m1")
+	order("m2")
 	_, body := ref.room(base)
-	mustContain(t, body, "Orders in: 1 of 2", "Waiting on Hicks (1 unit)", "1 of 2 player units have committed orders")
+	mustContain(t, body, "Orders in: 1 of 2", "Waiting on Hicks (1 unit)")
 	mustNotContain(t, body, "Every player has committed")
-
 	order("m3")
 	_, body = ref.room(base)
-	mustContain(t, body, "Every player has committed orders (2 of 2 units)", ">Lock turn 1 now</button>", "Everyone is done")
+	mustContain(t, body, "Every order is in (2 of 2)", ">Lock turn 1 now</button>")
 	_, body = hicks.room(base)
 	mustNotContain(t, body, "Lock turn 1 now")
-
 	ref.post(base+"/turn/lock", nil)
 	store.Read(code, func(r *game.Room) {
 		if r.Phase != game.PhaseResolving {

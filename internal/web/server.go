@@ -69,23 +69,26 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	}
 
 	funcs := template.FuncMap{
-		"asset": func(name string) string { return s.assets[name] },
-		"f1":    func(f float64) string { return fmt.Sprintf("%.1f", f) },
-		"add":   func(a, b float64) float64 { return a + b },
-		"ago":   ago,
-		"stamp": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04 UTC") },
-		"iso":   func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
-		"list":  func(items ...string) []string { return items },
-		"pair":  func(a, b any) []any { return []any{a, b} },
-		"diceCtx": func(faces []game.DieFace, hits, dice int) map[string]any {
-			return map[string]any{"Faces": faces, "Hits": hits, "Dice": dice}
+		"asset":       func(name string) string { return s.assets[name] },
+		"f1":          func(f float64) string { return fmt.Sprintf("%.1f", f) },
+		"add":         func(a, b float64) float64 { return a + b },
+		"ago":         ago,
+		"stamp":       func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04 UTC") },
+		"iso":         func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+		"list":        func(items ...string) []string { return items },
+		"pair":        func(a, b any) []any { return []any{a, b} },
+		"unitCtx":     func(base string, u game.UnitView) map[string]any { return map[string]any{"Base": base, "U": u} },
+		"zoneOptions": func() []game.ZoneOption { return game.ZoneOptions },
+		"signed":      func(n int) string { return fmt.Sprintf("%+d", n) },
+		"dict": func(kv ...any) map[string]any {
+			m := map[string]any{}
+			for i := 0; i+1 < len(kv); i += 2 {
+				m[fmt.Sprint(kv[i])] = kv[i+1]
+			}
+			return m
 		},
-		"unitCtx":         func(base string, u game.UnitView) map[string]any { return map[string]any{"Base": base, "U": u} },
-		"takeoverLabel":   game.TakeoverLabel,
-		"takeoverChoices": func() []int { return game.TakeoverChoices },
-		"zoneOptions":     func() []game.ZoneOption { return game.ZoneOptions },
-		"weekdays":        func() []string { return game.WeekdayShort },
-		"split":           strings.Split,
+		"weekdays":    func() []string { return game.WeekdayShort },
+		"split":       strings.Split,
 		"seq": func(n int) []int { // 1..n
 			out := make([]int, n)
 			for i := range out {
@@ -95,7 +98,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		},
 	}
 	for _, page := range []string{"home", "pending", "briefing", "holding", "editor", "message", "invite", "closed", "unit", "rules",
-		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-messages", "screen-room", "screen-orders"} {
+		"screen-map", "screen-turn", "screen-events", "screen-forces", "screen-people", "screen-reports", "screen-activity", "screen-messages", "screen-room", "screen-orders", "screen-facts"} {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/map.html", "templates/shell.html", "templates/sections.html", "templates/"+page+".html")
 		if err != nil {
 			return nil, err
@@ -119,7 +122,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	}
 	seat("GET ", s.room)
 	seat("GET /live", s.events)
-	for _, name := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders"} {
+	for _, name := range []string{"turn", "events", "forces", "people", "messages", "reports", "activity", "room", "orders", "facts"} {
 		seat("GET /"+name, s.screen(name))
 	}
 	seat("GET /edit", s.editor)
@@ -144,7 +147,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /turn/reopen", s.reopenTurn)
 	seat("POST /assistant", s.setAssistant)
 	seat("POST /assistant/run", s.assistantRun)
-	seat("POST /assistant/issues/{id}", s.decideIssue)
+	seat("POST /assistant/draft", s.useDraft)
 	seat("POST /reports/{op}/{turn}/narrative", s.decideNarrative)
 	seat("GET /units/{id}", s.unitCard)
 	seat("GET /rules", s.rulesPage)
@@ -152,13 +155,15 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /orders", s.saveOrder)
 	seat("POST /orders/{id}/withdraw", s.withdrawOrder)
 	seat("POST /orders/{id}/review", s.reviewOrder)
-	seat("POST /orders/{id}/confirm", s.confirmOrder)
-	seat("POST /orders/confirm-standing", s.confirmStanding)
+
 	seat("POST /admin-mode", s.adminMode)
-	seat("POST /units/{id}/radio", s.setRadio)
-	seat("POST /comms", s.commsRules)
-	seat("POST /encounters/settle-all", s.settleAll)
-	seat("POST /encounters/{id}/settle", s.settleEncounter)
+	seat("POST /units/{id}/edit", s.editUnit)
+	seat("POST /desk/contests", s.addContest)
+	seat("POST /desk/contests/{id}/roll", s.rollContest)
+	seat("POST /desk/contests/{id}/delete", s.deleteContest)
+	seat("POST /desk/outcome", s.setOutcome)
+	seat("POST /facts", s.proposeFact)
+	seat("POST /facts/{id}", s.decideFact)
 	seat("POST /close", s.closeRoom)
 	seat("POST /reopen", s.reopenRoom)
 	seat("POST /delete", s.deleteRoom)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
@@ -64,25 +63,25 @@ type View struct {
 	SetAside    int           // orders reopening it would set aside
 	Channel     Channel       // the one open on the Messages screen
 	Thread      []MessageView // its messages
-	CommsActive bool          // comms rules apply in this room
-	CommsRules  bool          // the module has comms rules (the referee may switch them off)
 	Screen      string
 
 	EventTable     []EventRow // referee
 	ThreatLevels   []int
 	CommittedCount int // the viewer's committed orders this turn
 	AwaitingReview int // a commander's players' orders waiting for review
-	StandingDrafts int // carried-over standing orders waiting to be confirmed
 
-	Resolution *ResolutionView // referee, while a turn is being resolved
-	Reports    []ReportView
-	Replays    map[string]ReplayData // replays linked from the reports shown
-	AARs       []OperationRecord
-	Stats      OpStats
-	AdminMode  bool // referee sees everything
-	Blind      bool // referee can't see player orders right now
+	Desk      *DeskView // referee, while a turn is being adjudicated
+	Reports   []ReportView
+	AARs      []OperationRecord
+	AdminMode bool // referee sees everything
+	Blind     bool // referee can't see player orders right now
+	Frozen    bool // players: the board as it stood at the lock
 
-	OrderSpec   OrderSpec
+	Facts       []FactView // the viewer can read, newest first
+	OpenFacts   int        // referee: proposals waiting
+	FactUnits   []UnitView // units the viewer may propose facts about
+	Skills      []Skill
+	Advantages  []Advantage
 	MyOrders    []OrderSlot // units the viewer can give orders to
 	OtherOrders []OrderView // other friendly orders the viewer may see
 
@@ -124,12 +123,9 @@ type ClockView struct {
 	DeadlineText string
 	Deferred     bool
 	LockedText   string
-	Takeover     time.Time
-	TakeoverText string
 	ScheduleText string
 	NextTurn     int
-	HasPlan      bool // fights still to settle before the turn can be published
-	Unsettled    int
+	Unwritten    int // locked orders without an outcome yet
 
 	// Order readiness: units held by players, and how many have committed orders.
 	OrdersIn    int
@@ -138,11 +134,10 @@ type ClockView struct {
 	Waiting     []string // players still to commit, with how many units each
 
 	// Schedule form (referee).
-	TZ            string
-	Times         []string // always 4 slots; blanks are unused
-	Days          []bool   // indexed by weekday
-	TakeoverHours int
-	DeferDefault  string // datetime-local value one day after the deadline
+	TZ           string
+	Times        []string // always 4 slots; blanks are unused
+	Days         []bool   // indexed by weekday
+	DeferDefault string   // datetime-local value one day after the deadline
 }
 
 type InviteView struct {
@@ -170,38 +165,30 @@ type UnitView struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	ClassName    string `json:"class"`
-	Kind         string `json:"kind"`             // group, special, monster, nest
-	Traits       string `json:"traits,omitempty"` // shown once the unit is identified
+	Kind         string `json:"kind"` // group, soldier, special, monster
 	Abbr         string `json:"abbr"`
 	Symbol       string `json:"-"` // counter symbol; empty for an unidentified contact (drawn face down)
-	Factors      string `json:"-"` // printed on the counter: attack-armor-move, or a headcount
+	Factors      string `json:"-"` // printed on the counter: a headcount
 	Side         string `json:"side"`
 	Role         string `json:"-"` // the side's role: player, enemy, or neutral
 	Hex          string `json:"hex"`
 	Strength     string `json:"strength"`
-	Hidden       bool   `json:"hidden,omitempty"`     // referee view: players don't know about it
-	Contact      bool   `json:"contact,omitempty"`    // player view: detected but unidentified
-	Ghost        bool   `json:"ghost,omitempty"`      // player view: out of sight, shown where last seen
-	Stale        bool   `json:"stale,omitempty"`      // off the net: shown where it last reported from
-	LocalSight   bool   `json:"localSight,omitempty"` // seen only by the viewer's units off the net
+	Status       string `json:"status,omitempty"`
+	Skills       string `json:"skills,omitempty"`
+	Kit          string `json:"kit,omitempty"`
+	Description  string `json:"description,omitempty"`
+	Hidden       bool   `json:"hidden,omitempty"`  // referee view: players don't know about it
+	Contact      bool   `json:"contact,omitempty"` // player view: seen but not identified
+	Stale        bool   `json:"stale,omitempty"`   // out of contact: shown where it last called in
 	SeenTurn     int    `json:"seenTurn,omitempty"`
 	AssignedTo   string `json:"-"`
 	AssignedName string `json:"commander,omitempty"`
 	Mine         bool   `json:"mine,omitempty"`
-	Stats        string `json:"stats,omitempty"`
-	Level        string `json:"level,omitempty"` // experience, friendly units
-	LevelRank    int    `json:"-"`               // 0 green .. 3 elite
-	Chevrons     string `json:"-"`               // path data for experience chevrons on the counter
-	XPDice       int    `json:"xpDice,omitempty"`
-	Supply       string `json:"supply,omitempty"`
 	Sector       string `json:"-"`
-	AmmoText     string `json:"-"`               // ammunition left, friendly units
 	OrderStatus  string `json:"-"`               // this turn's order, if the viewer may see it
 	Assignable   bool   `json:"-"`               // the viewer may reassign it
-	Radio        string `json:"radio,omitempty"` // friendly units under comms rules: "up" or "down"
+	Radio        string `json:"radio,omitempty"` // friendly units: "up" or "down"
 	RadioText    string `json:"radioText,omitempty"`
-	RadioSetting string `json:"-"`                // referee's override
-	Aboard       string `json:"aboard,omitempty"` // name of the transport it's riding
 }
 
 type FeatureView struct {
@@ -271,65 +258,44 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 		}
 	}
 
-	// Units: friendly units are visible to all approved members; others only
-	// when known, and enemies only as unidentified contacts.
+	// Units: friendly units are visible to every member; others once the
+	// referee reveals them, and as contacts until identified. While the
+	// referee adjudicates, players see the board as it stood at the lock.
 	groups := map[string]*ForceGroup{}
 	var visible []UnitView
-	local := r.localObservers(mod, me)
-	for _, u := range r.Units {
+	units := r.Units
+	if !ref && r.Phase == PhaseResolving && r.LockedUnits != nil {
+		units, v.Frozen = r.LockedUnits, true
+	}
+	for _, u := range units {
 		side := mod.Side(u.Side)
-		var uv UnitView
-		switch {
-		case ref || r.VisibleToPlayers(mod, u):
-			uv = unitView(u, mod, ref)
-			if !ref && side.Enemy {
-				uv.ID = contactID(r, u)
-			}
-		case !side.Playable && len(local) > 0 && r.inSight(mod, u, local):
-			// Seen only by the viewer's own units off the net.
-			uv = unitView(u, mod, false)
-			uv.LocalSight = true
-			if side.Enemy {
-				uv.ID = contactID(r, u)
-			}
-		case side.Enemy && r.Sightings[u.ID] != (Sighting{}):
-			uv = ghostView(r, u, mod) // out of sight: where it was last seen
-		default:
+		if side == nil || mod.Class(u.Class) == nil || !ref && !r.VisibleToPlayers(mod, u) {
 			continue
 		}
+		uv := unitView(r, u, mod, me)
 		uv.AssignedName = names[u.AssignedTo]
-		if t := r.Unit(u.Aboard); t != nil {
-			uv.Aboard = t.Name
-		}
 		uv.Mine = u.AssignedTo != "" && u.AssignedTo == me.ID
 		at, stale := r.reportedAt(u, me)
 		if stale {
 			uv.Hex, uv.Stale, uv.SeenTurn = HexID(at[0], at[1]), true, u.LastContact
 		}
+		uv.Sector = r.Map.SectorAt(at[0], at[1])
+		if side.Playable {
+			uv.Radio, uv.RadioText = "up", r.radioText(u)
+			if u.OutOfContact {
+				uv.Radio = "down"
+			}
+		}
 		visible = append(visible, uv)
 		if uv.Mine {
 			v.MyUnits = append(v.MyUnits, uv)
 		}
-		uv.Sector = r.Map.SectorAt(at[0], at[1])
-		if uv.Ghost {
-			sg := r.Sightings[u.ID]
-			uv.Sector = r.Map.SectorAt(sg.Col, sg.Row)
-		}
-		if side.Playable {
-			uv.AmmoText = ammoText(mod.Class(u.Class), u)
-			if r.CommsActive(mod) || u.OutOfContact {
-				uv.Radio, uv.RadioText = "up", r.radioText(u)
-				if u.OutOfContact {
-					uv.Radio = "down"
-				}
-				if ref {
-					uv.RadioSetting = u.Radio
-				}
-			}
-		}
 		if side.Playable && (ref || me.Role == RoleCommander && r.commands(me, r.memberOrNil(u.AssignedTo))) {
 			uv.Assignable = true
 			v.Assignable = append(v.Assignable, uv)
+		}
+		if side.Playable && (ref || uv.Mine || me.Role != RoleReferee) {
+			v.FactUnits = append(v.FactUnits, uv)
 		}
 		g := groups[u.Side]
 		if g == nil {
@@ -351,15 +317,27 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	}
 
 	v.Clock = buildClock(r)
-	v.Map, v.Legend, v.Data = buildMap(r, mod, me, visible, local)
+	v.Map, v.Legend, v.Data = buildMap(r, mod, me, visible)
 	addOrders(v, r, mod, me)
-	addResolution(v, r, mod, me)
+	markOrderStatus(v)
+	addReports(v, r, me)
 	v.Channels = r.Channels(me)
+	v.Facts = r.FactsFor(me, "")
+	v.Skills, v.Advantages = mod.Skills, mod.Advantages
 	if ref {
 		addRefereeEvents(v, r, mod)
+		v.AI = assistantView(r)
+		v.Desk = buildDesk(r, mod, me, v.AI)
+		for _, f := range r.Facts {
+			if f.Status == FactProposed {
+				v.OpenFacts++
+			}
+		}
+		if r.CanCorrect() {
+			v.Correctable, v.SetAside = r.Undo.Turn, r.NewTurnOrders()
+		}
 	}
 	v.AdminMode, v.Blind = me.AdminMode, r.Blind(me)
-	v.CommsActive, v.CommsRules = r.CommsActive(mod), mod.Comms != nil
 	v.NextAction = nextAction(v)
 	if ref {
 		v.EventTable = eventTable(r, mod)
@@ -394,7 +372,8 @@ func sideRole(s *Side) string {
 	return "neutral"
 }
 
-func unitView(u *Unit, mod *Module, ref bool) UnitView {
+func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
+	ref := me.Role == RoleReferee
 	cl := mod.Class(u.Class)
 	side := mod.Side(u.Side)
 	kind := cl.Kind
@@ -403,81 +382,56 @@ func unitView(u *Unit, mod *Module, ref bool) UnitView {
 	}
 	uv := UnitView{
 		ID: u.ID, Name: u.Name, ClassName: cl.Name, Abbr: cl.Abbr, Side: u.Side, Role: sideRole(side), Kind: kind, Symbol: cl.Symbol,
-		Factors: fmt.Sprintf("%d-%d-%d", cl.Attack, cl.Armor, cl.Movement),
-		Hex:     HexID(u.Col, u.Row), AssignedTo: u.AssignedTo, Hidden: ref && !u.Known,
+		Hex: HexID(u.Col, u.Row), AssignedTo: u.AssignedTo, Hidden: ref && !u.Known && !side.Playable, Status: u.Status,
+		Description: cl.Description,
+	}
+	headcount := func(noun string) string {
+		if !cl.IsGroup() && u.Strength <= 1 {
+			if u.Strength <= 0 {
+				return "down"
+			}
+			return ""
+		}
+		return plural(u.Strength, noun, noun+"s")
 	}
 	switch {
-	case side.Playable:
-		lvl := ExperienceOf(mod, u)
-		uv.Level, uv.XPDice = lvl.Name, lvl.Dice
-		uv.LevelRank = slices.IndexFunc(mod.Experience.Levels, func(l XPLevel) bool { return l.Name == lvl.Name })
-		for i := range max(0, uv.LevelRank) {
-			uv.Chevrons += fmt.Sprintf("M-8.1 %.1fl1.2-1.1 1.2 1.1", -0.6+float64(i)*1.5)
-		}
-		uv.Strength = fmt.Sprintf("%d personnel", u.Strength)
-		uv.Stats = fmt.Sprintf("Move %d · Attack %d · Range %d · Armor %d", cl.Movement, cl.Attack, cl.Range, cl.Armor)
-		uv.Supply = supplyText(cl)
-	case ref:
+	case side.Playable || ref || u.Identified:
+		uv.Skills, uv.Kit = skillsText(mod, u), KitOf(mod, u)
 		switch {
-		case !side.Enemy: // neutral: civilians
-			uv.Strength = fmt.Sprintf("%d people", u.Strength)
-			uv.Factors = fmt.Sprint(u.Strength)
-		case cl.IsGroup():
-			uv.Strength = fmt.Sprintf("%d infected", u.Strength)
+		case side.Playable && kind == "soldier":
+			uv.Strength = headcount("marine")
+		case side.Enemy:
+			uv.Strength = headcount("infected")
 		default:
-			uv.Strength = kind
+			uv.Strength = headcount("person")
 		}
-		if side.Enemy {
-			uv.Stats = fmt.Sprintf("Move %d · Attack %d · Armor %d", cl.Movement, cl.Attack, cl.Armor)
-			uv.Traits = traitsText(cl, mod)
+		if cl.IsGroup() {
+			uv.Factors = fmt.Sprint(u.Strength)
 		}
-	case side.Enemy:
+		if !ref && !side.Playable {
+			uv.ID = contactID(r, u)
+		}
+	default:
 		// Players see a contact: its signature, not its identity.
-		uv.Contact, uv.Symbol, uv.Factors = true, "", ""
+		uv.ID, uv.Contact, uv.Symbol = contactID(r, u), true, ""
 		uv.Name = "Contact at " + uv.Hex
-		uv.ClassName, uv.Abbr = "Unidentified contact", "?"
+		uv.ClassName, uv.Abbr, uv.Description, uv.Status = "Unidentified contact", "?", "", ""
 		if cl.Contact != nil {
 			uv.ClassName, uv.Abbr = cl.Contact.Label, cl.Contact.Abbr
 		}
+		uv.Strength = "unknown"
 		if cl.IsGroup() {
 			uv.Strength = estimate(u.Strength)
-		} else {
-			uv.Strength = "size unknown"
 		}
-	default:
-		uv.Strength = estimate(u.Strength) + " people"
-		uv.Factors = "~" + fmt.Sprint((u.Strength+5)/10*10)
 	}
 	return uv
 }
 
-func traitsText(cl *Class, mod *Module) string {
-	var parts []string
-	for _, id := range cl.Traits {
-		if t := mod.Trait(id); t != nil {
-			parts = append(parts, t.Name+": "+t.Text)
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
-func supplyText(cl *Class) string {
-	var parts []string
-	for k, n := range cl.Ammo {
-		parts = append(parts, fmt.Sprintf("%s %d", k, n))
-	}
-	sort.Strings(parts)
-	if cl.Capacity > 0 {
-		parts = append(parts, fmt.Sprintf("carries %d", cl.Capacity))
-	}
-	return strings.Join(parts, " · ")
-}
-
 // estimate turns an exact count into the kind of range a scout would report.
 func estimate(n int) string {
-	lo := max(10, int(float64(n)*0.5)/10*10)
-	hi := int(math.Ceil(float64(n)*1.5/10)) * 10
-	return fmt.Sprintf("est. %d–%d", lo, hi)
+	lo := max(1, int(float64(n)*0.6))
+	hi := max(lo+1, int(math.Ceil(float64(n)*1.5)))
+	return fmt.Sprintf("about %d–%d", lo, hi)
 }
 
 func stackRank(u UnitView) int {
@@ -496,20 +450,16 @@ func stackRank(u UnitView) int {
 func nextAction(v *View) string {
 	if v.Phase == PhaseResolving {
 		if !v.IsReferee {
-			return fmt.Sprintf("Turn %d is locked. The referee is resolving it; results will appear on the Reports screen.", v.Turn)
+			return fmt.Sprintf("Turn %d is locked. The referee is working out what happens; the report will appear on the Reports screen.", v.Turn)
 		}
-		msg := fmt.Sprintf("Turn %d is locked. Settle %s on the Turn screen, then publish the turn.", v.Turn, plural(v.Clock.Unsettled, "fight", "fights"))
-		if v.Clock.Unsettled == 0 {
-			msg = fmt.Sprintf("Turn %d is resolved. Check the moves on the Turn screen, then publish it and open turn %d.", v.Turn, v.Turn+1)
+		if v.Desk != nil && v.Desk.Unwritten > 0 {
+			return fmt.Sprintf("Turn %d is locked. Work through %s on the Turn screen: roll where it's in doubt, write what happened, then publish.",
+				v.Turn, plural(v.Desk.Unwritten, "order", "orders"))
 		}
-		if v.Clock.TakeoverText != "" {
-			msg += " If you don't, the AI takes over " + v.Clock.TakeoverText + "."
-		}
-		return msg
+		return fmt.Sprintf("Turn %d is ready. Check the outcomes on the Turn screen, then publish it and open turn %d.", v.Turn, v.Turn+1)
 	}
 	if v.Phase == PhasePlanning && len(v.MyOrders) > 0 && !v.IsReferee {
-		done := 0
-		reachable := 0
+		done, reachable := 0, 0
 		for _, o := range v.MyOrders {
 			if o.NoContact {
 				continue
@@ -520,9 +470,9 @@ func nextAction(v *View) string {
 			}
 		}
 		if done < reachable {
-			return fmt.Sprintf("Give your units orders: %d of %d committed. Orders lock %s.", done, reachable, v.Clock.DeadlineText)
+			return fmt.Sprintf("Say what your marine does: %d of %d orders committed. Orders lock %s.", done, reachable, v.Clock.DeadlineText)
 		}
-		return fmt.Sprintf("All %d of your units have committed orders. You can revise them until %s.", done, v.Clock.DeadlineText)
+		return fmt.Sprintf("Your orders are in. You can change them until %s.", v.Clock.DeadlineText)
 	}
 	if v.IsReferee {
 		unassigned := 0
@@ -534,40 +484,31 @@ func nextAction(v *View) string {
 		switch {
 		case len(v.Pending) > 0:
 			return fmt.Sprintf("%s waiting for your decision.", plural(len(v.Pending), "access request", "access requests"))
+		case v.OpenFacts > 0:
+			return fmt.Sprintf("%s on the Facts screen.", capitalize(plural(v.OpenFacts, "fact is waiting", "facts are waiting")))
 		case v.Phase == PhasePlanning && v.Clock.AllIn:
-			return fmt.Sprintf("Every player has committed orders (%d of %d units). Lock turn %d now, or wait for %s.",
+			return fmt.Sprintf("Every order is in (%d of %d). Lock turn %d now, or wait for %s.",
 				v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Turn, v.Clock.DeadlineText)
 		case len(v.Proposals) > 0:
 			return fmt.Sprintf("Review %s: apply or discard.", plural(len(v.Proposals), "proposed event", "proposed events"))
 		case len(v.Players) == 0 && v.Phase == PhaseSetup:
-			return "Share room code " + v.CodeDisplay + " with your players. Their requests will appear on the People screen."
+			return "Share room code " + v.CodeDisplay + " or an invite link with your players. Their requests will appear on the People screen."
 		case v.Phase == PhasePlanning:
-			return fmt.Sprintf("Turn %d planning is open: %d of %d player units have committed orders. Orders lock %s.",
+			return fmt.Sprintf("Turn %d: %d of %d orders committed. Orders lock %s.",
 				v.Turn, v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Clock.DeadlineText)
 		case unassigned > 0:
-			return fmt.Sprintf("Assign forces: %s still held by the referee.", plural(unassigned, "unit is", "units are"))
+			return fmt.Sprintf("Hand out the marines: %s still held by the referee.", plural(unassigned, "unit is", "units are"))
 		default:
-			return "All forces are assigned. Start the operation when you're ready."
+			return "Everyone has a marine. Start the operation when you're ready."
 		}
 	}
-	if v.IsCommander {
-		pool := len(v.Assignable)
-		switch {
-		case pool == 0:
-			return "You're a commander. Waiting for the referee to place units under your command."
-		case len(v.MyPlayers) == 0:
-			return fmt.Sprintf("You command %s. Ask the referee to put players under you, then hand units out in Assign forces.", plural(pool, "unit", "units"))
-		default:
-			return fmt.Sprintf("You command %s and lead %s. Hand units out in Assign forces.", plural(pool, "unit", "units"), plural(len(v.MyPlayers), "player", "players"))
-		}
-	}
-	if len(v.MyUnits) == 0 {
-		return "Waiting for your force to be assigned. Study the map while you wait."
+	if len(v.MyUnits) == 0 && !v.IsCommander {
+		return "Waiting for the referee to give you a marine. Read the briefing and the map while you wait."
 	}
 	if v.Phase == PhaseSetup {
-		return fmt.Sprintf("You command %s. Orders open when the operation starts.", plural(len(v.MyUnits), "unit", "units"))
+		return "Orders open when the operation starts. Read your unit card, and propose any facts you'd like to be true."
 	}
-	return fmt.Sprintf("You command %s. Orders lock %s. (Order entry isn't built yet.)", plural(len(v.MyUnits), "unit", "units"), v.Clock.DeadlineText)
+	return fmt.Sprintf("Orders lock %s.", v.Clock.DeadlineText)
 }
 
 func plural(n int, one, many string) string {
@@ -631,22 +572,20 @@ var WeekdayShort = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 
 func buildClock(r *Room) ClockView {
 	sc := r.Schedule
-	c := ClockView{Deadline: r.Deadline, Deferred: r.Deferred, NextTurn: r.Turn + 1, HasPlan: r.Unsettled() > 0, Unsettled: r.Unsettled(),
+	c := ClockView{Deadline: r.Deadline, Deferred: r.Deferred, NextTurn: r.Turn + 1,
 		ScheduleText: fmt.Sprintf("Orders lock at %s, %s.", joinTimes(sc), daysText(sc.Days)),
-		TZ:           sc.TimeZone, TakeoverHours: sc.Takeover, Days: make([]bool, 7)}
+		TZ:           sc.TimeZone, Days: make([]bool, 7)}
 	if r.Phase == PhasePlanning {
 		c.OrdersIn, c.OrdersTotal, c.Waiting = r.OrderReadiness()
 		c.AllIn = c.OrdersTotal > 0 && c.OrdersIn == c.OrdersTotal
 	}
+	c.Unwritten = r.Unwritten()
 	if !r.Deadline.IsZero() {
 		c.DeadlineText = r.FormatInZone(r.Deadline)
 		c.DeferDefault = r.Deadline.Add(24 * time.Hour).In(sc.Location()).Format("2006-01-02T15:04")
 	}
 	if !r.LockedAt.IsZero() {
 		c.LockedText = r.FormatInZone(r.LockedAt)
-	}
-	if t := r.TakeoverAt(); !t.IsZero() {
-		c.Takeover, c.TakeoverText = t, r.FormatInZone(t)
 	}
 	c.Times = append(slices.Clone(sc.Times), make([]string, max(0, 4-len(sc.Times)))...)
 	for d := range 7 {
@@ -655,35 +594,11 @@ func buildClock(r *Room) ClockView {
 	return c
 }
 
-// TakeoverLabel describes an AI takeover setting for the schedule form.
-func TakeoverLabel(h int) string {
-	switch h {
-	case -1:
-		return "Never: the turn waits for me"
-	case 0:
-		return "Immediately at lock"
-	}
-	return fmt.Sprintf("%s after lock", plural(h, "hour", "hours"))
-}
-
 // contactID gives players a stable handle for a contact that doesn't leak
 // the unit's real id (which can reveal what it is).
 func contactID(r *Room, u *Unit) string {
 	sum := sha256.Sum256([]byte(r.Code + "/" + u.ID))
 	return "c" + hex.EncodeToString(sum[:5])
-}
-
-// ghostView is a contact players lost sight of, at its last known hex.
-func ghostView(r *Room, u *Unit, mod *Module) UnitView {
-	sg := r.Sightings[u.ID]
-	cl := mod.Class(u.Class)
-	kind := cl.Kind
-	if kind == "" {
-		kind = "group"
-	}
-	return UnitView{ID: contactID(r, u), Name: "Lost contact", ClassName: "Last seen here", Abbr: "?", Side: u.Side, Role: "enemy",
-		Kind: kind, Hex: HexID(sg.Col, sg.Row), Contact: true, Ghost: true, SeenTurn: sg.Turn,
-		Strength: fmt.Sprintf("last seen turn %d, %s", sg.Turn, sg.At.Format("Jan 2 15:04 UTC"))}
 }
 
 // Tab is one screen of the room.
@@ -695,12 +610,12 @@ type Tab struct {
 
 // screenOrder lists the screens each kind of member gets, in tab order.
 var screenOrder = map[bool][]string{
-	true:  {"map", "turn", "events", "forces", "people", "messages", "reports", "activity", "room"},
-	false: {"map", "orders", "forces", "messages", "reports", "activity", "people"},
+	true:  {"map", "turn", "facts", "events", "forces", "people", "messages", "reports", "activity", "room"},
+	false: {"map", "orders", "forces", "facts", "messages", "reports", "activity", "people"},
 }
 
 var screenLabels = map[string]string{"map": "Map", "turn": "Turn", "events": "Random events", "forces": "Forces",
-	"people": "People", "reports": "Reports", "activity": "Activity", "messages": "Messages", "room": "Room", "orders": "Orders"}
+	"people": "People", "reports": "Reports", "activity": "Activity", "messages": "Messages", "facts": "Facts", "room": "Room", "orders": "Orders"}
 
 // HasScreen reports whether the viewer has a screen by this name.
 func (v *View) HasScreen(screen string) bool {
@@ -726,8 +641,8 @@ func (v *View) SetScreen(screen string) {
 		switch id {
 		case "turn":
 			switch {
-			case v.Phase == PhaseResolving && v.Clock.Unsettled > 0:
-				t.Badge = fmt.Sprint(v.Clock.Unsettled)
+			case v.Phase == PhaseResolving && v.Clock.Unwritten > 0:
+				t.Badge = fmt.Sprint(v.Clock.Unwritten)
 			case v.Phase == PhaseResolving, v.Clock.AllIn:
 				t.Badge, t.Calm = "✓", true
 			}
@@ -735,6 +650,8 @@ func (v *View) SetScreen(screen string) {
 			t.Badge = n(len(v.Proposals))
 		case "people":
 			t.Badge = n(len(v.Pending))
+		case "facts":
+			t.Badge = n(v.OpenFacts)
 		case "messages":
 			unread := 0
 			for _, c := range v.Channels {
@@ -756,20 +673,4 @@ func (v *View) SetScreen(screen string) {
 		}
 		v.Tabs = append(v.Tabs, t)
 	}
-}
-
-func ammoText(cl *Class, u *Unit) string {
-	if len(cl.Ammo) == 0 {
-		return ""
-	}
-	keys := make([]string, 0, len(cl.Ammo))
-	for k := range cl.Ammo {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	var parts []string
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s %d/%d", k, u.ammo(cl, k), cl.Ammo[k]))
-	}
-	return strings.Join(parts, " · ")
 }

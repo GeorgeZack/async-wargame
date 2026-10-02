@@ -37,6 +37,7 @@ func (r Range) Draw(rng *rand.Rand) int {
 //	drift   move Count units of Classes up to Steps hexes Toward a target
 //	reveal  make Count hidden units of Side known to players
 //	threat  change the campaign threat level by Amount
+//	jam     knock out the radios of Count friendly units for Turns turns
 //
 // Count 0..0 means "all matching units" for grow and drift.
 type EffectDef struct {

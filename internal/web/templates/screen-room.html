@@ -10,12 +10,6 @@
       <section class="panel"><h2>Your view</h2>
         <p class="small">{{if .AdminMode}}<strong>Admin view.</strong> You see everything, including player orders while they plan.{{else}}<strong>Blind referee.</strong> During planning you see positions and how many orders are in, but not what anyone ordered, so you can run the infected without bias. Everything is revealed at lock.{{end}}</p>
         <p class="small">Switch with the button in the title bar. Switching to admin view during planning is announced to players.</p></section>
-      {{if .CommsRules}}<section class="panel" id="comms-panel" data-live><h2>Communications</h2>
-        <p class="small">{{if .CommsActive}}<strong>On.</strong> Units off the command net keep their orders to themselves: their commander can't see or change them, and other players can't see them.{{else}}<strong>Off.</strong> Every unit is on the command net and all orders are shared.{{end}}</p>
-        <form method="post" action="{{.Base}}/comms" data-enhance>
-          <input type="hidden" name="on" value="{{if .CommsActive}}0{{else}}1{{end}}">
-          <button type="submit" class="secondary">{{if .CommsActive}}Switch communications rules off{{else}}Switch communications rules on{{end}}</button></form>
-        <p class="muted small">Set a single unit lost or forced in contact from the Radio column on the Forces screen.</p></section>{{end}}
       {{template "sec-notify" .}}
       {{template "sec-access" .}}
     </div>

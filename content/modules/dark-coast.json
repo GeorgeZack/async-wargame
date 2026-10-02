@@ -1,0 +1,806 @@
+{
+  "id": "dark-coast",
+  "version": "2.0.0",
+  "name": "Dark Coast",
+  "intro": "Colonial marines in a dead city. Say what your marines do; the referee says what happens.",
+  "scale": {
+    "hex": "about 50 metres: a city block",
+    "turn": "about ten minutes"
+  },
+  "rules": [
+    {
+      "title": "How a turn works",
+      "text": [
+        "Each turn, every player writes an order for their marine: what they do, how, and why. Write it the way you'd say it over the radio: \"I go up the stairwell slow, check the landing, then cover the corridor while Doyle comes up.\" You can mark a spot on the map, but you don't have to.",
+        "The squad leader can read the squad's orders while they're being written, and can send one back with a note before the lock. A marine whose radio is out keeps their orders to themselves.",
+        "At the lock, the referee reads every order and decides what happens. Where the outcome is in doubt, the dice decide how well it went; the referee decides what that means. Then the turn is published: everyone gets a report of what their marine saw and did."
+      ]
+    },
+    {
+      "title": "Say what you do, not which rule you use",
+      "text": [
+        "There's no list of actions. If your marine could plausibly do it, write it. Throw a grenade, kick a door, carry a kid, lie to a frightened man, hot-wire the ambulance. The referee rules on whether it's possible and what it takes.",
+        "Your unit card lists your marine's skills and kit, but it doesn't list every bolt and bandage. If something isn't on the card, you can propose it as a fact (see below) or just try it and let the referee decide."
+      ]
+    },
+    {
+      "title": "Facts: building the world together",
+      "text": [
+        "Anyone can propose a fact: \"Okafor carries a breaching charge\", \"the hospital has a loading dock on the river side\", \"Lin worked an ER on Tarsis and knows triage\". The referee accepts it, changes it, or turns it down, with a reason.",
+        "Accepted facts are true from then on, for everyone. Propose what makes the story better, not just what saves your skin; the referee is more likely to say yes to a fact with a cost or a complication attached."
+      ]
+    },
+    {
+      "title": "The dice",
+      "text": [
+        "When the outcome is in doubt, the referee calls for a roll. Your chance is your skill plus any advantage (cover, surprise, numbers, a good plan) or minus a handicap (dark, wounded, rushed), never below 5% or above 95%. Roll d100: at or under your chance succeeds, and the margin is how far under. A tenth of your chance or less is a critical; 96 or more is a fumble.",
+        "Against an opponent, both sides roll. If only one succeeds, it wins. If both do, the bigger margin wins. If both fail, nobody gets what they wanted, and something complicates things. The server rolls, so nobody has to trust anyone's dice.",
+        "The dice say who did better and by how much. The referee (sometimes with help from an AI assistant, which the referee always checks) says what that looks like."
+      ]
+    },
+    {
+      "title": "Harm",
+      "text": [
+        "There are no hit points. A marine who loses a fight is hurt, pinned, disarmed, separated, or bitten, depending on what was at stake and how badly it went; the referee writes it on the unit's status. A marine with a bad wound fights at a handicap until someone treats it. Death is possible and is never just bad luck on one roll: the referee warns you when you're taking a risk that could end your marine."
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "shoot",
+      "name": "Shoot",
+      "note": "Aimed fire, suppressing fire, throwing grenades."
+    },
+    {
+      "id": "fight",
+      "name": "Fight",
+      "note": "Hand to hand, bayonet, wrestling something off a friend."
+    },
+    {
+      "id": "move",
+      "name": "Move",
+      "note": "Running, climbing, carrying, getting somewhere fast."
+    },
+    {
+      "id": "sneak",
+      "name": "Sneak",
+      "note": "Moving unseen and unheard; hiding."
+    },
+    {
+      "id": "spot",
+      "name": "Spot",
+      "note": "Noticing, searching, reading a room before you walk into it."
+    },
+    {
+      "id": "medic",
+      "name": "Medic",
+      "note": "First aid, triage, keeping someone alive until the dropship."
+    },
+    {
+      "id": "tech",
+      "name": "Tech",
+      "note": "Doors, radios, vehicles, generators, demolition."
+    },
+    {
+      "id": "lead",
+      "name": "Lead",
+      "note": "Giving orders under fire; calming or convincing civilians."
+    },
+    {
+      "id": "nerve",
+      "name": "Nerve",
+      "note": "Holding steady when it all goes wrong."
+    }
+  ],
+  "advantages": [
+    {
+      "name": "Cover",
+      "value": 20,
+      "note": "Behind something that stops bullets or teeth."
+    },
+    {
+      "name": "Heavy cover or a barricade",
+      "value": 30
+    },
+    {
+      "name": "Surprise",
+      "value": 30,
+      "note": "The other side didn't see it coming."
+    },
+    {
+      "name": "Flanking",
+      "value": 20
+    },
+    {
+      "name": "A good plan, set up beforehand",
+      "value": 20
+    },
+    {
+      "name": "Superior numbers",
+      "value": 10,
+      "note": "Up to +30 for overwhelming numbers."
+    },
+    {
+      "name": "Height",
+      "value": 10
+    },
+    {
+      "name": "The right tool",
+      "value": 10,
+      "note": "A breaching charge for a door, a stretcher for a casualty."
+    },
+    {
+      "name": "Rushed",
+      "value": -10
+    },
+    {
+      "name": "Dark or smoke",
+      "value": -20
+    },
+    {
+      "name": "Wounded",
+      "value": -20
+    },
+    {
+      "name": "Wrong tool, or none",
+      "value": -20
+    },
+    {
+      "name": "Low on ammunition",
+      "value": -20
+    },
+    {
+      "name": "Alone and surrounded",
+      "value": -30
+    }
+  ],
+  "sides": [
+    {
+      "id": "marines",
+      "name": "Colonial Marines",
+      "playable": true
+    },
+    {
+      "id": "civilians",
+      "name": "Civilians"
+    },
+    {
+      "id": "infected",
+      "name": "Infected",
+      "enemy": true
+    }
+  ],
+  "classes": [
+    {
+      "id": "sergeant",
+      "name": "Squad leader",
+      "abbr": "SGT",
+      "side": "marines",
+      "kind": "soldier",
+      "symbol": "infantry",
+      "strength": 1,
+      "skills": {
+        "shoot": 55,
+        "fight": 45,
+        "move": 45,
+        "sneak": 35,
+        "spot": 50,
+        "medic": 25,
+        "tech": 30,
+        "lead": 65,
+        "nerve": 60
+      },
+      "description": "Runs the squad, carries the radio, and answers for everyone who doesn't come back.",
+      "kit": "Carbine, sidearm, squad radio, flares, two frag grenades, map tablet."
+    },
+    {
+      "id": "rifleman",
+      "name": "Rifleman",
+      "abbr": "RIF",
+      "side": "marines",
+      "kind": "soldier",
+      "symbol": "infantry",
+      "strength": 1,
+      "skills": {
+        "shoot": 60,
+        "fight": 50,
+        "move": 55,
+        "sneak": 40,
+        "spot": 45,
+        "medic": 20,
+        "tech": 25,
+        "lead": 30,
+        "nerve": 50
+      },
+      "description": "Point man: first through the door, last out of it.",
+      "kit": "Rifle with underslung light, combat knife, three frag grenades, one smoke grenade."
+    },
+    {
+      "id": "gunner",
+      "name": "Automatic rifleman",
+      "abbr": "AR",
+      "side": "marines",
+      "kind": "soldier",
+      "symbol": "mg",
+      "strength": 1,
+      "skills": {
+        "shoot": 60,
+        "fight": 45,
+        "move": 40,
+        "sneak": 25,
+        "spot": 40,
+        "medic": 20,
+        "tech": 30,
+        "lead": 30,
+        "nerve": 55
+      },
+      "description": "Carries the squad's firepower and most of its ammunition.",
+      "kit": "Light machine gun, extra belts, sidearm, one frag grenade."
+    },
+    {
+      "id": "corpsman",
+      "name": "Corpsman",
+      "abbr": "DOC",
+      "side": "marines",
+      "kind": "soldier",
+      "symbol": "medic",
+      "strength": 1,
+      "skills": {
+        "shoot": 40,
+        "fight": 35,
+        "move": 45,
+        "sneak": 35,
+        "spot": 50,
+        "medic": 70,
+        "tech": 35,
+        "lead": 45,
+        "nerve": 55
+      },
+      "description": "Keeps marines and civilians breathing.",
+      "kit": "Carbine, aid bag, folding stretcher, sedatives, flashlight."
+    },
+    {
+      "id": "civilians",
+      "name": "Survivors",
+      "abbr": "CIV",
+      "side": "civilians",
+      "symbol": "civilian",
+      "strength": 6,
+      "skills": {
+        "move": 35,
+        "sneak": 30,
+        "spot": 30,
+        "nerve": 25
+      },
+      "description": "Frightened people. Some are hurt; some will panic; some might help."
+    },
+    {
+      "id": "shamblers",
+      "name": "Shamblers",
+      "abbr": "Z",
+      "side": "infected",
+      "symbol": "horde",
+      "strength": 10,
+      "skills": {
+        "fight": 45,
+        "move": 20,
+        "sneak": 10,
+        "spot": 35,
+        "nerve": 95
+      },
+      "description": "Slow, relentless, drawn to noise and light. Dangerous in numbers and in tight spaces.",
+      "contact": {
+        "abbr": "?",
+        "label": "Movement"
+      }
+    },
+    {
+      "id": "runners",
+      "name": "Runners",
+      "abbr": "RUN",
+      "side": "infected",
+      "symbol": "runner",
+      "strength": 4,
+      "skills": {
+        "fight": 50,
+        "move": 65,
+        "sneak": 30,
+        "spot": 45,
+        "nerve": 95
+      },
+      "description": "The recently turned. Fast, and they come straight at you.",
+      "contact": {
+        "abbr": "?",
+        "label": "Fast movement"
+      }
+    },
+    {
+      "id": "crawler",
+      "name": "Crawler",
+      "abbr": "CRL",
+      "side": "infected",
+      "kind": "special",
+      "symbol": "crawler",
+      "strength": 1,
+      "skills": {
+        "fight": 55,
+        "move": 40,
+        "sneak": 70,
+        "spot": 50,
+        "nerve": 95
+      },
+      "description": "Waits under beds and in vents. Grabs and doesn't let go.",
+      "contact": {
+        "abbr": "!",
+        "label": "Something small"
+      }
+    },
+    {
+      "id": "screamer",
+      "name": "Screamer",
+      "abbr": "SCR",
+      "side": "infected",
+      "kind": "special",
+      "symbol": "screamer",
+      "strength": 1,
+      "skills": {
+        "fight": 20,
+        "move": 40,
+        "sneak": 40,
+        "spot": 60,
+        "nerve": 95
+      },
+      "description": "Its shriek carries for blocks and draws every infected that hears it.",
+      "contact": {
+        "abbr": "!",
+        "label": "Single contact"
+      }
+    },
+    {
+      "id": "brute",
+      "name": "Brute",
+      "abbr": "BRT",
+      "side": "infected",
+      "kind": "monster",
+      "symbol": "brute",
+      "strength": 1,
+      "skills": {
+        "fight": 75,
+        "move": 35,
+        "sneak": 10,
+        "spot": 35,
+        "nerve": 95
+      },
+      "description": "Huge, armoured in its own swollen flesh. Small arms barely slow it.",
+      "contact": {
+        "abbr": "!",
+        "label": "Large contact"
+      }
+    }
+  ],
+  "terrain": [
+    {
+      "code": "~",
+      "id": "sea",
+      "name": "Open water",
+      "water": true,
+      "note": "Dropships may hover here. Impassable to ground units."
+    },
+    {
+      "code": "=",
+      "id": "river",
+      "name": "Wide water",
+      "water": true,
+      "note": "Lakes and wide rivers. Impassable to ground units."
+    },
+    {
+      "code": "b",
+      "id": "beach",
+      "name": "Beach",
+      "note": "Embarkation point when adjacent to open water."
+    },
+    {
+      "code": ".",
+      "id": "open",
+      "name": "Open ground"
+    },
+    {
+      "code": "u",
+      "id": "urban",
+      "name": "Urban"
+    },
+    {
+      "code": "U",
+      "id": "dense",
+      "name": "Dense urban",
+      "note": "Short sight lines. Contacts are hard to detect."
+    },
+    {
+      "code": "i",
+      "id": "industrial",
+      "name": "Industrial"
+    },
+    {
+      "code": "f",
+      "id": "forest",
+      "name": "Woods"
+    },
+    {
+      "code": "h",
+      "id": "hills",
+      "name": "Hills",
+      "note": "Elevated. Good for observation and comms relays."
+    },
+    {
+      "code": "m",
+      "id": "marsh",
+      "name": "Marsh"
+    }
+  ],
+  "edges": [
+    {
+      "id": "river",
+      "name": "River",
+      "blocks": true,
+      "crossings": [
+        "bridge",
+        "ford"
+      ],
+      "note": "Runs along hex sides. Ground units cross only at a bridge or ford."
+    },
+    {
+      "id": "stream",
+      "name": "Stream",
+      "crossings": [
+        "bridge",
+        "ford"
+      ],
+      "note": "Crossable anywhere at extra cost."
+    },
+    {
+      "id": "ridge",
+      "name": "Ridge",
+      "blocks": true,
+      "crossings": [
+        "pass"
+      ],
+      "note": "Steep high ground. Ground units cross only at a pass."
+    },
+    {
+      "id": "cliff",
+      "name": "Cliff",
+      "blocks": true,
+      "crossings": [],
+      "note": "Impassable to ground units."
+    },
+    {
+      "id": "wall",
+      "name": "Wall or barricade",
+      "blocks": true,
+      "crossings": [
+        "gate"
+      ],
+      "note": "Built obstacle. Engineers can breach it."
+    }
+  ],
+  "crossings": [
+    {
+      "id": "bridge",
+      "name": "Bridge"
+    },
+    {
+      "id": "ford",
+      "name": "Ford"
+    },
+    {
+      "id": "pass",
+      "name": "Pass"
+    },
+    {
+      "id": "gate",
+      "name": "Gate"
+    }
+  ],
+  "events": [
+    {
+      "id": "stragglers",
+      "title": "Stragglers drift in",
+      "category": "horde",
+      "weight": 14,
+      "referee": "A few more shamblers wander in from outside the district.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "shamblers",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            4,
+            10
+          ],
+          "scale": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "follow_noise",
+      "title": "They follow the noise",
+      "category": "horde",
+      "weight": 14,
+      "referee": "Shamblers drift toward the marines.",
+      "effects": [
+        {
+          "op": "drift",
+          "classes": [
+            "shamblers",
+            "runners"
+          ],
+          "count": [
+            1,
+            2
+          ],
+          "toward": "players",
+          "steps": [
+            1,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dead_rise",
+      "title": "The dead rise",
+      "category": "horde",
+      "weight": 8,
+      "referee": "Bodies in the street get up. A group of shamblers grows.",
+      "effects": [
+        {
+          "op": "grow",
+          "classes": [
+            "shamblers"
+          ],
+          "count": [
+            1,
+            1
+          ],
+          "percent": [
+            20,
+            50
+          ],
+          "scale": true
+        }
+      ]
+    },
+    {
+      "id": "runner_pack",
+      "title": "Runners",
+      "category": "horde",
+      "weight": 8,
+      "minThreat": 2,
+      "referee": "A pack of the recently turned bursts out of a side street.",
+      "report": "Fast movement to the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "runners",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            3,
+            5
+          ],
+          "known": true,
+          "where": {
+            "terrain": [
+              "urban",
+              "dense"
+            ],
+            "awayFromMarines": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "crawler",
+      "title": "Something in the vents",
+      "category": "special",
+      "weight": 6,
+      "referee": "A crawler settles in somewhere close to the marines' route.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "crawler",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "where": {
+            "terrain": [
+              "urban",
+              "dense",
+              "industrial"
+            ],
+            "awayFromMarines": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "screamer",
+      "title": "A scream",
+      "category": "special",
+      "weight": 5,
+      "minThreat": 2,
+      "unique": "screamer",
+      "referee": "A screamer takes up a perch and starts calling.",
+      "report": "A shriek to the {dir}. Everything in the city heard it.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "screamer",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "known": true,
+          "where": {
+            "terrain": [
+              "dense",
+              "urban"
+            ],
+            "awayFromMarines": 3
+          }
+        },
+        {
+          "op": "threat",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "brute",
+      "title": "The brute",
+      "category": "monster",
+      "weight": 3,
+      "minThreat": 3,
+      "unique": "brute",
+      "referee": "A brute forces its way into the district.",
+      "report": "Something heavy is breaking through walls to the {dir}.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "brute",
+          "count": [
+            1,
+            1
+          ],
+          "strength": [
+            1,
+            1
+          ],
+          "known": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "survivor_signal",
+      "title": "Survivor signal",
+      "category": "respite",
+      "weight": 5,
+      "referee": "Hidden survivors signal for help.",
+      "report": "A flashlight blinks from a window to the {dir}.",
+      "effects": [
+        {
+          "op": "reveal",
+          "side": "civilians",
+          "count": [
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "drone_feed",
+      "title": "Drone overflight",
+      "category": "respite",
+      "weight": 5,
+      "referee": "The dropship's drone marks hidden infected near the squad.",
+      "report": "Drone overflight: {n:contact} marked near the squad.",
+      "effects": [
+        {
+          "op": "reveal",
+          "side": "infected",
+          "count": [
+            1,
+            2
+          ],
+          "within": 4
+        }
+      ]
+    },
+    {
+      "id": "static",
+      "title": "Radio static",
+      "category": "special",
+      "weight": 5,
+      "minThreat": 2,
+      "referee": "Interference knocks out a marine's radio for a while.",
+      "report": "Static on the squad net.",
+      "effects": [
+        {
+          "op": "jam",
+          "count": [
+            1,
+            1
+          ],
+          "turns": [
+            1,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lull",
+      "title": "Eerie quiet",
+      "category": "respite",
+      "weight": 6,
+      "maxThreat": 3,
+      "referee": "Nothing happens. Let them breathe.",
+      "effects": []
+    },
+    {
+      "id": "worse",
+      "title": "It's getting worse",
+      "category": "wave",
+      "weight": 4,
+      "minThreat": 2,
+      "referee": "The district wakes up. Threat rises.",
+      "report": "Movement everywhere now.",
+      "effects": [
+        {
+          "op": "spawn",
+          "class": "shamblers",
+          "count": [
+            1,
+            2
+          ],
+          "strength": [
+            6,
+            12
+          ],
+          "scale": true,
+          "where": {
+            "edge": "inland",
+            "awayFromMarines": 3
+          }
+        },
+        {
+          "op": "threat",
+          "amount": 1
+        }
+      ]
+    }
+  ]
+}

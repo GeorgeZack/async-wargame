@@ -2,14 +2,19 @@
 <main id="main" class="screen screen-turn" data-base="{{.Base}}" data-version="{{.Version}}">
   {{template "sec-next" .}}
   {{template "sec-steps" .}}
+  {{if eq .Phase "resolving"}}
+  {{template "sec-desk" .}}
   <div class="cols cols-turn">
-    <div class="col">{{template "sec-clock" .}}{{template "sec-orders" .}}</div>
-    <div class="col wide">
-      {{template "sec-assistant" .}}
-      {{template "sec-desk" .}}
-      {{if not .Resolution}}<section class="panel"><h2>Resolution desk</h2>
-        <p class="muted">{{if eq .Phase "resolving"}}No resolution to review for this turn. Publish it from the procedure above.{{else}}When the turn locks, every unit's moves are worked out together and each fight lands here as an encounter card to settle.{{end}}</p></section>{{end}}
-    </div>
+    <div class="col">{{template "sec-assistant" .}}</div>
+    <div class="col">{{template "sec-clock" .}}</div>
   </div>
+  {{else}}
+  <div class="cols cols-turn">
+    <div class="col">{{template "sec-clock" .}}{{template "sec-assistant" .}}</div>
+    <div class="col">{{template "sec-orders" .}}
+      {{if not .MyOrders}}<section class="panel"><h2>Orders</h2><p class="muted small">{{if .Blind}}You're refereeing blind: players' orders appear at the lock.{{else}}No orders yet.{{end}} When the turn locks, every order lands on the desk here for you to judge.</p></section>{{end}}</div>
+  </div>
+  {{template "sec-desk" .}}
+  {{end}}
 </main>
 {{template "shell-bottom" .}}{{end}}

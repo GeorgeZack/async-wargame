@@ -7,11 +7,12 @@ import (
 )
 
 // A room is a campaign of one or more operations. When the referee ends an
-// operation, every friendly unit still on the map has survived it: it gains
-// an operation of experience and a line in its service record. The next
+// operation, every friendly unit still standing (on the map, strength above
+// zero) has survived it and gets a line in its service record. The next
 // operation starts from the scenario template, with survivors in place of
-// their template counterparts and green replacements for units that were
-// lost. Experience levels and their bonus dice come from the module.
+// their template counterparts and replacements for those who were lost.
+// Survivors keep everything the referee changed on them: skills, kit,
+// notes, and the scars in their status.
 
 type OperationRecord struct {
 	Number    int       `json:"number"`
@@ -20,11 +21,7 @@ type OperationRecord struct {
 	EndedAt   time.Time `json:"endedAt"`
 	Survivors []string  `json:"survivors"`
 	Lost      []string  `json:"lost"`
-	Stats     OpStats   `json:"stats"` // the after-action review
 }
-
-// ExperienceOf is the unit's current experience level.
-func ExperienceOf(mod *Module, u *Unit) XPLevel { return mod.Experience.Level(u.Operations) }
 
 // EndOperation closes the current operation and sets up the next one.
 func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.Time) error {
@@ -36,19 +33,17 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	}
 	r.Undo = nil
 	op := max(r.Operation, 1)
-	rec := OperationRecord{Number: op, Scenario: sc.Name, Turns: r.Turn, EndedAt: now.UTC(), Stats: r.Stats}
+	rec := OperationRecord{Number: op, Scenario: sc.Name, Turns: r.Turn, EndedAt: now.UTC()}
 
 	survivors := map[string]*Unit{}
 	for _, u := range r.Units {
-		if !mod.Side(u.Side).Playable {
+		if !mod.Side(u.Side).Playable || u.Strength <= 0 {
 			continue
 		}
-		before := ExperienceOf(mod, u)
 		u.Operations++
-		after := ExperienceOf(mod, u)
 		line := fmt.Sprintf("Operation %d (%s): survived, %d turns.", op, sc.Name, r.Turn)
-		if after.Name != before.Name {
-			line += " Promoted to " + after.Name + "."
+		if u.Status != "" {
+			line += " Came out " + u.Status + "."
 		}
 		u.Record = append(u.Record, line)
 		survivors[u.ID] = u
@@ -83,7 +78,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	r.Operation = op + 1
 	r.Phase, r.Turn, r.Threat = PhaseSetup, 0, MinThreat
 	r.Deadline, r.LockedAt, r.Deferred = time.Time{}, time.Time{}, false
-	r.Sightings, r.Resolution, r.Stats = nil, nil, OpStats{}
+	r.Desk, r.LockedUnits = nil, nil
 	for _, e := range r.Events {
 		if e.Status == EventProposed {
 			e.Status, e.DecidedAt = EventDiscarded, &now
@@ -96,12 +91,4 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	}
 	r.logf(VisAll, "%s. Operation %d is being prepared.", msg, op+1)
 	return nil
-}
-
-// xpNote reminds the referee of a unit's experience dice.
-func xpNote(mod *Module, u *Unit) string {
-	if l := ExperienceOf(mod, u); l.Dice > 0 {
-		return fmt.Sprintf(" (%s: +%d dice)", u.Name+" is "+l.Name, l.Dice)
-	}
-	return ""
 }

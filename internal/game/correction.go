@@ -10,8 +10,8 @@ import (
 // Corrections. Publishing keeps a snapshot of the game as it stood just
 // before. Until the next turn locks, the referee can reopen the published
 // turn to fix a mistake: the game goes back to the snapshot, still being
-// resolved with its fights settled as they were, so the referee can
-// re-settle a fight or adjust a unit and publish again. People, messages,
+// resolved with its rolls and outcomes as they were, so the referee
+// can reroll, rewrite, or adjust a unit and publish again. People, messages,
 // invites, and the activity log aren't part of the game state and stay as
 // they are. Orders already written for the new turn are set aside: they
 // were written against a situation that's about to change.
@@ -33,26 +33,25 @@ type Correction struct {
 // gameState is the part of a room a correction rolls back: pointers into
 // the room, so the same value both saves and restores it.
 type gameState struct {
-	Turn       *int                 `json:"turn"`
-	Phase      *Phase               `json:"phase"`
-	Deadline   *time.Time           `json:"deadline"`
-	Deferred   *bool                `json:"deferred"`
-	LockedAt   *time.Time           `json:"lockedAt"`
-	Threat     *int                 `json:"threat"`
-	Units      *[]*Unit             `json:"units"`
-	Features   *[]Feature           `json:"features"`
-	Events     *[]*GameEvent        `json:"events"`
-	Orders     *[]*Order            `json:"orders"`
-	Resolution **Resolution         `json:"resolution"`
-	Reports    *[]*TurnReport       `json:"reports"`
-	Stats      *OpStats             `json:"stats"`
-	Sightings  *map[string]Sighting `json:"sightings"`
-	Seq        *int                 `json:"seq"`
+	Turn        *int           `json:"turn"`
+	Phase       *Phase         `json:"phase"`
+	Deadline    *time.Time     `json:"deadline"`
+	Deferred    *bool          `json:"deferred"`
+	LockedAt    *time.Time     `json:"lockedAt"`
+	Threat      *int           `json:"threat"`
+	Units       *[]*Unit       `json:"units"`
+	Features    *[]Feature     `json:"features"`
+	Events      *[]*GameEvent  `json:"events"`
+	Orders      *[]*Order      `json:"orders"`
+	Desk        **Desk         `json:"desk"`
+	LockedUnits *[]*Unit       `json:"lockedUnits"`
+	Reports     *[]*TurnReport `json:"reports"`
+	Seq         *int           `json:"seq"`
 }
 
 func (r *Room) gameState() gameState {
 	return gameState{&r.Turn, &r.Phase, &r.Deadline, &r.Deferred, &r.LockedAt, &r.Threat, &r.Units, &r.Features,
-		&r.Events, &r.Orders, &r.Resolution, &r.Reports, &r.Stats, &r.Sightings, &r.Seq}
+		&r.Events, &r.Orders, &r.Desk, &r.LockedUnits, &r.Reports, &r.Seq}
 }
 
 // snapshot saves the game state for a correction of this turn.
@@ -74,7 +73,7 @@ func (r *Room) CanCorrect() bool {
 func (r *Room) NewTurnOrders() int {
 	n := 0
 	for _, o := range r.Orders {
-		if o.Turn == r.Turn && o.Status != OrderWithdrawn && !o.Carried {
+		if o.Turn == r.Turn && o.Status != OrderWithdrawn {
 			n++
 		}
 	}
@@ -97,7 +96,7 @@ func (r *Room) ReopenTurn(actor *Member, reason string, now time.Time) error {
 	undo := r.Undo
 	// Decoding into existing slices and maps would merge with what's there;
 	// start them empty so the snapshot replaces them outright.
-	r.Units, r.Features, r.Events, r.Orders, r.Resolution, r.Reports, r.Stats, r.Sightings = nil, nil, nil, nil, nil, nil, OpStats{}, nil
+	r.Units, r.Features, r.Events, r.Orders, r.Desk, r.LockedUnits, r.Reports = nil, nil, nil, nil, nil, nil, nil
 	st := r.gameState()
 	if err := json.Unmarshal(undo.State, &st); err != nil {
 		return fmt.Errorf("restoring turn %d: %w", undo.Turn, err)

@@ -26,6 +26,10 @@ type Store struct {
 	// Deliver, if set, receives the notifications an update raised, after
 	// the update is saved and the store is unlocked.
 	Deliver func([]Notice)
+	// retired holds rooms built on a module this server no longer has (an
+	// older version of the game). They aren't served, but they're written
+	// back untouched so nothing is lost.
+	retired []json.RawMessage
 }
 
 func OpenStore(path string, cat *Catalog) (*Store, error) {
@@ -37,9 +41,22 @@ func OpenStore(path string, cat *Catalog) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	var rooms []*Room
-	if err := json.Unmarshal(b, &rooms); err != nil {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	var rooms []*Room
+	for _, msg := range raw {
+		var r Room
+		if err := json.Unmarshal(msg, &r); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		if cat.Modules[r.ModuleID] == nil || cat.Scenarios[r.ScenarioID] == nil {
+			s.retired = append(s.retired, msg)
+			log.Printf("room %s (%s) uses %s, which this version doesn't have; kept in the file but not served", r.Code, r.Name, r.ModuleID)
+			continue
+		}
+		rooms = append(rooms, &r)
 	}
 	for _, r := range rooms {
 		if r.Threat == 0 { // saved before threat levels existed
@@ -62,8 +79,11 @@ func OpenStore(path string, cat *Catalog) (*Store, error) {
 }
 
 func (s *Store) saveLocked() error {
-	rooms := make([]*Room, 0, len(s.rooms))
+	rooms := make([]any, 0, len(s.rooms)+len(s.retired))
 	for _, r := range s.rooms {
+		rooms = append(rooms, r)
+	}
+	for _, r := range s.retired {
 		rooms = append(rooms, r)
 	}
 	b, err := json.MarshalIndent(rooms, "", " ")
@@ -177,9 +197,7 @@ func (s *Store) Update(code string, fn func(*Room) error) error {
 		return err
 	}
 	if mod := s.Cat.Modules[r.ModuleID]; mod != nil {
-		r.syncPassengers()
 		r.RefreshComms(mod)
-		r.RefreshFog(mod, time.Now())
 	}
 	r.Version++
 	s.rooms[code] = r

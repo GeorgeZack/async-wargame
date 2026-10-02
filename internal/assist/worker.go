@@ -64,13 +64,7 @@ func (w *Worker) Once(ctx context.Context) bool {
 			if run == nil {
 				return errNothing
 			}
-			mod := w.Store.Cat.Modules[r.ModuleID]
-			switch run.Kind {
-			case game.RunOrderReview:
-				system, user, ok = r.OrderReviewPrompt(mod, run)
-			case game.RunNarrative:
-				system, user, ok = r.NarrativePrompt(mod, run)
-			}
+			system, user, ok = r.PromptFor(w.Store.Cat.Modules[r.ModuleID], run)
 			return nil
 		})
 		if err != nil || run == nil {
@@ -81,22 +75,16 @@ func (w *Worker) Once(ctx context.Context) bool {
 		var callErr error
 		if ok {
 			callCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			maxTokens := map[string]int{game.RunOrderReview: 2000, game.RunNarrative: 600}[run.Kind]
+			maxTokens := map[string]int{game.RunSuggest: 2500, game.RunOutcome: 600, game.RunNarrative: 600}[run.Kind]
 			reply, usage, callErr = w.Client.Complete(callCtx, system, user, maxTokens)
 			cancel()
 		}
 		err = w.Store.Update(code, func(r *game.Room) error {
 			r.FinishRun(run.ID, usage.Prompt+usage.Completion, callErr, func(stored *game.Run) error {
 				if !ok {
-					return nil // nothing to review: done, quietly
+					return nil // nothing to do: done, quietly
 				}
-				switch run.Kind {
-				case game.RunOrderReview:
-					return r.ApplyOrderReview(stored, reply, ai.DecodeJSON)
-				case game.RunNarrative:
-					return r.ApplyNarrative(stored, reply)
-				}
-				return nil
+				return r.ApplyReply(w.Store.Cat.Modules[r.ModuleID], stored, reply, ai.DecodeJSON)
 			}, !ok, time.Now())
 			return nil
 		})

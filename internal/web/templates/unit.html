@@ -6,45 +6,68 @@
     <div class="card-head">
       <svg class="card-counter" viewBox="-11 -11 23 23" aria-hidden="true"><defs>{{template "counter-defs"}}</defs>{{template "counter" .Counter}}</svg>
       <div>
-        <p class="eyebrow">{{.SideName}}{{if .Class}} · {{.Class.Name}}{{end}}</p>
+        <p class="eyebrow">{{.SideName}} · {{.Unit.ClassName}}</p>
         <h1 id="card-h">{{.Unit.Name}}</h1>
-        <p class="muted small">Hex {{.Unit.Hex}} · sector {{.Sector}}{{with .Commander}} · commanded by {{.}}{{end}}</p>
-    {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $.Card.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}
+        <p class="muted small">Hex {{.Unit.Hex}} · sector {{.Sector}}{{if .Unit.Stale}} · last called in from here{{end}}{{with .Commander}} · played by {{.}}{{end}}</p>
+        {{with .RadioText}}<p class="small"><span class="radio-light r-{{if $.Card.RadioDown}}down{{else}}up{{end}}" aria-hidden="true"></span> {{.}}</p>{{end}}
       </div>
     </div>
 
     {{if .Contact}}
-    <p>{{.Unit.ClassName}} · {{.Unit.Strength}}.</p>
-    <p class="muted small">Your units haven't identified this contact. Get closer, or get eyes on it, to learn more.</p>
+    <p>{{.Unit.ClassName}}, {{.Unit.Strength}}.</p>
+    <p class="muted small">Nobody has got a good look at it yet. Get closer, or get eyes on it, and the referee will tell you more.</p>
     {{else}}
-    <dl class="stat-grid">
-      <div><dt>Movement</dt><dd>{{.Class.Movement}}</dd></div>
-      <div><dt>Attack</dt><dd>{{.Class.Attack}}</dd></div>
-      <div><dt>Range</dt><dd>{{.Class.Range}}</dd></div>
-      <div><dt>Armor</dt><dd>{{.Class.Armor}}</dd></div>
-      {{if .StackPts}}<div><dt>Stacking</dt><dd>{{.StackPts}}</dd></div>{{end}}
-      {{if .Class.Capacity}}<div><dt>Carries</dt><dd>{{.Class.Capacity}}</dd></div>{{end}}
-    </dl>
-    <p><strong>Strength:</strong> {{.Unit.Strength}}{{with .Ammo}} · <strong>Supply:</strong> {{range $i, $a := .}}{{if $i}}, {{end}}{{$a}}{{end}}{{end}}</p>
-    <p class="muted small">Counter factors read attack–armor–movement: {{.Unit.Factors}}. Movement is spent on terrain; see the <a href="{{$.Base}}/rules#movement">rules</a>.</p>
+    {{with .Unit.Description}}<p>{{.}}</p>{{end}}
+    {{if or .Unit.Strength .Unit.Status}}<p>{{with .Unit.Strength}}<strong>{{.}}</strong>{{end}}{{if and .Unit.Strength .Unit.Status}} · {{end}}{{with .Unit.Status}}<span class="unit-status">{{.}}</span>{{end}}</p>{{end}}
+    <section><h2>Skills</h2>
+      <dl class="skill-grid">{{range .Skills}}<div{{if .Changed}} class="changed"{{end}}><dt title="{{.Note}}">{{.Name}}</dt><dd>{{.Value}}%</dd></div>{{end}}</dl>
+      <p class="muted small">Roll at or under your skill, plus or minus any advantage, on d100. See the <a href="{{$.Base}}/rules">rules</a>.</p></section>
+    {{with .Kit}}<section><h2>Kit</h2><p>{{.}}</p>
+      <p class="muted small">Not everything is listed. Need something that isn't here? Propose it as a fact below.</p></section>{{end}}
+    {{with .Notes}}<section><h2>Notes</h2><p class="pre">{{.}}</p></section>{{end}}
 
-    {{if .Level.Name}}
-    <section class="xp">
-      <h2>Experience: {{.Level.Name}}{{if .Level.Dice}} <span class="tag tag-xp">+{{.Level.Dice}} {{if eq .Level.Dice 1}}die{{else}}dice{{end}}</span>{{end}}</h2>
-      <p class="small">{{.Level.Note}} {{.Operations}} {{if eq .Operations 1}}operation{{else}}operations{{end}} survived.{{with .NextLevel}} Becomes <strong>{{.Name}}</strong> after {{.Min}}.{{end}}</p>
-      <ol class="xp-ladder">{{$cur := .Level.Name}}{{range .Levels}}<li class="{{if eq .Name $cur}}now{{end}}"><strong>{{.Name}}</strong> <span class="muted small">{{.Min}}+ ops · +{{.Dice}}</span></li>{{end}}</ol>
-      {{if .Record}}<h3>Service record</h3><ul class="small">{{range .Record}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    <section><h2>Facts</h2>
+      {{if .Facts}}<ul class="plain list small">{{range .Facts}}<li><span class="tag tag-fact-{{.Status}}">{{.Status}}</span> {{.Text}}{{with .Reply}} <span class="muted">— {{.}}</span>{{end}}</li>{{end}}</ul>
+      {{else}}<p class="muted small">Nothing established yet.</p>{{end}}
+      {{if .CanPropose}}<form method="post" action="{{$.Base}}/facts" class="stack" data-enhance data-reset>
+        <input type="hidden" name="unit" value="{{.Unit.ID}}">
+        <label class="small">Propose a fact about {{.Unit.Name}}
+          <input name="text" maxlength="400" required class="compact-input" placeholder="Carries a flare gun with two flares"></label>
+        <div class="row"><button type="submit" class="secondary small-btn">{{if $.IsReferee}}Add fact{{else}}Propose{{end}}</button></div>
+      </form>{{end}}
     </section>
-    {{end}}
-
-    {{with .Traits}}
-    <section><h2>Traits</h2>
-      <dl class="traits-list">{{range .}}<dt>{{.Name}}</dt><dd>{{.Text}}</dd>{{end}}</dl></section>
-    {{end}}
 
     {{with .Order}}
     <section><h2>Orders this turn</h2>
-      <p class="small"><span class="tag tag-order-{{.Status}}">{{.Status}}</span> {{.Summary}}{{with .Intent}} · “{{.}}”{{end}}{{with .Author}} <span class="muted">· {{.}}</span>{{end}}</p></section>
+      <p class="small"><span class="tag tag-order-{{.Status}}">{{.Status}}</span>{{with .Author}} <span class="muted">by {{.}}</span>{{end}}</p>
+      <blockquote class="order-text">{{.Text}}</blockquote></section>
+    {{end}}
+
+    {{if .Record}}<section><h2>Service record</h2><ul class="small">{{range .Record}}<li>{{.}}</li>{{end}}</ul></section>{{end}}
+
+    {{if .CanEdit}}
+    <section class="card-edit"><h2>Change this unit</h2>
+      <form method="post" action="{{$.Base}}/units/{{.RawID}}/edit" class="stack" data-enhance>
+        <div class="row tight">
+          <label class="inline">Name <input name="name" value="{{.Unit.Name}}" maxlength="32" class="compact-input"></label>
+          <label class="inline">Hex <input name="hex" value="{{.Unit.Hex}}" maxlength="4" class="mono num-s"></label>
+          <label class="inline">Strength <input type="number" name="strength" value="{{.Strength}}" min="0" max="100000" class="num-s"></label>
+        </div>
+        <label>Status <input name="status" value="{{.Status}}" maxlength="200" placeholder="pinned, wounded: left arm, carrying a child"></label>
+        <fieldset class="plain-fieldset"><legend>Skills</legend>
+          <div class="row tight">{{range .Skills}}<label class="inline small">{{.Name}} <input type="number" name="skill_{{.ID}}" value="{{.Value}}" min="0" max="100" class="num-s"></label>{{end}}</div>
+        </fieldset>
+        <label>Kit <textarea name="kit" rows="2" maxlength="500">{{.Kit}}</textarea></label>
+        <label>Notes <span class="muted small">everyone who can see this card reads them</span><textarea name="notes" rows="3" maxlength="2000">{{.Notes}}</textarea></label>
+        {{if not .Playable}}<div class="row tight">
+          <input type="hidden" name="known_set" value="1"><label class="toggle"><input type="checkbox" name="known"{{if .Known}} checked{{end}}> Players know it's there</label>
+          <input type="hidden" name="identified_set" value="1"><label class="toggle"><input type="checkbox" name="identified"{{if .Identified}} checked{{end}}> and what it is</label>
+        </div>{{else}}<input type="hidden" name="radio_down_set" value="1"><label class="toggle"><input type="checkbox" name="radio_down"{{if .RadioDown}} checked{{end}}> Radio out</label>{{end}}
+        <div class="row"><button type="submit">Save</button></div>
+      </form>
+      <form method="post" action="{{$.Base}}/units/{{.RawID}}/edit" data-confirm="Take {{.Unit.Name}} off the map for good?">
+        <input type="hidden" name="remove" value="1"><button type="submit" class="link danger small">Remove from the map</button></form>
+    </section>
     {{end}}
     {{end}}
   </article>

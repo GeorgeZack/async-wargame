@@ -78,7 +78,7 @@ with the referee.
 
 Players have one page: what's happened (the latest report, the briefing,
 earlier turns), the map, their character (with a private brief), the order
-box, and talk. The referee has four screens: Table, Desk, People, and Setup.
+box, and game chat. The referee has four screens: Table, Desk, People, and Setup.
 
 The map is the drawn hex map or an uploaded image, with a hex grid, square
 grid, or no grid over it. Counters and pins go anywhere; the grid is for

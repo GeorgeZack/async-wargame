@@ -88,6 +88,9 @@ func cleanText(s string, max int) (string, error) {
 
 // ApplyEdits applies a batch of editor ops for the referee.
 func (r *Room) ApplyEdits(actor *Member, mod *Module, ops []EditOp) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
@@ -164,6 +167,9 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 		}
 
 	case "unit-add":
+		if r.Wayward != nil && (len(r.Units) >= 6 || op.Strength > 1) {
+			return bad("Wayward supports up to six individual characters")
+		}
 		if len(r.Units) >= maxUnits {
 			return bad("a map can hold at most %d units", maxUnits)
 		}
@@ -343,6 +349,9 @@ func (r *Room) StartOperation(actor *Member, mod *Module, now time.Time) error {
 	if r.Phase != PhaseSetup {
 		return bad("the operation has already started")
 	}
+	if r.Wayward != nil && (len(r.Units) < 1 || len(r.Units) > 6 || len(r.Formations) > 0) {
+		return bad("Wayward needs 1–6 individual characters without formations")
+	}
 	r.logf(VisAll, "The operation has begun.")
 	r.openTurn(1, now)
 	return nil
@@ -363,6 +372,8 @@ func (r *Room) ResetToScenario(actor *Member, sc *Scenario, mod *Module) error {
 	}
 	fresh := newRoom(r.Code, r.Name, sc, mod, "", "")
 	r.BriefingVignette = nil
+	r.Mission = fresh.Mission
+	r.Wayward = fresh.Wayward
 	r.Objectives = append([]string{}, fresh.Objectives...)
 	r.Map, r.Features, r.Units = fresh.Map, fresh.Features, fresh.Units
 	r.Briefing, r.RefereeNotes, r.Threat = fresh.Briefing, fresh.RefereeNotes, MinThreat
@@ -617,6 +628,9 @@ func (r *Room) SetObjectives(actor *Member, text string) error {
 		if line = strings.TrimSpace(line); line != "" {
 			goals = append(goals, line)
 		}
+	}
+	if r.Mission != nil && !slices.Equal(goals, r.Objectives) {
+		return bad("this scenario has fixed, automatically checked objectives")
 	}
 	r.Objectives = goals
 	return nil

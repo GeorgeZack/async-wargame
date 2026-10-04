@@ -84,8 +84,9 @@ type FeatureMark struct {
 // when several sit on the same spot).
 type Tether struct{ X1, Y1, X2, Y2 float64 }
 type Pip struct {
-	X        float64
-	Detached bool
+	X         float64
+	Detached  bool
+	Destroyed bool
 }
 type Stack struct {
 	Members string
@@ -207,7 +208,7 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 	var us []UnitView
 	formations := map[string][]UnitView{}
 	for _, u := range units {
-		if u.Formation != "" && !u.Stale && !u.Detached && r.formation(u.Formation) != nil {
+		if u.Formation != "" && !u.Stale && !u.Detached && !u.Destroyed && r.formation(u.Formation) != nil {
 			formations[u.Formation] = append(formations[u.Formation], u)
 		} else {
 			us = append(us, u)
@@ -246,17 +247,20 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 		}
 		placed = append(placed, p)
 		label := u.Name
+		if u.Destroyed {
+			label += " — destroyed"
+		}
 		if u.Where != "" {
 			label += ", " + u.Where
 		}
 		if u.Stale {
 			label += fmt.Sprintf(" (out of contact: where they last called in, turn %d)", u.SeenTurn)
 		}
-		st := Stack{X: p.X, Y: p.Y, Top: u, Count: 1, Label: label, Chit: u.Detached, Members: strings.Join(u.Members, " ")}
+		st := Stack{X: p.X, Y: p.Y, Top: u, Count: 1, Label: label, Chit: u.Detached || u.Destroyed && u.Formation != "", Members: strings.Join(u.Members, " ")}
 		if len(u.Members) > 0 {
 			for _, m := range units {
 				if m.Formation == u.Formation && !m.Stale {
-					st.Pips = append(st.Pips, Pip{Detached: m.Detached})
+					st.Pips = append(st.Pips, Pip{Detached: m.Detached, Destroyed: m.Destroyed})
 				}
 			}
 			for i := range st.Pips {
@@ -268,7 +272,7 @@ func buildMap(r *Room, mod *Module, me *Member, units []UnitView) (MapView, []Te
 		mv.Stacks = append(mv.Stacks, st)
 	}
 	for _, st := range mv.Stacks {
-		if !st.Chit || st.Top.Stale {
+		if !st.Chit || st.Top.Stale || st.Top.Destroyed {
 			continue
 		}
 		for _, anchor := range mv.Stacks {

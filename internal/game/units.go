@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// Destroyed is the canonical out-of-action state; the counter remains on the map.
+func (u *Unit) Destroyed() bool { return u.Strength <= 0 }
+
 // QualityOf is how good a unit is, as a bonus to its rolls: the referee's
 // value for it if set, else its template's.
 func QualityOf(mod *Module, u *Unit) int {
@@ -68,6 +71,9 @@ type UnitEdit struct {
 // EditUnit applies a referee's change to a unit. During adjudication,
 // players keep seeing the board as it was at the lock until publishing.
 func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
@@ -99,7 +105,13 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 		if *e.Strength < 0 || *e.Strength > 100000 {
 			return bad("strength is 0 to 100000")
 		}
+		wasDestroyed := u.Destroyed()
 		u.Strength = *e.Strength
+		if wasDestroyed && !u.Destroyed() && u.Formation != "" {
+			if at, ok := r.formationAnchor(u.Formation, u); ok && at != u.Pos() {
+				u.Detached = true
+			}
+		}
 	}
 	for _, f := range []struct {
 		in  *string

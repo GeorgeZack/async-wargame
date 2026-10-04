@@ -15,6 +15,7 @@ import (
 // notes, and the scars in their status.
 
 type OperationRecord struct {
+	Result    string    `json:"result,omitempty"`
 	Number    int       `json:"number"`
 	Scenario  string    `json:"scenario"`
 	Turns     int       `json:"turns"`
@@ -31,10 +32,16 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	if r.Phase == PhaseSetup {
 		return bad("the operation hasn't started yet")
 	}
+	r.Assistant.Decision = nil
+	r.Assistant.Batches = nil
+	r.cancelRuns(func(x *Run) bool { return x.Automatic() }, now)
 	r.Undo = nil
 	op := max(r.Operation, 1)
 	rec := OperationRecord{Number: op, Scenario: sc.Name, Turns: r.Turn, EndedAt: now.UTC()}
 
+	if r.MissionComplete() {
+		rec.Result = r.Mission.Status
+	}
 	survivors := map[string]*Unit{}
 	for _, u := range r.Units {
 		if !mod.Side(u.Side).Playable || u.Strength <= 0 {
@@ -74,6 +81,8 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 		}
 	}
 	r.Formations = fresh.Formations
+	r.Mission = fresh.Mission
+	r.Wayward = fresh.Wayward
 	r.Moves, r.Plans = nil, nil
 	r.Units = units
 	r.Map, r.Features = fresh.Map, fresh.Features

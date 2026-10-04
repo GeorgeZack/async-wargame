@@ -1,0 +1,125 @@
+{
+  "id": "wayward",
+  "engine": "wayward",
+  "version": "0.1.0",
+  "name": "Wayward! Exploration",
+  "intro": "Sword-and-sorcery exploration. Human wanderers use guile, practical skill and nerve. The Silent Tollhouse is a short outdoor investigation with no combat encounters. This adaptation supports task checks and persistent discoveries only. All equipment and character abilities are fixed pregens.",
+  "sides": [
+    {
+      "id": "wanderers",
+      "name": "Wanderers",
+      "playable": true
+    }
+  ],
+  "classes": [
+    {
+      "id": "merchant",
+      "name": "Merchant",
+      "abbr": "MER",
+      "side": "wanderers",
+      "kind": "special",
+      "symbol": "infantry",
+      "strength": 1,
+      "quality": 0,
+      "speed": 0.72,
+      "run": 0.72,
+      "description": "A human merchant drawn into the mystery at the tollhouse.",
+      "kit": "Knife, short spear, light armor, writing materials, rope and lantern; backpack, waterskin and food and water for three days. Equipment is fixed for this playtest.",
+      "character": {
+        "archetype": "Merchant",
+        "skills": {
+          "social": 3,
+          "craft": 1,
+          "physical": 1
+        },
+        "armor": 2
+      }
+    },
+    {
+      "id": "burglar",
+      "name": "Burglar",
+      "abbr": "BUR",
+      "side": "wanderers",
+      "kind": "special",
+      "symbol": "infantry",
+      "strength": 1,
+      "quality": 0,
+      "speed": 0.72,
+      "run": 0.72,
+      "description": "A human burglar drawn into the mystery at the tollhouse.",
+      "kit": "Knife, sword, light armor, lockpick tools, crowbar and rope; backpack, waterskin and food and water for three days. Equipment is fixed for this playtest.",
+      "character": {
+        "archetype": "Burglar",
+        "skills": {
+          "stealth": 3,
+          "craft": 1,
+          "physical": 1
+        },
+        "armor": 2
+      }
+    }
+  ],
+  "terrain": [
+    {
+      "code": "~",
+      "id": "sea",
+      "name": "Open water",
+      "water": true,
+      "note": "Dropships may hover here. Impassable to ground units."
+    },
+    {
+      "code": "=",
+      "id": "river",
+      "name": "Wide water",
+      "water": true,
+      "note": "Lakes and wide rivers. Impassable to ground units."
+    },
+    {
+      "code": "b",
+      "id": "beach",
+      "name": "Beach",
+      "note": "Embarkation point when adjacent to open water."
+    },
+    {
+      "code": ".",
+      "id": "open",
+      "name": "Open ground"
+    },
+    {
+      "code": "u",
+      "id": "urban",
+      "name": "Urban"
+    },
+    {
+      "code": "U",
+      "id": "dense",
+      "name": "Dense urban",
+      "note": "Short sight lines. Contacts are hard to detect."
+    },
+    {
+      "code": "i",
+      "id": "industrial",
+      "name": "Industrial"
+    },
+    {
+      "code": "f",
+      "id": "forest",
+      "name": "Woods"
+    },
+    {
+      "code": "h",
+      "id": "hills",
+      "name": "Hills",
+      "note": "Elevated. Good for observation and comms relays."
+    },
+    {
+      "code": "m",
+      "id": "marsh",
+      "name": "Marsh"
+    }
+  ],
+  "attribution": "Wayward!, by George Zackrison, based on Barbaric! Second Edition by Omer Golan-Joel and incorporating material by Omer Golan-Joel, Richard Hazlewood, Josh Peters, and Robert Garitta.",
+  "license": "CC BY-SA 4.0 \u2014 https://creativecommons.org/licenses/by-sa/4.0/",
+  "source": "https://github.com/Ouroboros-Technology-LLC/wayward/blob/796f407d250e9953d811a22dba3c0182044c9e87/Core-Rules.html",
+  "adaptation": "Selected task rules and human narrative-archetype pregens for an asynchronous exploration playtest; see docs/wayward.md for omissions and playtest conventions."
+}

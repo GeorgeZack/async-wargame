@@ -417,9 +417,9 @@ table.events td.num { text-align: center; }
 .counter .ctr-back { fill: var(--c-edge); stroke: #3d311f; stroke-width: 0.3; }
 .counter .ctr { fill: var(--face, var(--c-back)); stroke: #3d311f; stroke-width: 0.35; }
 .counter .ctr-line { fill: none; stroke: var(--counter-ink, var(--ink)); stroke-width: 0.3; opacity: 0.55; }
-.counter.side-marines { --face: var(--c-marines); }
-.counter.side-civilians { --face: var(--c-civilians); }
-.counter.side-infected { --face: var(--c-infected); --counter-ink: var(--c-ink-light); }
+.counter.role-player, .counter.side-marines { --face: var(--c-marines); }
+.counter.role-neutral, .counter.side-civilians { --face: var(--c-civilians); }
+.counter.role-enemy, .counter.side-infected { --face: var(--c-infected); --counter-ink: var(--c-ink-light); }
 .counter.side-infected.kind-monster { --face: var(--c-monster); }
 .counter.side-infected.kind-nest { --face: var(--c-nest); }
 .counter.contact { --face: var(--c-back); --counter-ink: var(--ink); }
@@ -1149,3 +1149,25 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .objectives h2 { margin-top: 0; font-size: 1rem; }
 .objectives ol { margin-bottom: 0; padding-left: 1.4rem; }
 .objectives li + li { margin-top: .4rem; }
+
+/* Destruction uses shape and text as well as color, at every map zoom. */
+.counter.destroyed { --face: #77736a; --counter-ink: #e9e4d9; }
+.counter.destroyed .ctr { stroke: #322f2c; stroke-width: 1; stroke-dasharray: 2 1; }
+.counter.destroyed > use, .counter.destroyed .ctr-id, .counter.destroyed .ctr-f { opacity: .35; }
+.destroyed-cross { fill: none; stroke: #241b19; stroke-width: 2.1; stroke-linecap: square; paint-order: stroke; }
+.destroyed-band { fill: #332723; }
+.counter text.destroyed-label { fill: #fff4dc; font-size: 3px; font-weight: 900; letter-spacing: .15px; }
+.formation-pip.destroyed { fill: none; stroke: #8d2924; }
+.pip-loss { fill: none; stroke: #8d2924; stroke-width: .7; }
+.destroyed-status { font-weight: 800; color: var(--danger, #a43830); }
+
+.report-details { margin-block: .8rem; border-block: 1px solid var(--border); padding-block: .65rem; }
+.report-details > summary { font-weight: 600; }
+.private-update { border-inline-start: 3px solid var(--accent); padding-inline-start: .75rem; }
+
+/* Wayward character abilities remain legible at narrow viewport widths. */
+.character-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .65rem; }
+.character-stats > div { border: 1px solid currentColor; border-radius: .25rem; padding: .5rem .75rem; }
+.character-stats dt { font-size: .8rem; }
+.character-stats dd { margin: .2rem 0 0; font-size: 1.2rem; font-weight: 700; }
+.wayward-notice { margin-block: 1rem; padding: 1rem; border-inline-start: 3px solid currentColor; }

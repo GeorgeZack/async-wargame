@@ -38,10 +38,13 @@ const (
 	PhasePlanning Phase = "planning"
 	// PhaseResolving: orders are locked and the referee is adjudicating.
 	PhaseResolving Phase = "resolving"
+	PhaseComplete  Phase = "complete"
 )
 
 // Room is one hosted campaign: its membership, canonical state, and history.
 type Room struct {
+	Wayward          *WaywardState     `json:"wayward,omitempty"`
+	Mission          *MissionState     `json:"mission,omitempty"`
 	BriefingVignette *Vignette         `json:"briefingVignette,omitempty"`
 	Code             string            `json:"code"`
 	Name             string            `json:"name"`
@@ -317,7 +320,11 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 	r := &Room{
 		Code: code, Name: name, ScenarioID: sc.ID, ModuleID: mod.ID, ModuleVersion: mod.Version,
 		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Members: []*Member{ref},
-		Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), Objectives: slices.Clone(sc.Objectives), RefereeNotes: sc.RefereeNotes,
+		Mission: newMission(sc.Mission), Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), Objectives: slices.Clone(sc.Objectives), RefereeNotes: sc.RefereeNotes,
+	}
+	if mod.Engine == "wayward" {
+		r.Wayward = newWayward(sc.Challenges)
+		r.Assistant.On, r.Assistant.Automatic = true, true
 	}
 	for _, f := range sc.Formations {
 		f := f

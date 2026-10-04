@@ -19,9 +19,10 @@ import (
 
 // Desk is the referee's work on one turn.
 type Desk struct {
-	Turn     int        `json:"turn"`
-	Contests []*Contest `json:"contests,omitempty"`
-	Outcomes []*Outcome `json:"outcomes,omitempty"`
+	Wayward  []*WaywardAction `json:"wayward,omitempty"`
+	Turn     int              `json:"turn"`
+	Contests []*Contest       `json:"contests,omitempty"`
+	Outcomes []*Outcome       `json:"outcomes,omitempty"`
 	// Questions about orders, by order id: drafted, and sent to the player.
 	Questions map[string]*Question `json:"questions,omitempty"`
 }
@@ -106,6 +107,9 @@ func (r *Room) party(mod *Module, in PartyInput) (Party, string, error) {
 	unit := ""
 	u := r.Unit(in.Unit)
 	if u != nil {
+		if u.Destroyed() {
+			return p, "", bad("destroyed units cannot take part in contests")
+		}
 		unit = u.ID
 		if p.Name == "" {
 			p.Name = u.Name
@@ -141,6 +145,9 @@ func (r *Room) AddContest(actor *Member, mod *Module, orderID, title string, a P
 	if actor.Role != RoleReferee {
 		return nil, ErrForbidden
 	}
+	if r.Wayward != nil {
+		return nil, bad("Wayward uses task checks, not d10 contests")
+	}
 	d, err := r.desk()
 	if err != nil {
 		return nil, err
@@ -148,8 +155,9 @@ func (r *Room) AddContest(actor *Member, mod *Module, orderID, title string, a P
 	if orderID != "" && r.lockedOrder(orderID) == nil {
 		return nil, bad("that order isn't part of this turn")
 	}
-	if len(d.Contests) >= 100 {
-		return nil, bad("that's a lot of rolls for one turn; delete some first")
+	limit := min(600, max(100, len(r.Units)*3))
+	if len(d.Contests) >= limit {
+		return nil, bad("this turn has reached its limit of %d contests", limit)
 	}
 	c := &Contest{ID: newID(), Order: orderID, Title: clip(title, 80), Secret: secret}
 	if c.A, c.AUnit, err = r.party(mod, a); err != nil {
@@ -197,6 +205,9 @@ func (r *Room) RollContest(actor *Member, id string, dieA, dieB int, now time.Ti
 		rng, _ := newRNG()
 		res, c.Manual = rules.Contest(rng, c.A, c.B), false
 	}
+	if c.Result != nil {
+		r.logKind(VisReferee, "", "%s replaced dice for %s. Previous: %s. New: %s.", actor.Name, c.Title, c.Result.Text(), res.Text())
+	}
 	c.Result, c.RolledAt = &res, now.UTC()
 	return nil
 }
@@ -211,6 +222,9 @@ func (r *Room) DeleteContest(actor *Member, id string) error {
 		return err
 	}
 	n := len(d.Contests)
+	if c := d.contest(id); c != nil && c.Result != nil {
+		r.logKind(VisReferee, "", "%s deleted rolled contest %s: %s.", actor.Name, c.Title, c.Result.Text())
+	}
 	d.Contests = slices.DeleteFunc(d.Contests, func(c *Contest) bool { return c.ID == id })
 	if len(d.Contests) == n {
 		return ErrNotFound
@@ -340,6 +354,11 @@ func (r *Room) PublishTurn(actor *Member, mod *Module, now time.Time) error {
 	if r.Phase != PhaseResolving {
 		return bad("the turn hasn't been locked yet")
 	}
+	if r.Assistant.Automatic {
+		if err := r.SetAutomatic(actor, "pause", now); err != nil {
+			return err
+		}
+	}
 	return r.publish(mod, now)
 }
 
@@ -356,8 +375,17 @@ func (r *Room) publish(mod *Module, now time.Time) error {
 	}
 	rep := &TurnReport{Operation: max(r.Operation, 1), Turn: r.Turn, At: now.UTC(), Corrected: r.pendingCorrection()}
 	rolls := func(orderID string, e *ReportEntry) {
+		for _, a := range d.Wayward {
+			if a.Order == orderID {
+				if a.Secret {
+					e.Secret = append(e.Secret, a.Text())
+				} else {
+					e.Rolls = append(e.Rolls, a.Text())
+				}
+			}
+		}
 		for _, c := range d.Contests {
-			if c.Order != orderID || c.Result == nil {
+			if !r.contestInvolvesOrder(c, orderID) || c.Result == nil {
 				continue
 			}
 			line := c.Title + ": " + c.Result.Text()
@@ -405,11 +433,17 @@ func (r *Room) publish(mod *Module, now time.Time) error {
 	if len(loose.Secret) > 0 {
 		rep.Entries = append(rep.Entries, loose)
 	}
+	r.evaluateMission(mod, rep)
 	r.Reports = append(r.Reports, rep)
 	r.LockedUnits = nil
 	r.assistAtPublish(now)
 	r.logKind(VisAll, "sitrep", "Turn %d is published. The report is under Situation.", r.Turn)
-	r.openTurn(r.Turn+1, now)
+	if r.MissionComplete() {
+		r.Phase = PhaseComplete
+		r.Deadline, r.RemindAt = time.Time{}, time.Time{}
+	} else {
+		r.openTurn(r.Turn+1, now)
+	}
 	r.Plans = nil // the snapshot retains plans if this turn is reopened
 	return nil
 }

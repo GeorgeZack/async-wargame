@@ -10,6 +10,10 @@ import "fmt"
 // RefreshComms works out who's in contact and reports changes. The store
 // calls it after every update.
 func (r *Room) RefreshComms(mod *Module) {
+	visibility := VisAll
+	if r.Phase == PhaseResolving {
+		visibility = VisReferee // intermediate unit changes are unpublished
+	}
 	for _, u := range r.Units {
 		if s := mod.Side(u.Side); s == nil || !s.Playable {
 			continue
@@ -22,13 +26,13 @@ func (r *Room) RefreshComms(mod *Module) {
 			if u.OutOfContact {
 				u.OutOfContact = false
 				if r.Phase != PhaseSetup {
-					r.logf(VisAll, "%s is back on the radio.", u.Name)
+					r.logf(visibility, "%s is back in contact.", u.Name)
 				}
 			}
 		case !u.OutOfContact:
 			u.OutOfContact = true
 			if r.Phase != PhaseSetup {
-				r.logf(VisAll, "Lost contact with %s.", u.Name)
+				r.logf(visibility, "Lost contact with %s.", u.Name)
 			}
 		}
 	}
@@ -40,7 +44,7 @@ func (r *Room) radioText(u *Unit) string {
 	case !u.OutOfContact:
 		return "In contact"
 	case u.JammedUntil >= r.Turn && u.JammedUntil > 0:
-		return fmt.Sprintf("Radio jammed until turn %d", u.JammedUntil+1)
+		return fmt.Sprintf("Communications disrupted until turn %d", u.JammedUntil+1)
 	case u.LastContact > 0:
 		return fmt.Sprintf("Out of contact since turn %d", u.LastContact)
 	}
@@ -79,3 +83,7 @@ func (r *Room) KnownBy(mod *Module, u *Unit, me *Member) bool {
 	}
 	return false
 }
+
+// PubliclyKnown distinguishes shared contacts from a discovery known only to a
+// specific player. An automatic briefing must use the former audience.
+func (r *Room) PubliclyKnown(mod *Module, u *Unit) bool { return mod.Side(u.Side).Playable || u.Known }

@@ -26,6 +26,16 @@ const (
 
 const maxOrderLen = 1500
 
+func (r *Room) ordersOpen(now time.Time) error {
+	if r.Phase != PhasePlanning {
+		return bad("orders can only be changed while a turn is in planning")
+	}
+	if !r.Deadline.IsZero() && !now.Before(r.Deadline) {
+		return bad("the order deadline has passed; wait for the next turn")
+	}
+	return nil
+}
+
 // Order is one unit's order for one turn.
 type Order struct {
 	Group       string          `json:"group,omitempty"` // shared squad instruction; empty for individual orders
@@ -56,6 +66,9 @@ type OrderRevision struct {
 // CanOrder reports whether actor may give unit u orders: its holder, the
 // holder's commander, or the referee.
 func (r *Room) CanOrder(mod *Module, actor *Member, u *Unit) bool {
+	if r.MissionComplete() || u.Destroyed() {
+		return false
+	}
 	if s := mod.Side(u.Side); s == nil || !s.Playable {
 		return false
 	}
@@ -87,8 +100,8 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text string, mark *
 	if strings.HasPrefix(unitID, "f-") {
 		return r.SaveSquadOrder(actor, mod, strings.TrimPrefix(unitID, "f-"), text, mark, commit, now)
 	}
-	if r.Phase != PhasePlanning {
-		return nil, bad("orders can only be written while a turn is in planning")
+	if err := r.ordersOpen(now); err != nil {
+		return nil, err
 	}
 	u := r.Unit(unitID)
 	if u == nil {
@@ -144,8 +157,8 @@ func (r *Room) SaveOrder(actor *Member, mod *Module, unitID, text string, mark *
 
 // WithdrawOrder cancels an order before lock.
 func (r *Room) WithdrawOrder(actor *Member, mod *Module, id string, now time.Time) error {
-	if r.Phase != PhasePlanning {
-		return bad("orders can only be withdrawn while a turn is in planning")
+	if err := r.ordersOpen(now); err != nil {
+		return err
 	}
 	for _, o := range r.Orders {
 		if o.ID != id || o.Turn != r.Turn || o.Status == OrderWithdrawn {
@@ -193,8 +206,8 @@ func (r *Room) CanReview(actor *Member, u *Unit) bool {
 // ReviewOrder is a commander approving a player's committed order, or
 // returning it to draft with a note.
 func (r *Room) ReviewOrder(actor *Member, id, action, note string, now time.Time) error {
-	if r.Phase != PhasePlanning {
-		return bad("orders can only be reviewed while a turn is in planning")
+	if err := r.ordersOpen(now); err != nil {
+		return err
 	}
 	var o *Order
 	for _, x := range r.Orders {
@@ -255,6 +268,10 @@ func (r *Room) lockOrders() {
 		}
 		switch o.Status {
 		case OrderCommitted:
+			if u := r.Unit(o.Unit); u != nil && u.Destroyed() {
+				o.Status = OrderLapsed
+				continue
+			}
 			o.Status = OrderLocked
 		case OrderDraft:
 			o.Status = OrderLapsed
@@ -269,7 +286,7 @@ func (r *Room) OrderReadiness() (in, total int, waiting []string) {
 	var order []string
 	for _, u := range r.Units {
 		m := r.memberOrNil(u.AssignedTo)
-		if m == nil || !m.InPlay() {
+		if u.Destroyed() || m == nil || !m.InPlay() {
 			continue
 		}
 		total++

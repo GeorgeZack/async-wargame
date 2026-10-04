@@ -4,6 +4,18 @@ Browser-based, referee-led asynchronous wargames. See [design-doc.md](design-doc
 The interface uses an era-neutral field-manual style: paper and olive in light
 mode, charcoal and brass in dark mode, suitable for historical or future settings.
 
+## Wayward exploration playtest
+
+Choose **Wayward: The Silent Tollhouse (2 players)** for asynchronous RPG play
+with an AI Referee. Two fixed characters investigate a missing caravan using
+native 2d6 Skill checks and persistent discoveries. Submitted actions resolve
+when everyone is ready or the scheduled deadline arrives. The host sets up the
+room; normal adjudication and publication are automatic.
+
+This first slice covers exploration, not combat, sorcery, Hero Points or
+advancement. See [Wayward setup, supported rules and next steps](docs/wayward.md).
+The existing wargame scenarios keep their own rules engine.
+
 ## Run
 
 ```sh
@@ -97,6 +109,15 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
   panel, with Cancel all). A request already waiting on the model is cut
   off, and an answer that arrives anyway is thrown away. Switching the
   assistant off for a room cancels its requests too.
+- **Reasoning effort:** `ai-reasoning-effort` optionally selects `none`, `low`,
+  `medium`, `high`, etc. Empty preserves the provider default. OpenRouter receives
+  its documented `reasoning` object (`none` sends `enabled:false`); other compatible
+  endpoints receive `reasoning_effort`. Use only a setting your model supports.
+  With reasoning disabled, the tested DeepSeek endpoint completed the six-turn
+  Crossroads mission in about three minutes; the earlier default-reasoning runs
+  repeatedly timed out. This is a measured test result, not a latency guarantee.
+  Reasoning and visible output can share the token budget; see the
+  [provider documentation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
 - **Your own instructions to the model:** `ai-instructions` (one line;
   `\n` starts a new one) and/or `ai-instructions-file` are added to every
   prompt the assistant sends, for example "Answer directly. Don't reason at
@@ -111,6 +132,160 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
 - Nothing is sent until the referee switches the assistant on for their
   room (Setup screen). What's sent: unit names and stats, orders and their
   intent, positions, and report lines. Not messages, and not anyone's name.
+
+### Automatic referee (opt-in)
+
+On the **Desk** or **Setup** screen, choose **Enable automatic referee**.
+This uses the configured text model (`ai` / `ai-model`). Host the room, admit
+players, set up the scenario and start the operation normally. Thereafter,
+each scheduled lock starts a four-stage turn without a manual Publish step:
+
+1. Decide enemy intentions without seeing player orders.
+2. Decide uncertain contests; the server rolls and records the dice.
+3. Resolve every effective order, including global squad orders and individual
+   exceptions, plus enemy actions. Propose movement, formation splits/rejoins,
+   losses, status/contact changes, reveals and threat changes.
+4. Write the briefing from public outcomes and recorded public state changes, then apply the validated
+   changes and publish the report together. The next planning deadline opens,
+   unless the scenario’s objective checks complete the mission.
+
+Larger turns are processed in persisted batches, targeting eight units each and
+keeping formations together. Each unit/order has exactly one writer; other
+orders remain read-only context. Dice relevant to a batch accompany its task.
+All batches must pass the full-turn validator before any map change or report
+is published. The referee can see batch progress on the Desk.
+
+**Pause AI · take over** cancels pending work and rejects late replies.
+`ai-retries` defaults to one automatic retry for a failed, unchanged stage
+(0–2 supported). Validation feedback and the previous rejected proposal go to
+the retry; an invalid resolution batch can split into smaller groups while
+preserving completed batches and dice. Exhausted retries leave the turn
+unpublished and offer **Retry adjudication**. Changes made while
+an AI request runs invalidate its reply. A correction restores the game before
+AI state changes and pauses automation for human editing. Settings, queued work,
+dice and unpublished decisions survive reloads; interrupted running requests
+can be reissued on startup. Model/provider, request stages, dice and the private
+judgment reason remain on record.
+
+`ai-concurrency` controls requests across rooms (default 1; maximum 16). A room
+stays sequential so its stages cannot race. Gracefully interrupted requests
+return to the queue; pause/cancellation still discard late work. Requests over
+256 KB of prompt text stop for review instead of silently dropping context.
+
+This is an initial automatic turn referee with deterministic regression tests and
+a disposable real-model playtest runner. Real-model runs have exposed invalid
+formation decisions and long provider waits; judgment quality is still experimental. The model judges
+terrain and tactics; the server validates destinations, maximum movement reach,
+formation consistency, losses, audiences, and complete order coverage. It does
+not yet automatically manage proposed facts/random events, ask and wait for
+player clarification, replenish forces, create new terrain, or advance between operations. Scenarios may define server-checked hold/extraction
+objectives and mission success/failure; Crossroads Rearguard demonstrates this. Images keep their separate review workflow.
+The scale harness supports 100 players. The server has been tested with 100
+simultaneous authenticated clients, and automated campaigns exercise repeated
+100-order turns. A real-model 100-order turn completed unattended in about nine
+minutes (2m37s players, 6m26s judge), after earlier failures drove repair fixes.
+Private judge steps notify referees only; publication and a stopped-judge
+status change notify everyone. Browsers coalesce bursts of updates and defer refreshes in hidden tabs.
+Batching still carries shared world/order context; it is not
+full encounter isolation. Dense formations, long orders, tactical consistency,
+long-range dependencies and long campaign histories need further testing. Result
+prose can still contradict another group's unit changes; shared engagement
+resolution is needed before treating this as reliable large-campaign judging.
+Creating/closing rooms and configuring campaigns remain host actions.
+
+### Two-player test scenario
+
+Choose **Crossroads Rearguard (2 players)** when creating a room. It uses the
+Border War gunpowder module: one player holds **Line Detachment** (12 infantry),
+and the other holds **Scout Detachment** (8 scouts). Admit both on People,
+assign one detachment to each, enable the automatic referee, then start. Players
+coordinate through the in-app chat; the AI runs the raiders and adjudicates.
+
+Hold the Crossroads uncontested at each publication through turn 4, then bring
+survivors of both detachments to West Road during turns 5–6. The server evaluates
+these conditions from recorded positions and strength, shows progress under
+Objectives, records success/failure, and stops further orders and deadlines.
+The final turn remains correctable. Starting the next operation is a host action;
+it records the result and resets the scenario objectives.
+
+A unit at **strength 0 is destroyed**: its crossed-out counter stays on the map,
+it cannot receive orders or roll contests, and it no longer moves with its squad.
+The referee can use **Mark destroyed** on its card or restore a mistaken loss by
+setting strength above zero. Unpublished losses stay private until publication.
+Players see one turn narrative; **Order results and rolls** expands the detail.
+Private updates remain visible. The original mission briefing is kept separately.
+
+### AI players against the judge
+
+```sh
+# Uses the configured text endpoint/model/key, never the live -data file.
+# Optionally add -ai-reasoning-effort low if your model supports it.
+mise exec -- go run . -config game.conf \
+  -playtest data/playtests/crossroads-001 -playtest-scenario crossroads \
+  -playtest-games 1 -playtest-turns 6 -playtest-max-calls 48
+
+# Standard squad and a second game starting with a nearby enemy.
+mise exec -- go run . -config game.conf \
+  -playtest data/playtests/squad-001 -playtest-games 2 -playtest-turns 4
+
+# Synthetic 100-player load fixture; eight player requests in flight.
+# "none" is appropriate only when the configured model supports disabling reasoning.
+mise exec -- go run . -config game.conf -ai-reasoning-effort none \
+  -playtest data/playtests/load-100-001 -playtest-scenario crossroads \
+  -playtest-players 100 -playtest-concurrency 8 \
+  -playtest-games 1 -playtest-turns 1 -playtest-max-calls 180
+
+# Continue a finished test (including a stopped adjudication) into a NEW directory.
+# Source files and recorded dice stay intact; locked orders are not regenerated.
+mise exec -- go run . -config game.conf -ai-reasoning-effort none \
+  -playtest data/playtests/load-100-002 -playtest-from data/playtests/load-100-001 \
+  -playtest-games 1 -playtest-turns 1 -playtest-max-calls 180
+```
+
+The output directory **must not exist**. Each player sees only their normal
+filtered browser view and submits through the same order permissions. The runner
+locks immediately, drives the normal referee worker, retries a rejected stage
+once with validation feedback (without rerolling), and audits publication,
+movement, casualties and report privacy. Completed missions stop early. The CLI
+defaults to four concurrent players (1–16); squad commanders submit first so
+subordinates can see shared orders. A 100-player fixture has independent commands
+and opposing contacts across ten sectors, not the original mission objectives.
+
+Outputs: `summary.json` (results, failures, calls, tokens, per-turn timings,
+stage latency percentiles and largest prompts), `calls.jsonl`
+(local prompts/replies/timing, including private referee context), and
+`campaigns.json` (disposable state). Keep these local records private. The runner
+has an overall `-playtest-timeout` (20m by default) and a per-completion
+`-playtest-call-timeout` (2m). `-playtest-max-calls` bounds logical completions;
+transient HTTP retries can send up to three requests per completion. No image
+requests are made. A nonzero exit means a failed validation, provider call, audit,
+or exhausted budget. Generated scenarios are saved under `scenarios/`; use the
+run directory as `-modules` when opening a disposable store in the browser.
+A clean run verifies mechanics, not the quality of every ruling; human review
+still matters. For a provider-free 1,200-order soak test:
+
+```sh
+AW_SCALE_SOAK_TURNS=12 mise exec -- go test ./internal/playtest -run TestHundred -v
+mise exec -- go test ./internal/web -run TestHundred -v
+```
+
+The optional fairness calibration makes six real resolution requests with fixed
+dice, identical forces, and changes to names, list order, wording, and an
+attempted instruction override. It records private JSON evidence and validates
+state changes; a passing test does **not** certify tactical fairness. Set
+`AW_FAIRNESS_API`, `AW_FAIRNESS_MODEL`, `AW_AI_KEY`, and `AW_FAIRNESS_OUTPUT`
+(a new directory under an existing private directory), then run:
+
+```sh
+mise exec -- go test ./internal/game -run '^TestModelFairnessCalibration$' -v -count=1 -timeout=15m
+```
+
+Automatic judging permits one opposed exchange per pair of units per turn and
+hides already-rolled dice during contest selection. Both affected orders share
+those dice. Human referees can create distinct contests; replacing/deleting a
+rolled result leaves a private audit entry. Enemy perception and casualty
+severity remain model-dependent. See [the fairness audit](docs/HANDOFF.md) for
+measured results and unresolved limits.
 
 ### Situation vignettes (separate image API)
 

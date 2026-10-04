@@ -10,18 +10,20 @@ import (
 
 // Scenario defines a map, features, starting forces, and briefing text.
 type Scenario struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Module       string            `json:"module"`
-	Summary      string            `json:"summary"`
-	Objectives   []string          `json:"objectives,omitempty"`
-	Briefing     []string          `json:"briefing"`
-	RefereeNotes string            `json:"refereeNotes"`
-	Map          HexMap            `json:"map"`
-	Board        Board             `json:"board"`
-	Features     []ScenarioFeature `json:"features"`
-	Units        []ScenarioUnit    `json:"units"`
-	Formations   []Formation       `json:"formations,omitempty"`
+	Challenges   []WaywardChallenge `json:"challenges,omitempty"`
+	Mission      []MissionRule      `json:"mission,omitempty"`
+	ID           string             `json:"id"`
+	Name         string             `json:"name"`
+	Module       string             `json:"module"`
+	Summary      string             `json:"summary"`
+	Objectives   []string           `json:"objectives,omitempty"`
+	Briefing     []string           `json:"briefing"`
+	RefereeNotes string             `json:"refereeNotes"`
+	Map          HexMap             `json:"map"`
+	Board        Board              `json:"board"`
+	Features     []ScenarioFeature  `json:"features"`
+	Units        []ScenarioUnit     `json:"units"`
+	Formations   []Formation        `json:"formations,omitempty"`
 }
 
 // Spot is where something starts: a drawn hex (col, row, from 0), or an
@@ -175,7 +177,10 @@ func (s *Scenario) validate(m *Module) error {
 			return fmt.Errorf("unit %q is off the map", u.ID)
 		}
 	}
-	return nil
+	if err := s.validateWayward(m); err != nil {
+		return err
+	}
+	return s.validateMission(m)
 }
 
 // HexID is the conventional four-digit wargame hex number, 1-based: column then row.

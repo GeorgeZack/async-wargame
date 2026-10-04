@@ -164,6 +164,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /turn/next", s.nextTurn)
 	seat("POST /turn/reopen", s.reopenTurn)
 	seat("POST /assistant", s.setAssistant)
+	seat("POST /assistant/automatic", s.setAutomatic)
 	seat("POST /vignettes/{op}/{turn}/generate", s.generateVignette)
 	seat("POST /vignettes/{op}/{turn}/decide", s.decideVignette)
 	seat("GET /vignettes/image/{name}", s.vignetteImage)
@@ -426,8 +427,24 @@ func (s *Server) serveScreen(w http.ResponseWriter, r *http.Request, screen stri
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	var version int64
+	memberID := ""
 	err := s.store.Read(code, func(room *game.Room) {
-		if s.member(r, room) != nil {
+		if me := s.member(r, room); me != nil {
+			memberID = me.ID
+			version = room.Version
+		}
+	})
+	if err != nil || version == 0 {
+		http.Error(w, "not a member", http.StatusForbidden)
+		return
+	}
+	ch, cancel := s.store.SubscribeMember(code, memberID)
+	defer cancel()
+	// Catch changes between authentication and subscribing. Later changes are
+	// already queued, so a publication cannot fall through the connection gap.
+	version = 0
+	err = s.store.Read(code, func(room *game.Room) {
+		if me := s.member(r, room); me != nil && me.ID == memberID {
 			version = room.Version
 		}
 	})
@@ -438,8 +455,6 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
-	ch, cancel := s.store.Subscribe(code)
-	defer cancel()
 	fmt.Fprintf(w, "retry: 5000\nevent: hello\ndata: %d\n\n", version)
 	rc.Flush()
 	tick := time.NewTicker(25 * time.Second)

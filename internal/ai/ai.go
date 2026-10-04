@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -38,11 +39,12 @@ const UserAgent = "async-wargame/1.0"
 
 // Config says which model to use.
 type Config struct {
-	BaseURL string // ending in /v1
-	APIKey  string // sent as a bearer token if set
-	Model   string
-	Name    string // shown to referees: where game data goes
-	Timeout time.Duration
+	ReasoningEffort string // optional OpenAI-compatible reasoning_effort; empty keeps provider default
+	BaseURL         string // ending in /v1
+	APIKey          string // sent as a bearer token if set
+	Model           string
+	Name            string // shown to referees: where game data goes
+	Timeout         time.Duration
 	// Session, if set, is sent as x-opencode-session: OpenCode groups a
 	// client's requests by it. One per server run.
 	Session string
@@ -97,6 +99,8 @@ func New(cfg Config) *Client {
 }
 
 // Model is the model's ID; Provider is where requests go, for referees.
+func (c *Client) ReasoningEffort() string { return c.cfg.ReasoningEffort }
+
 func (c *Client) Model() string    { return c.cfg.Model }
 func (c *Client) Provider() string { return c.cfg.Name }
 
@@ -117,32 +121,48 @@ type message struct {
 // Complete sends a system prompt and a user message and returns the reply.
 // It retries a couple of times when the service is busy or briefly down.
 func (c *Client) Complete(ctx context.Context, system, user string, maxTokens int) (string, Usage, error) {
-	body, _ := json.Marshal(map[string]any{
+	request := map[string]any{
 		"model":       c.cfg.Model,
 		"messages":    []message{{"system", c.system(system)}, {"user", user}},
 		"temperature": 0.3,
 		"max_tokens":  maxTokens,
 		"stream":      false,
-	})
+	}
+	if c.cfg.ReasoningEffort != "" {
+		u, _ := url.Parse(c.cfg.BaseURL)
+		if u != nil && strings.EqualFold(u.Hostname(), "openrouter.ai") {
+			if c.cfg.ReasoningEffort == "none" {
+				request["reasoning"] = map[string]any{"enabled": false}
+			} else {
+				request["reasoning"] = map[string]any{"effort": c.cfg.ReasoningEffort}
+			}
+		} else {
+			request["reasoning_effort"] = c.cfg.ReasoningEffort
+		}
+	}
+	body, _ := json.Marshal(request)
 	var lastErr error
+	var total Usage
 	for attempt := range 3 {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
-				return "", Usage{}, ctx.Err()
+				return "", total, ctx.Err()
 			case <-time.After(time.Duration(attempt*attempt) * c.backoff):
 			}
 		}
 		text, usage, retry, err := c.once(ctx, body)
+		total.Prompt += usage.Prompt
+		total.Completion += usage.Completion
 		if err == nil {
-			return text, usage, nil
+			return text, total, nil
 		}
 		lastErr = err
 		if !retry {
 			break
 		}
 	}
-	return "", Usage{}, lastErr
+	return "", total, lastErr
 }
 
 func (c *Client) once(ctx context.Context, body []byte) (string, Usage, bool, error) {
@@ -157,7 +177,13 @@ func (c *Client) once(ctx context.Context, body []byte) (string, Usage, bool, er
 		return "", Usage{}, ctx.Err() == nil, fmt.Errorf("%s: %w", c.cfg.Name, err)
 	}
 	defer res.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	raw, readErr := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	if readErr != nil {
+		if ctx.Err() != nil {
+			return "", Usage{}, false, ctx.Err()
+		}
+		return "", Usage{}, true, fmt.Errorf("%s: reading reply: %w", c.cfg.Name, readErr)
+	}
 	if res.StatusCode != http.StatusOK {
 		retry := res.StatusCode == http.StatusTooManyRequests || res.StatusCode >= 500
 		return "", Usage{}, retry, fmt.Errorf("%s: %s: %s", c.cfg.Name, res.Status, errorText(raw))
@@ -174,6 +200,12 @@ func (c *Client) once(ctx context.Context, body []byte) (string, Usage, bool, er
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return "", Usage{}, false, fmt.Errorf("%s: unreadable reply: %w", c.cfg.Name, err)
+	}
+	if len(out.Choices) > 0 && out.Choices[0].FinishReason == "length" {
+		return "", out.Usage, false, fmt.Errorf("%s: reply reached its output token limit; incomplete output was discarded", c.cfg.Name)
+	}
+	if len(out.Choices) > 0 && out.Choices[0].FinishReason == "content_filter" {
+		return "", out.Usage, false, fmt.Errorf("%s: provider filtered the reply", c.cfg.Name)
 	}
 	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
 		return "", out.Usage, true, fmt.Errorf("%s: empty reply", c.cfg.Name)

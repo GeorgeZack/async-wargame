@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -78,6 +79,9 @@ func (s *Server) editText(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) start(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		if room.Wayward != nil && s.ai == nil {
+			return fmt.Errorf("%w: configure the AI API and model before starting Wayward", game.ErrBadRequest)
+		}
 		return room.StartOperation(me, s.store.Cat.Modules[room.ModuleID], time.Now())
 	})
 }

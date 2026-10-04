@@ -20,6 +20,7 @@ var ErrInvalid = errors.New("bad request")
 
 // Module is a versioned setting.
 type Module struct {
+	Engine    string     `json:"engine,omitempty"` // empty: wargame; wayward: exploration playtest
 	ID        string     `json:"id"`
 	Version   string     `json:"version"`
 	Name      string     `json:"name"`
@@ -53,12 +54,13 @@ type Side struct {
 
 // Class is a unit template: what a unit of this kind starts with.
 type Class struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Abbr   string `json:"abbr"`
-	Side   string `json:"side"`
-	Kind   string `json:"kind,omitempty"`   // "group" (strength is a headcount) or a single "special", "monster", "nest", "vehicle"
-	Symbol string `json:"symbol,omitempty"` // counter art
+	Character *WaywardCharacter `json:"character,omitempty"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Abbr      string            `json:"abbr"`
+	Side      string            `json:"side"`
+	Kind      string            `json:"kind,omitempty"`   // "group" (strength is a headcount) or a single "special", "monster", "nest", "vehicle"
+	Symbol    string            `json:"symbol,omitempty"` // counter art
 	// Strength is the usual headcount for a new unit of this kind.
 	Strength int `json:"strength,omitempty"`
 	// Quality is how good a unit of this kind is, as a bonus to its rolls:
@@ -155,6 +157,9 @@ func (m *Module) HasTerrain(id string) bool {
 
 // Index builds lookups and validates the module.
 func (m *Module) Index() error {
+	if m.Engine != "" && m.Engine != "wayward" {
+		return fmt.Errorf("unknown rules engine %q", m.Engine)
+	}
 	m.terrainByCode = map[byte]*Terrain{}
 	for i := range m.Terrain {
 		t := &m.Terrain[i]
@@ -175,6 +180,16 @@ func (m *Module) Index() error {
 		}
 		if cl.Quality < -5 || cl.Quality > 10 {
 			return fmt.Errorf("class %q: quality must be -5 to 10", cl.ID)
+		}
+		if m.Engine == "wayward" {
+			if cl.Character == nil || cl.Strength != 1 || cl.IsGroup() || !m.sideByID[cl.Side].Playable || m.sideByID[cl.Side].Enemy {
+				return fmt.Errorf("Wayward requires individual characters")
+			}
+			if err := cl.Character.Validate(); err != nil {
+				return err
+			}
+		} else if cl.Character != nil {
+			return fmt.Errorf("Wayward character sheets require the Wayward engine")
 		}
 		m.classByID[cl.ID] = cl
 	}

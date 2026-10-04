@@ -1,0 +1,233 @@
+{
+  "id": "border-war",
+  "version": "1.0.0",
+  "name": "Border War",
+  "intro": "Gunpowder infantry in a fictional border conflict. Muskets, bayonets, scouts, smoke and messengers; no radios, aircraft, modern weapons or magic. A volley, reload and short reposition can fit one turn; sustained sprinting and accurate fire cannot. Units are detachments, not individual characters. Cohesion and cover matter more than killing every opponent.",
+  "factors": [
+    {
+      "name": "Veteran",
+      "value": 1
+    },
+    {
+      "name": "Ambush or surprise",
+      "value": 3
+    },
+    {
+      "name": "Good cover",
+      "value": 2
+    },
+    {
+      "name": "Flanking",
+      "value": 2
+    },
+    {
+      "name": "A good plan",
+      "value": 1
+    },
+    {
+      "name": "Superior numbers",
+      "value": 2
+    },
+    {
+      "name": "Height",
+      "value": 1
+    },
+    {
+      "name": "Rushed",
+      "value": -1
+    },
+    {
+      "name": "Night or smoke",
+      "value": -1
+    },
+    {
+      "name": "Rain",
+      "value": -1
+    },
+    {
+      "name": "Alone and surrounded",
+      "value": -2
+    }
+  ],
+  "sides": [
+    {
+      "id": "allies",
+      "name": "Border Guard",
+      "playable": true
+    },
+    {
+      "id": "raiders",
+      "name": "Raiding force",
+      "enemy": true
+    }
+  ],
+  "classes": [
+    {
+      "id": "line",
+      "name": "Line detachment",
+      "abbr": "LIN",
+      "side": "allies",
+      "strength": 12,
+      "quality": 2,
+      "symbol": "infantry",
+      "speed": 2,
+      "run": 6,
+      "description": "Twelve trained infantry. Strong when steady and mutually supporting; slow in dense woods.",
+      "kit": "Muskets, bayonets, cartridge pouches, signal flag. No artillery."
+    },
+    {
+      "id": "scouts",
+      "name": "Scout detachment",
+      "abbr": "SCT",
+      "side": "allies",
+      "strength": 8,
+      "quality": 1,
+      "symbol": "infantry",
+      "speed": 3,
+      "run": 8,
+      "description": "Eight light infantry. Good at observation, dispersed movement and flanking; vulnerable to a formed assault.",
+      "kit": "Light muskets, blades, field glasses, whistles."
+    },
+    {
+      "id": "raiders",
+      "name": "Raider band",
+      "abbr": "RAI",
+      "side": "raiders",
+      "strength": 10,
+      "quality": 0,
+      "symbol": "infantry",
+      "speed": 3,
+      "run": 7,
+      "description": "Irregular infantry intent on seizing the road. Seek exposed flanks; fall back when badly outmatched.",
+      "kit": "Mixed muskets, blades, no armor.",
+      "contact": {
+        "abbr": "?",
+        "label": "Armed movement"
+      }
+    }
+  ],
+  "terrain": [
+    {
+      "code": "~",
+      "id": "sea",
+      "name": "Open water",
+      "water": true,
+      "note": "Dropships may hover here. Impassable to ground units."
+    },
+    {
+      "code": "=",
+      "id": "river",
+      "name": "Wide water",
+      "water": true,
+      "note": "Lakes and wide rivers. Impassable to ground units."
+    },
+    {
+      "code": "b",
+      "id": "beach",
+      "name": "Beach",
+      "note": "Embarkation point when adjacent to open water."
+    },
+    {
+      "code": ".",
+      "id": "open",
+      "name": "Open ground"
+    },
+    {
+      "code": "u",
+      "id": "urban",
+      "name": "Urban"
+    },
+    {
+      "code": "U",
+      "id": "dense",
+      "name": "Dense urban",
+      "note": "Short sight lines. Contacts are hard to detect."
+    },
+    {
+      "code": "i",
+      "id": "industrial",
+      "name": "Industrial"
+    },
+    {
+      "code": "f",
+      "id": "forest",
+      "name": "Woods"
+    },
+    {
+      "code": "h",
+      "id": "hills",
+      "name": "Hills",
+      "note": "Elevated. Good for observation and comms relays."
+    },
+    {
+      "code": "m",
+      "id": "marsh",
+      "name": "Marsh"
+    }
+  ],
+  "edges": [
+    {
+      "id": "river",
+      "name": "River",
+      "blocks": true,
+      "crossings": [
+        "bridge",
+        "ford"
+      ],
+      "note": "Runs along hex sides. Ground units cross only at a bridge or ford."
+    },
+    {
+      "id": "stream",
+      "name": "Stream",
+      "crossings": [
+        "bridge",
+        "ford"
+      ],
+      "note": "Crossable anywhere at extra cost."
+    },
+    {
+      "id": "ridge",
+      "name": "Ridge",
+      "blocks": true,
+      "crossings": [
+        "pass"
+      ],
+      "note": "Steep high ground. Ground units cross only at a pass."
+    },
+    {
+      "id": "cliff",
+      "name": "Cliff",
+      "blocks": true,
+      "crossings": [],
+      "note": "Impassable to ground units."
+    },
+    {
+      "id": "wall",
+      "name": "Wall or barricade",
+      "blocks": true,
+      "crossings": [
+        "gate"
+      ],
+      "note": "Built obstacle. Engineers can breach it."
+    }
+  ],
+  "crossings": [
+    {
+      "id": "bridge",
+      "name": "Bridge"
+    },
+    {
+      "id": "ford",
+      "name": "Ford"
+    },
+    {
+      "id": "pass",
+      "name": "Pass"
+    },
+    {
+      "id": "gate",
+      "name": "Gate"
+    }
+  ],
+  "events": []
+}

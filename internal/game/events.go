@@ -483,6 +483,9 @@ func (r *Room) proposal(actor *Member, id string) (*GameEvent, error) {
 // ApplyEvent makes a proposal canonical. Effects whose targets have changed
 // since the roll (a unit moved or is gone) are skipped and noted.
 func (r *Room) ApplyEvent(actor *Member, mod *Module, id string) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	ev, err := r.proposal(actor, id)
 	if err != nil {
 		return err
@@ -564,6 +567,9 @@ func (r *Room) DiscardEvent(actor *Member, id string) error {
 }
 
 func (r *Room) SetThreat(actor *Member, delta int) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}

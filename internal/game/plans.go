@@ -26,8 +26,16 @@ func (r *Room) PlansFor(me *Member) []*Plan {
 }
 
 func (r *Room) PlanUnits(actor *Member, mod *Module, moves []UnitMove, now time.Time) error {
+	if r.MissionComplete() {
+		return bad("the mission is complete")
+	}
 	if actor.Status != StatusApproved || (actor.Role != RoleReferee && r.Phase != PhasePlanning) {
 		return ErrForbidden
+	}
+	if actor.Role != RoleReferee {
+		if err := r.ordersOpen(now); err != nil {
+			return err
+		}
 	}
 	if len(moves) == 0 || len(moves) > 200 {
 		return bad("plan 1 to 200 units at a time")

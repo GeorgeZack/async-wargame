@@ -244,7 +244,7 @@ func (r *Room) Due(now time.Time) bool {
 	}
 	switch r.Phase {
 	case PhasePlanning:
-		return !r.Deadline.IsZero() && !now.Before(r.Deadline) || r.reminderDue(now)
+		return r.waywardReady() || !r.Deadline.IsZero() && !now.Before(r.Deadline) || r.reminderDue(now)
 	}
 	return false
 }
@@ -254,7 +254,7 @@ func (r *Room) Due(now time.Time) bool {
 func (r *Room) Tick(mod *Module, now time.Time) {
 	switch {
 	case !r.Due(now):
-	case r.Phase == PhasePlanning && r.reminderDue(now) && now.Before(r.Deadline):
+	case r.Phase == PhasePlanning && !r.waywardReady() && r.reminderDue(now) && now.Before(r.Deadline):
 		r.remind()
 	case r.Phase == PhasePlanning:
 		r.lock(mod, now)

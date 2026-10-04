@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -96,5 +97,84 @@ func TestInstructionsJoinEveryPrompt(t *testing.T) {
 	c.Complete(context.Background(), "You are Jev.", "hi", 50)
 	if got != "You are Jev." {
 		t.Errorf("without instructions: %q", got)
+	}
+}
+
+func TestTruncatedRepliesNeverPublishAndKeepUsage(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Write([]byte(`{"choices":[{"message":{"content":"The squad moved to the"},"finish_reason":"length"}],"usage":{"prompt_tokens":100,"completion_tokens":10}}`))
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL, Model: "test", Name: "test"})
+	text, usage, err := c.Complete(context.Background(), "s", "u", 10)
+	if err == nil || text != "" || usage.Prompt != 100 || usage.Completion != 10 || calls != 1 {
+		t.Fatalf("truncation not rejected: %q %+v %v %d", text, usage, err, calls)
+	}
+}
+func TestRetryUsageIsAccumulated(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		reply := ""
+		if calls == 2 {
+			reply = "Done."
+		}
+		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": reply}}}, "usage": Usage{Prompt: 10, Completion: 5}})
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL, Model: "test", Name: "test"})
+	c.backoff = time.Millisecond
+	_, usage, err := c.Complete(context.Background(), "s", "u", 10)
+	if err != nil || calls != 2 || usage.Prompt != 20 || usage.Completion != 10 {
+		t.Fatalf("lost failed attempt's usage: %+v %v", usage, err)
+	}
+}
+
+func TestOptionalReasoningEffort(t *testing.T) {
+	got := map[string]any{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&got)
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+	for _, effort := range []string{"", "low"} {
+		got = map[string]any{}
+		c := New(Config{BaseURL: srv.URL, Model: "test", ReasoningEffort: effort})
+		if _, _, err := c.Complete(context.Background(), "s", "u", 100); err != nil {
+			t.Fatal(err)
+		}
+		value, has := got["reasoning_effort"]
+		if effort == "" && has || effort != "" && value != effort {
+			t.Fatalf("effort %q sent %v", effort, got)
+		}
+	}
+}
+
+type captureTransport func(*http.Request) (*http.Response, error)
+
+func (f captureTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestOpenRouterReasoningWireFormat(t *testing.T) {
+	for _, effort := range []string{"", "low", "none"} {
+		c := New(Config{BaseURL: "https://openrouter.ai/api/v1", Model: "test", ReasoningEffort: effort})
+		c.http.Transport = captureTransport(func(r *http.Request) (*http.Response, error) {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := body["reasoning_effort"]; ok {
+				t.Fatal("OpenRouter needs the reasoning object")
+			}
+			reasoning, present := body["reasoning"].(map[string]any)
+			if effort == "" && present || effort == "low" && reasoning["effort"] != "low" || effort == "none" && reasoning["enabled"] != false {
+				t.Fatalf("effort %s: %v", effort, body)
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}]}`)), Header: make(http.Header)}, nil
+		})
+		if _, _, err := c.Complete(context.Background(), "s", "u", 100); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

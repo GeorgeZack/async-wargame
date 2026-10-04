@@ -13,25 +13,29 @@ import (
 // View is everything one member may see of a room. Building it is where
 // hidden-state filtering happens: nothing outside a View reaches a browser.
 type View struct {
-	ImageAI      ImageAIView // referee-only image service details
-	BriefingArt  VignetteView
-	Code         string
-	CodeDisplay  string
-	Name         string
-	ScenarioName string
-	Summary      string
-	Objectives   []string
-	Briefing     []string
-	RefereeNotes string
-	ModuleName   string
-	ModuleVer    string
-	ScaleText    string // "1 hex = 50 m · 1 turn = 10 minutes"
-	Board        Board
-	MyCards      []*UnitCard // a player's own characters, with their briefs
-	Turn         int
-	Operation    int
-	Phase        Phase
-	Version      int64
+	Wayward             bool
+	Discoveries         []string
+	AdjudicationStopped bool // public status only; model details remain referee-only
+	Mission             *MissionState
+	ImageAI             ImageAIView // referee-only image service details
+	BriefingArt         VignetteView
+	Code                string
+	CodeDisplay         string
+	Name                string
+	ScenarioName        string
+	Summary             string
+	Objectives          []string
+	Briefing            []string
+	RefereeNotes        string
+	ModuleName          string
+	ModuleVer           string
+	ScaleText           string // "1 hex = 50 m · 1 turn = 10 minutes"
+	Board               Board
+	MyCards             []*UnitCard // a player's own characters, with their briefs
+	Turn                int
+	Operation           int
+	Phase               Phase
+	Version             int64
 
 	Base       string // URL prefix for this seat: /r/CODE or /r/CODE/k/KEY
 	AccessLink string // absolute link that opens this seat on another device or tab
@@ -169,6 +173,7 @@ type ForceGroup struct {
 }
 
 type UnitView struct {
+	Destroyed    bool     `json:"destroyed,omitempty"`
 	Formation    string   `json:"formation,omitempty"`
 	Detached     bool     `json:"detached,omitempty"`
 	Members      []string `json:"members,omitempty"`
@@ -214,10 +219,11 @@ type FeatureView struct {
 
 // BuildView filters a room for the given member.
 func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
+	r = r.forViewer(me)
 	ref := me.Role == RoleReferee
 	v := &View{
 		Code: r.Code, CodeDisplay: DisplayCode(r.Code), Name: r.Name,
-		ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing, Objectives: r.Objectives,
+		Wayward: r.Wayward != nil, Discoveries: r.waywardDiscoveryText(), Mission: r.Mission, ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing, Objectives: r.Objectives,
 		ModuleName: mod.Name, ModuleVer: r.ModuleVersion, ScaleText: r.Board.ScaleText(), Board: r.Board,
 		Turn: r.Turn, Operation: max(r.Operation, 1), Phase: r.Phase, Version: r.Version, IsReferee: ref,
 		Me: memberView(r, me, me),
@@ -291,7 +297,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 			uv.X, uv.Y, uv.Stale, uv.SeenTurn = at.X, at.Y, true, u.LastContact
 			uv.Where = r.Where(at, ref)
 		}
-		if side.Playable {
+		if side.Playable && !uv.Destroyed {
 			uv.Radio, uv.RadioText = "up", r.radioText(u)
 			if u.OutOfContact {
 				uv.Radio = "down"
@@ -328,6 +334,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	}
 
 	v.Clock = buildClock(r)
+	v.AdjudicationStopped = r.AutomaticStopped()
 	v.Map, v.Legend, v.Data = buildMap(r, mod, me, visible)
 	v.Data.Plans = r.PlansFor(me)
 	addOrders(v, r, mod, me)
@@ -374,6 +381,18 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	return v
 }
 
+// Use the locked unit state for every player-facing projection, not just map
+// counters. Order slots, formation membership and roster labels must not reveal
+// intermediate referee edits before publication either.
+func (r *Room) forViewer(me *Member) *Room {
+	if me.Role != RoleReferee && r.Phase == PhaseResolving && r.LockedUnits != nil {
+		view := *r
+		view.Units = r.LockedUnits
+		return &view
+	}
+	return r
+}
+
 func memberView(r *Room, m, me *Member) MemberView {
 	mv := MemberView{ID: m.ID, Name: m.Name, Role: m.Role, Status: m.Status, RequestedAt: m.RequestedAt, IsMe: m.ID == me.ID,
 		ReportsTo: m.ReportsTo, Test: m.TestKey != ""}
@@ -409,16 +428,16 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 	uv := UnitView{
 		ID: u.ID, Name: u.Name, ClassName: cl.Name, Abbr: cl.Abbr, Side: u.Side, Role: sideRole(side), Kind: kind, Symbol: cl.Symbol,
 		X: u.X, Y: u.Y, Where: r.Where(u.Pos(), ref), AssignedTo: u.AssignedTo, Hidden: ref && !u.Known && !side.Playable, Status: u.Status,
-		Description: cl.Description,
+		Description: cl.Description, Destroyed: u.Destroyed(),
 	}
-	headcount := func(noun string) string {
+	headcount := func() string {
 		if !cl.IsGroup() && u.Strength <= 1 {
 			if u.Strength <= 0 {
 				return "down"
 			}
 			return ""
 		}
-		return plural(u.Strength, noun, noun+"s")
+		return fmt.Sprintf("%d remaining", u.Strength)
 	}
 	switch {
 	case side.Playable || ref || u.Identified:
@@ -426,14 +445,7 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 			uv.Formation, uv.Detached = u.Formation, u.Detached
 		}
 		uv.Bonus, uv.Kit = bonusText(mod, u), KitOf(mod, u)
-		switch {
-		case side.Playable && kind == "soldier":
-			uv.Strength = headcount("marine")
-		case side.Enemy:
-			uv.Strength = headcount("infected")
-		default:
-			uv.Strength = headcount("person")
-		}
+		uv.Strength = headcount()
 		if cl.IsGroup() {
 			uv.Factors = fmt.Sprint(u.Strength)
 		}
@@ -455,6 +467,14 @@ func unitView(r *Room, u *Unit, mod *Module, me *Member) UnitView {
 		if cl.IsGroup() {
 			uv.Strength = estimate(u.Strength)
 		}
+	}
+	if uv.Destroyed {
+		uv.Strength = "Destroyed"
+		uv.Factors = "0"
+	}
+	if u.OutOfContact && me.Role != RoleReferee && u.AssignedTo != me.ID {
+		uv.Destroyed = false // no new casualty intelligence through a stale contact
+		uv.Strength, uv.Status, uv.Factors = "Last contact", "", ""
 	}
 	return uv
 }
@@ -480,9 +500,24 @@ func stackRank(u UnitView) int {
 }
 
 func nextAction(v *View) string {
+	if v.Phase == PhasePlanning && !v.Clock.Deadline.IsZero() && !time.Now().Before(v.Clock.Deadline) {
+		return "The deadline has passed. Orders are closed; the referee will resolve this turn."
+	}
+	if v.Phase == PhaseComplete {
+		return "Mission " + v.Mission.Status + ". Review the final situation report and objective results."
+	}
 	if v.Phase == PhaseResolving {
 		if !v.IsReferee {
+			if v.AdjudicationStopped {
+				return "Adjudication needs the referee's attention. Your orders are locked; no partial result has been published."
+			}
 			return fmt.Sprintf("Turn %d is locked. The referee is working out what happens; the report will appear under Situation.", v.Turn)
+		}
+		if v.AI.Automatic {
+			if v.AI.AutoStopped {
+				return fmt.Sprintf("AI adjudication of turn %d stopped. Retry or take over on the Desk.", v.Turn)
+			}
+			return fmt.Sprintf("The AI referee is adjudicating turn %d and will publish when finished. Pause it on the Desk to take over.", v.Turn)
 		}
 		if v.Desk != nil && v.Desk.Unwritten > 0 {
 			return fmt.Sprintf("Turn %d is locked. Work through %s on the Desk: roll where it's in doubt, write what happened, then publish.",
@@ -502,7 +537,7 @@ func nextAction(v *View) string {
 			}
 		}
 		if done < reachable {
-			return fmt.Sprintf("Say what your marine does: %d of %d orders committed. Orders lock %s.", done, reachable, v.Clock.DeadlineText)
+			return fmt.Sprintf("Give your units orders: %d of %d orders committed. Orders lock %s.", done, reachable, v.Clock.DeadlineText)
 		}
 		return fmt.Sprintf("Your orders are in. You can change them until %s.", v.Clock.DeadlineText)
 	}
@@ -529,13 +564,13 @@ func nextAction(v *View) string {
 			return fmt.Sprintf("Turn %d: %d of %d orders committed. Orders lock %s.",
 				v.Turn, v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Clock.DeadlineText)
 		case unassigned > 0:
-			return fmt.Sprintf("Hand out the marines: %s still held by the referee.", plural(unassigned, "unit is", "units are"))
+			return fmt.Sprintf("Assign the units: %s still held by the referee.", plural(unassigned, "unit is", "units are"))
 		default:
-			return "Everyone has a marine. Check the map, scale, and briefs on Setup, then start the operation."
+			return "Everyone has a unit. Check the map, scale, and briefs on Setup, then start the operation."
 		}
 	}
 	if len(v.MyUnits) == 0 && !v.IsCommander {
-		return "Waiting for the referee to give you a marine. Read the briefing and the map while you wait."
+		return "Waiting for the referee to assign you a unit. Read the briefing and the map while you wait."
 	}
 	if v.Phase == PhaseSetup {
 		return "Orders open when the operation starts. Read your character and private brief, and propose anything you'd like to be true."

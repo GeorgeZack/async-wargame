@@ -18,10 +18,10 @@ import (
 // adequate for a few small private campaigns; swap in a database once turn
 // history and analysis records grow.
 type Store struct {
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	path  string
 	rooms map[string]*Room
-	subs  map[string]map[chan int64]struct{}
+	subs  map[string]map[chan int64]string
 	Cat   *Catalog
 	// Deliver, if set, receives the notifications an update raised, after
 	// the update is saved and the store is unlocked.
@@ -33,7 +33,7 @@ type Store struct {
 }
 
 func OpenStore(path string, cat *Catalog) (*Store, error) {
-	s := &Store{path: path, rooms: map[string]*Room{}, subs: map[string]map[chan int64]struct{}{}, Cat: cat}
+	s := &Store{path: path, rooms: map[string]*Room{}, subs: map[string]map[chan int64]string{}, Cat: cat}
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
@@ -146,8 +146,8 @@ func (s *Store) Create(name, scenarioID, refName, tokenHash string) (string, err
 
 // Read calls fn with the room under lock. fn must not retain the room.
 func (s *Store) Read(code string, fn func(*Room)) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	r := s.rooms[code]
 	if r == nil {
 		return ErrNotFound
@@ -158,8 +158,8 @@ func (s *Store) Read(code string, fn func(*Room)) error {
 
 // Codes lists the rooms.
 func (s *Store) Codes() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	out := make([]string, 0, len(s.rooms))
 	for code := range s.rooms {
 		out = append(out, code)
@@ -186,6 +186,16 @@ func (s *Store) Touch(code string, fn func(*Room) bool) error {
 // Update applies fn to a copy of the room. If fn succeeds the copy becomes
 // canonical, is saved, and subscribers are notified; otherwise nothing changes.
 func (s *Store) Update(code string, fn func(*Room) error) error {
+	return s.update(code, false, fn)
+}
+
+// UpdateAssistant is for the model worker's private bookkeeping/proposals. Its
+// publication changes phase/turn and wakes everyone; intermediate work only
+// wakes referees and internal watchers, avoiding 100 identical page refreshes.
+func (s *Store) UpdateAssistant(code string, fn func(*Room) error) error {
+	return s.update(code, true, fn)
+}
+func (s *Store) update(code string, assistant bool, fn func(*Room) error) error {
 	var notices []Notice
 	defer func() { // runs after the unlock below
 		if len(notices) > 0 && s.Deliver != nil {
@@ -215,12 +225,9 @@ func (s *Store) Update(code string, fn func(*Room) error) error {
 		return err
 	}
 	notices, r.Outbox = r.Outbox, nil
-	for ch := range s.subs[code] {
-		select {
-		case ch <- r.Version:
-		default: // subscriber is behind; it will catch up on the next send
-		}
-	}
+	private := assistant && orig.Phase == r.Phase && orig.Turn == r.Turn && orig.Operation == r.Operation && orig.AutomaticStopped() == r.AutomaticStopped()
+	s.notifyLocked(code, r, private)
+
 	return nil
 }
 
@@ -235,12 +242,16 @@ func cloneRoom(r *Room) (*Room, error) {
 
 // Subscribe returns a channel that receives the room version after each change.
 func (s *Store) Subscribe(code string) (<-chan int64, func()) {
+	return s.SubscribeMember(code, "")
+}
+
+func (s *Store) SubscribeMember(code, memberID string) (<-chan int64, func()) {
 	ch := make(chan int64, 1)
 	s.mu.Lock()
 	if s.subs[code] == nil {
-		s.subs[code] = map[chan int64]struct{}{}
+		s.subs[code] = map[chan int64]string{}
 	}
-	s.subs[code][ch] = struct{}{}
+	s.subs[code][ch] = memberID
 	s.mu.Unlock()
 	return ch, func() {
 		s.mu.Lock()
@@ -325,3 +336,18 @@ func (s *Store) Delete(code string, check func(*Room) error) error {
 
 // MapDir is where uploaded map images are kept: next to the state file.
 func (s *Store) MapDir() string { return filepath.Join(filepath.Dir(s.path), "maps") }
+
+func (s *Store) notifyLocked(code string, r *Room, private bool) {
+	for ch, memberID := range s.subs[code] {
+		if private && memberID != "" {
+			m := r.memberOrNil(memberID)
+			if m == nil || m.Role != RoleReferee {
+				continue
+			}
+		}
+		select {
+		case ch <- r.Version:
+		default:
+		}
+	}
+}

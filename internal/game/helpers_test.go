@@ -50,7 +50,7 @@ func startedRoom(t *testing.T, now time.Time) (*Room, *Module, *Member) {
 // orderRoom is a started St. Ines room: Apone commands, Hicks reports to
 // him and holds Reyes (m1), Vasquez holds Okafor (m2).
 func orderRoom(t *testing.T) (*Room, *Module, *Member, *Member, *Member) {
-	r, mod, ref := startedRoom(t, central(t, "2026-09-30 12:00"))
+	r, mod, ref := startedRoom(t, time.Now())
 	cmd := &Member{ID: "c", Name: "Apone", Role: RoleCommander, Status: StatusApproved}
 	hicks := &Member{ID: "h", Name: "Hicks", Role: RolePlayer, Status: StatusApproved, ReportsTo: "c"}
 	vasq := &Member{ID: "v", Name: "Vasquez", Role: RolePlayer, Status: StatusApproved}

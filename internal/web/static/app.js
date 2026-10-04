@@ -277,7 +277,7 @@
         const u = mapData()?.units?.find((u) => u.id === m?.dataset.unit);
         return m && (mapData()?.referee || (u?.mine && mapData()?.orders?.open)) ? m : null;
       }
-      if (main()?.dataset.referee !== "1" && !editor.active) return null;
+      if (main()?.dataset.phase === "complete" || (main()?.dataset.referee !== "1" && !editor.active)) return null;
       if (editor.active && editor.tool !== "inspect") return null;
       const m = target.closest?.("[data-unit], [data-place]");
       if (!m || (m.dataset.place != null && !editor.active)) return null;
@@ -416,7 +416,7 @@
 
     // --- selecting several counters (the referee) ---
 
-    canGroup() { return !planning.on && (main()?.dataset.referee === "1" || editor.active); },
+    canGroup() { return main()?.dataset.phase !== "complete" && !planning.on && (main()?.dataset.referee === "1" || editor.active); },
 
     paintGroup() {
       this.svg?.querySelectorAll("[data-unit]").forEach((m) => m.classList.toggle("picked", this.group.has(m.dataset.unit)));
@@ -725,13 +725,14 @@
     const u = data.units?.find((x) => x.id === id);
     if (!u) { box.replaceChildren(el("p", { class: "muted small" }, "Not on the map any more.")); return; }
     const orderID = data.orders?.units?.find((x) => x.id === u.id || u.members?.includes(x.id))?.id;
-    const canOrder = data.orders?.open && orderID;
-    const ref = data.referee;
+    const canOrder = !u.destroyed && data.orders?.open && orderID;
+    const ref = data.referee && main()?.dataset.phase !== "complete";
     box.replaceChildren(...[
       el("div", {}, el("span", { class: `abbr side-${u.side}`, "aria-hidden": "true" }, u.abbr),
         el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
         u.mine ? " (yours)" : "", u.hidden ? " (hidden from players)" : "", u.stale ? " (where they last called in)" : ""),
       el("div", { class: "muted small" }, [u.class, u.strength, u.where, u.commander].filter(Boolean).join(" · ")),
+      u.destroyed ? el("div", { class: "small destroyed-status" }, "Destroyed · out of action") : null,
       u.status ? el("div", { class: "small unit-status" }, u.status) : null,
       ref ? el("p", { class: "muted small" }, main()?.dataset.phase === "resolving" ? "Drag to stage its final position. Publishing applies the move." : "Drag it to move it.") : null,
       el("div", { class: "row tight" },
@@ -740,9 +741,9 @@
         el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "small", "data-card": "" }, "Open card"))].filter(Boolean));
     const ms = u.members ? data.units.filter((m) => !m.members && m.formation === u.formation) : u.formation ? [u] : [];
     for (const m of ms) {
-      const row = el("p", { class: "small" }, [m.name, m.class, m.commander, m.status, m.detached ? "split off" : m.stale ? "last known position" : "together"].filter(Boolean).join(" · "));
+      const row = el("p", { class: "small" }, [m.name, m.class, m.commander, m.destroyed ? "destroyed" : m.status, m.destroyed ? "out of action" : m.detached ? "split off" : m.stale ? "last known position" : "together"].filter(Boolean).join(" · "));
       box.append(row);
-      if (ref) {
+      if (ref && !m.destroyed) {
         const form = el("form", { method: "post", action: `${main().dataset.base}/units/${m.id}/${m.detached ? "rejoin" : "split"}`, "data-enhance": "" },
           el("button", { type: "submit", class: "secondary small-btn" }, m.detached ? `Rejoin ${m.name}` : `Split off ${m.name}`));
         box.append(form);
@@ -1223,6 +1224,23 @@
   }
 
   let refreshing = null;
+  let liveTimer = null, liveDirty = false;
+
+  // A burst of 100 orders should not make every browser fetch 100 pages.
+  // Coalesce updates, stagger clients, and catch hidden tabs up when reopened.
+  function scheduleRefresh() {
+    liveDirty = true;
+    if (document.hidden || liveTimer !== null) return;
+    liveTimer = setTimeout(() => {
+      liveTimer = null;
+      if (document.hidden) return;
+      liveDirty = false;
+      refresh();
+    }, 700 + Math.random() * 600);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && liveDirty) scheduleRefresh();
+  });
 
   async function refresh() {
     if (refreshing) { refreshing.again = true; return; }
@@ -1261,7 +1279,7 @@
     } finally {
       const again = refreshing.again;
       refreshing = null;
-      if (again) refresh();
+      if (again) scheduleRefresh();
     }
   }
 
@@ -1273,7 +1291,7 @@
     const setLive = (text, cls) => { if (dot) { dot.textContent = text; dot.className = "sb-live " + cls; } };
     es.addEventListener("open", () => setLive("live", "on"));
     es.addEventListener("error", () => setLive("reconnecting…", "off"));
-    const onVersion = (e) => { if (String(e.data) !== m.dataset.version) refresh(); };
+    const onVersion = (e) => { if (String(e.data) !== m.dataset.version) scheduleRefresh(); };
     es.addEventListener("update", onVersion);
     // On reconnect the server says hello with its current version; catch up if we missed changes.
     es.addEventListener("hello", onVersion);

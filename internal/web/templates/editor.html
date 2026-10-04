@@ -147,7 +147,7 @@
         <label>Campaign name <input name="campaign" value="{{.Name}}" maxlength="32" required></label>
         <label>Player briefing <span class="muted small">Blank lines separate paragraphs.</span>
           <textarea name="briefing" rows="9">{{.BriefingText}}</textarea></label>
-        <label>Objectives <span class="muted small">One per line; shown below the briefing.</span><textarea name="objectives" rows="4">{{.ObjectivesText}}</textarea></label>
+        {{if .Mission}}{{template "objectives" .}}<p class="small muted">These scenario objectives are fixed and checked automatically at publication.</p>{{else}}<label>Objectives <span class="muted small">One per line; shown below the briefing.</span><textarea name="objectives" rows="4">{{.ObjectivesText}}</textarea></label>{{end}}
         <label>Referee notes <span class="muted small">Only you see these.</span>
           <textarea name="notes" rows="5">{{.RefereeNotes}}</textarea></label>
         <button type="submit">Save texts</button>

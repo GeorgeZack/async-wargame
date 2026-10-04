@@ -59,7 +59,7 @@ type OrderUnit struct {
 
 func (r *Room) orderView(o *Order, editable bool) OrderView {
 	ov := OrderView{Group: o.Group, Members: r.orderMemberNames(o), ID: o.ID, UnitID: o.Unit, Text: o.Text, Status: o.Status, Version: o.Version, UpdatedAt: o.UpdatedAt,
-		Editable: editable && r.Phase == PhasePlanning, Review: o.Review, ReviewNote: o.ReviewNote, ReviewedBy: o.ReviewedBy}
+		Editable: editable && r.ordersOpen(time.Now()) == nil, Review: o.Review, ReviewNote: o.ReviewNote, ReviewedBy: o.ReviewedBy}
 	if u := r.Unit(o.Unit); u != nil {
 		ov.UnitName = r.orderName(o)
 	}
@@ -75,14 +75,14 @@ func (r *Room) orderView(o *Order, editable bool) OrderView {
 
 // addOrders fills the order panels and the map's order marks.
 func addOrders(v *View, r *Room, mod *Module, me *Member) {
-	v.Data.Orders = OrderData{Open: r.Phase == PhasePlanning, Orders: map[string]OrderView{}}
-	if r.Phase == PhaseSetup {
+	v.Data.Orders = OrderData{Open: r.ordersOpen(time.Now()) == nil, Orders: map[string]OrderView{}}
+	if r.Phase == PhaseSetup || r.Phase == PhaseComplete {
 		return
 	}
 	if me.Role == RoleReferee && r.Phase == PhasePlanning {
 		for _, u := range r.Units {
 			h := r.memberOrNil(u.AssignedTo)
-			if !mod.Side(u.Side).Playable || h == nil || h.Role == RoleReferee || h.Status != StatusApproved {
+			if u.Destroyed() || !mod.Side(u.Side).Playable || h == nil || h.Role == RoleReferee || h.Status != StatusApproved {
 				continue
 			}
 			c := CheckIn{Unit: unitView(r, u, mod, me), Holder: h.Name, Status: "none", Moved: r.MoveOf(u.ID)}
@@ -153,7 +153,7 @@ func addOrders(v *View, r *Room, mod *Module, me *Member) {
 		if !r.CanOrderSquad(mod, me, f.ID) {
 			continue
 		}
-		members := r.members(f.ID)
+		members := r.livingMembers(f.ID)
 		slot := SquadOrderSlot{ID: FormationToken(f.ID), Name: f.Name}
 		for _, u := range members {
 			slot.Members = append(slot.Members, u.Name)

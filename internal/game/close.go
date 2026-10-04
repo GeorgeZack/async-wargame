@@ -18,6 +18,9 @@ func (r *Room) Close(actor *Member, now time.Time) error {
 	if r.Closed {
 		return bad("the room is already closed")
 	}
+	r.Assistant.Automatic, r.Assistant.Decision = false, nil
+	r.Assistant.Batches = nil
+	r.cancelRuns(func(x *Run) bool { return x.Automatic() }, now)
 	r.Closed, r.ClosedAt = true, now.UTC()
 	r.logf(VisAll, "The referee closed the room. The operation has ended.")
 	return nil

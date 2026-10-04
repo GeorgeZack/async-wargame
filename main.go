@@ -26,6 +26,7 @@ import (
 	"asyncwargame/internal/game"
 	"asyncwargame/internal/imageai"
 	"asyncwargame/internal/imagework"
+	"asyncwargame/internal/playtest"
 	"asyncwargame/internal/push"
 	"asyncwargame/internal/web"
 )
@@ -35,6 +36,9 @@ func main() {
 	dataPath := flag.String("data", "data/campaigns.json", "campaign state file")
 	modsDir := flag.String("modules", "", "extra directory with modules/*.json and scenarios/*.json to load alongside the built-in ones")
 	aiFlag := flag.String("ai", "", `AI model for the referee assistant: "opencode" (OpenCode Go) or "opencode-zen" (key in AW_AI_KEY or OPENCODE_API_KEY), "ollama", "local" (runs llama-server with -ai-local-model), or an OpenAI-compatible base URL ending in /v1. Empty: no AI`)
+	aiRetries := flag.Int("ai-retries", 1, "automatic retries per failed unchanged referee stage (0–2); dice are preserved")
+	aiConcurrency := flag.Int("ai-concurrency", 1, "concurrent referee requests across rooms (1–16); each room stays sequential")
+	aiEffort := flag.String("ai-reasoning-effort", "", "optional reasoning effort supported by your provider/model: none, minimal, low, medium, high, xhigh or max; empty keeps its default")
 	aiModel := flag.String("ai-model", "", "model ID (default: glm-5.2 for opencode, big-pickle for opencode-zen, llama3.1 for ollama)")
 	aiLlama := flag.String("ai-llama-server", "llama-server", `llama.cpp server binary for -ai local`)
 	aiLocalModel := flag.String("ai-local-model", "", "GGUF model file for -ai local")
@@ -47,6 +51,17 @@ func main() {
 	imageResponseFormat := flag.String("image-response-format", "", "empty for provider default; b64_json for gateways that require it")
 	pushKey := flag.String("push-key", "", "VAPID key file for web push notifications (default: vapid.pem next to the -data file); created if missing")
 	noPush := flag.Bool("no-push", false, "turn web push notifications off")
+	playFrom := flag.String("playtest-from", "", "continue a finished single-game playtest in a NEW output directory; source is read-only")
+	playPlayers := flag.Int("playtest-players", 0, "generate a disposable load scenario with 1–100 player commands; 0 uses the scenario unchanged")
+	playConcurrency := flag.Int("playtest-concurrency", 4, "concurrent AI player requests (1–16); commander submits first")
+	playScenario := flag.String("playtest-scenario", "st-ines", "scenario ID for disposable AI games (st-ines, crossroads, or wayward-tollhouse)")
+	playDir := flag.String("playtest", "", "run AI players against the AI referee in a NEW output directory, then exit; never opens -data")
+	playGames := flag.Int("playtest-games", 2, "number of disposable AI games (1–50)")
+	playTurns := flag.Int("playtest-turns", 4, "maximum turns per AI game (1–50)")
+	playCalls := flag.Int("playtest-max-calls", 80, "maximum model completions across AI players and judge (HTTP retries may add requests)")
+	playCallLimit := flag.Duration("playtest-call-timeout", 2*time.Minute, "maximum wait for one AI playtest completion, including provider retries")
+	playLimit := flag.Duration("playtest-timeout", 20*time.Minute, "maximum wall time for the whole AI playtest")
+	playContact := flag.Bool("playtest-contact", true, "start every second AI game with a known enemy nearby to exercise combat")
 	proxy := flag.Bool("proxy", false, "running behind a reverse proxy or tunnel that terminates HTTPS (trusts X-Forwarded-Proto and X-Forwarded-For)")
 	flag.String("config", defaultConfig, "settings file: the flags above as name = value lines, plus ai-key, ai-key-file, image-key, image-key-file, host-password, and push-contact (see async-wargame.example.conf)")
 	configFile, err := loadConfig(flag.CommandLine, os.Args[1:])
@@ -65,6 +80,42 @@ func main() {
 	cat, err := game.LoadCatalog(sources...)
 	if err != nil {
 		log.Fatalf("loading modules and scenarios: %v", err)
+	}
+	if *aiRetries < 0 || *aiRetries > 2 {
+		log.Fatal("ai-retries must be 0–2")
+	}
+	if *aiConcurrency < 1 || *aiConcurrency > 16 {
+		log.Fatal("ai-concurrency must be 1–16")
+	}
+	if *playDir != "" {
+		if *aiFlag == "" || (*playLimit <= 0 || *playCallLimit <= 0) {
+			log.Fatal("playtest needs -ai and a positive timeout")
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		ctx, cancel := context.WithTimeout(ctx, *playLimit)
+		defer cancel()
+		instructions, err := aiInstructionText(*aiInstructions, *aiInstructionsFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions, *aiEffort)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if local != nil {
+			defer local.Stop()
+		}
+		summary, err := playtest.Run(ctx, cat, client, playtest.Config{From: *playFrom, Players: *playPlayers, Concurrency: *playConcurrency, CallTimeout: *playCallLimit, Scenario: *playScenario, Directory: *playDir, Games: *playGames, Turns: *playTurns, MaxCalls: *playCalls, Contact: *playContact})
+		log.Printf("playtest results: %s/summary.json (%d completions, %d tokens)", *playDir, summary.Calls, summary.Tokens)
+		if err != nil {
+			log.Printf("playtest found failures: %v", err)
+			if local != nil {
+				local.Stop()
+			}
+			os.Exit(1)
+		}
+		return
 	}
 	store, err := game.OpenStore(*dataPath, cat)
 	if err != nil {
@@ -107,7 +158,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("AI: %v", err)
 		}
-		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions)
+		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions, *aiEffort)
 		if err != nil {
 			log.Fatalf("AI: %v", err)
 		}
@@ -122,7 +173,7 @@ func main() {
 			}()
 		}
 		srv.SetAI(client)
-		go (&assist.Worker{Store: store, Client: client}).Run(ctx)
+		go (&assist.Worker{Store: store, Client: client, Concurrency: *aiConcurrency, Retries: *aiRetries}).Run(ctx)
 		log.Printf("AI assistant: %s via %s", client.Model(), client.Provider())
 		if in := client.Instructions(); in != "" {
 			log.Printf("AI instructions added to every prompt: %q", in)
@@ -160,12 +211,15 @@ func main() {
 }
 
 // startAI sets up the assistant's model from the -ai flags.
-func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int, instructions string) (*ai.Client, *ai.Local, error) {
+func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int, instructions, effort string) (*ai.Client, *ai.Local, error) {
 	key := os.Getenv("AW_AI_KEY")
 	if key == "" {
 		key = os.Getenv("OPENCODE_API_KEY") // what OpenCode's own tools use
 	}
-	cfg := ai.Config{BaseURL: which, Model: model, APIKey: key, Name: which, Instructions: instructions}
+	if !slices.Contains([]string{"", "none", "minimal", "low", "medium", "high", "xhigh", "max"}, effort) {
+		return nil, nil, fmt.Errorf("unknown ai-reasoning-effort %q", effort)
+	}
+	cfg := ai.Config{ReasoningEffort: effort, BaseURL: which, Model: model, APIKey: key, Name: which, Instructions: instructions}
 	var local *ai.Local
 	switch p, ok := ai.Presets[which]; {
 	case ok:

@@ -74,7 +74,7 @@
 </details>
 {{end}}
 
-{{define "counter"}}<g class="counter side-{{.Top.Side}} kind-{{.Top.Kind}}{{if .Top.Mine}} mine{{end}}{{if .Top.Hidden}} hidden{{end}}{{if .Top.Contact}} contact{{end}}{{if .Top.Stale}} stale{{end}}">
+{{define "counter"}}<g class="counter side-{{.Top.Side}} role-{{.Top.Role}} kind-{{.Top.Kind}}{{if .Top.Mine}} mine{{end}}{{if .Top.Hidden}} hidden{{end}}{{if .Top.Contact}} contact{{end}}{{if .Top.Stale}} stale{{end}}{{if .Top.Destroyed}} destroyed{{end}}">
         <title>{{.Label}}</title>
         {{if gt .Count 2}}<rect class="ctr-edge" x="-7" y="-7" width="18" height="18" rx="1"/>{{end}}
         {{if gt .Count 1}}<rect class="ctr-back" x="-8" y="-8" width="18" height="18" rx="1"/>{{end}}
@@ -84,9 +84,11 @@
         {{if .Top.Contact}}<text class="ctr-q" y="4.2">{{.Top.Abbr}}</text>
         {{else}}<text class="ctr-id" y="-5">{{.Top.Abbr}}</text>
         {{with .Top.Symbol}}<use href="#s-{{.}}" y="-.2"/>{{end}}
-        {{if .Pips}}{{range .Pips}}<circle class="formation-pip{{if .Detached}} detached{{end}}" cx="{{f1 .X}}" cy="6" r="1"/>{{end}}{{else}}<text class="ctr-f" y="7.6">{{.Top.Factors}}</text>{{end}}{{end}}
+        {{if .Pips}}{{range .Pips}}<circle class="formation-pip{{if .Detached}} detached{{end}}{{if .Destroyed}} destroyed{{end}}" cx="{{f1 .X}}" cy="6" r="1"/>{{if .Destroyed}}<path class="pip-loss" transform="translate({{f1 .X}} 6)" d="M-1.2 -1.2 1.2 1.2 M-1.2 1.2 1.2 -1.2"/>{{end}}{{end}}{{else}}<text class="ctr-f" y="7.6">{{.Top.Factors}}</text>{{end}}{{end}}
         {{if gt .Count 1}}<text class="ctr-n" x="7.6" y="-5.4">{{.Count}}</text>{{end}}
         {{with .Top.Radio}}<circle class="ctr-radio r-{{.}}" cx="-6.6" cy="-6.6" r="1.5"><title>{{$.Top.RadioText}}</title></circle>{{end}}
+        {{if .Top.Destroyed}}<path class="destroyed-cross" d="M-7 -7 7 7 M-7 7 7 -7"/><rect class="destroyed-band" x="-11" y="8.5" width="22" height="4"/><text class="destroyed-label" y="11.5">DESTROYED</text>{{end}}
+
       </g>{{end}}
 
 {{define "counter-defs"}}

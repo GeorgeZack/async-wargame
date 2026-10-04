@@ -20,6 +20,7 @@ type DeskView struct {
 }
 
 type DeskItem struct {
+	Wayward  []string
 	Order    OrderView
 	Unit     UnitView
 	Bonus    string // what this unit's rolls start from
@@ -62,7 +63,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 	dv := &DeskView{Factors: mod.Factors}
 	for _, s := range mod.Sides {
 		for _, u := range r.Units {
-			if u.Side == s.ID {
+			if u.Side == s.ID && !u.Destroyed() {
 				dv.Units = append(dv.Units, UnitOption{ID: u.ID, Name: u.Name, SideName: s.Name, Enemy: s.Enemy})
 			}
 		}
@@ -84,8 +85,13 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 		it.Moved = r.MoveOf(u.ID)
 		it.Reach, it.Wants = r.ReachText(mod, u), r.IntendedMove(mod, u, o)
 		for _, c := range d.Contests {
-			if c.Order == o.ID {
+			if r.contestInvolvesOrder(c, o.ID) {
 				it.Contests = append(it.Contests, contestView(c))
+			}
+		}
+		for _, a := range d.Wayward {
+			if a.Order == o.ID {
+				it.Wayward = append(it.Wayward, a.Text())
 			}
 		}
 		if it.Outcome == nil || it.Outcome.Text == "" {
@@ -109,7 +115,7 @@ func buildDesk(r *Room, mod *Module, me *Member, ai AIView) *DeskView {
 		}
 	}
 	for _, u := range r.Units {
-		if mod.Side(u.Side).Playable && !ordered[u.ID] && r.memberOrNil(u.AssignedTo) != nil {
+		if !u.Destroyed() && mod.Side(u.Side).Playable && !ordered[u.ID] && r.memberOrNil(u.AssignedTo) != nil {
 			dv.Missing = append(dv.Missing, u.Name)
 		}
 	}

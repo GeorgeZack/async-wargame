@@ -33,6 +33,8 @@ type Correction struct {
 // gameState is the part of a room a correction rolls back: pointers into
 // the room, so the same value both saves and restores it.
 type gameState struct {
+	Wayward     **WaywardState `json:"wayward"`
+	Mission     **MissionState `json:"mission"`
 	Turn        *int           `json:"turn"`
 	Phase       *Phase         `json:"phase"`
 	Deadline    *time.Time     `json:"deadline"`
@@ -53,7 +55,7 @@ type gameState struct {
 }
 
 func (r *Room) gameState() gameState {
-	return gameState{&r.Turn, &r.Phase, &r.Deadline, &r.Deferred, &r.LockedAt, &r.Threat, &r.Units, &r.Features,
+	return gameState{&r.Wayward, &r.Mission, &r.Turn, &r.Phase, &r.Deadline, &r.Deferred, &r.LockedAt, &r.Threat, &r.Units, &r.Features,
 		&r.Events, &r.Orders, &r.Desk, &r.LockedUnits, &r.Reports, &r.Seq, &r.Intentions, &r.Plans, &r.Moves}
 }
 
@@ -69,11 +71,14 @@ func (r *Room) snapshot(now time.Time) {
 
 // CanCorrect reports whether the last published turn can still be reopened.
 func (r *Room) CanCorrect() bool {
-	return r.Undo != nil && r.Phase == PhasePlanning && r.Turn == r.Undo.Turn+1 && !r.Closed
+	return r.Undo != nil && (r.Phase == PhasePlanning && r.Turn == r.Undo.Turn+1 || r.Phase == PhaseComplete && r.Turn == r.Undo.Turn) && !r.Closed
 }
 
 // NewTurnOrders counts the orders that reopening would set aside.
 func (r *Room) NewTurnOrders() int {
+	if r.Phase == PhaseComplete {
+		return 0
+	}
 	n := 0
 	for _, o := range r.Orders {
 		if o.Turn == r.Turn && o.Status != OrderWithdrawn {
@@ -100,11 +105,14 @@ func (r *Room) ReopenTurn(actor *Member, reason string, now time.Time) error {
 	// Decoding into existing slices and maps would merge with what's there;
 	// start them empty so the snapshot replaces them outright.
 	r.Units, r.Features, r.Events, r.Orders, r.Desk, r.LockedUnits, r.Reports, r.Intentions = nil, nil, nil, nil, nil, nil, nil, nil
-	r.Plans, r.Moves = nil, nil
+	r.Plans, r.Moves, r.Mission, r.Wayward = nil, nil, nil, nil
 	st := r.gameState()
 	if err := json.Unmarshal(undo.State, &st); err != nil {
 		return fmt.Errorf("restoring turn %d: %w", undo.Turn, err)
 	}
+	r.Assistant.Automatic, r.Assistant.Decision = false, nil
+	r.Assistant.Batches = nil
+	r.cancelRuns(func(run *Run) bool { return run.Automatic() }, now)
 	r.Undo = nil
 	r.LockedAt = now.UTC() // the referee gets a full window before any takeover
 	r.Corrections = append(r.Corrections, Correction{Turn: r.Turn, At: now.UTC(), Reason: reason})

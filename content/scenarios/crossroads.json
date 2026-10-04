@@ -1,0 +1,191 @@
+{
+  "id": "crossroads",
+  "name": "Crossroads Rearguard (2 players)",
+  "module": "border-war",
+  "summary": "A short two-player cooperative gunpowder battle. One player holds the crossroads with line infantry while the other scouts and protects the flank. The AI referee controls the raiders.",
+  "objectives": [
+    "Hold the Crossroads uncontested through turn 4.",
+    "Bring survivors of both detachments to West Road during turns 5\u20136."
+  ],
+  "briefing": [
+    "Two players, two independent commands. Give Line Detachment to player one and Scout Detachment to player two. Neither player commands the other; coordinate in Game Chat. Enable the automatic referee before starting.",
+    "A supply column has already passed west. Your rearguard must keep this junction open for four turns, then withdraw to West Road by the end of turn six. Each turn is one minute and each grid cell is 25 metres.",
+    "Line Detachment begins at the Crossroads. Scout Detachment begins one cell north, beside the wood. A raider band is visible east of the junction. The wood and southern ridge hide parts of the approaches.",
+    "Use short, concrete orders: state your destination, how you support the other detachment, and when you will fall back. Outcomes, casualties, split advances and discoveries are judged by the AI; both players can inspect the published turn report."
+  ],
+  "refereeNotes": "Run the raiders as an opposing force, not as cooperative target dummies. East Raiders initially try to pin the line with fire from the east; Wood Raiders are hidden in the north-east wood and intend to probe the northern flank. They have no knowledge of private player orders. The hidden reserve must not be revealed in public prose before observed. Favor retreats or suppression over implausible extermination from one volley. No new units, resupply, construction or weather events. The server evaluates objective progress from published positions and strength. Do not award completion yourself. Both players share command intent through messages or visible orders, not telepathy. The server ends the mission once its objectives are resolved; never start a new operation yourself.",
+  "board": {
+    "background": "hex",
+    "grid": "hex",
+    "distance": {
+      "amount": 25,
+      "unit": "m"
+    },
+    "turn": {
+      "amount": 1,
+      "unit": "minutes"
+    }
+  },
+  "map": {
+    "cols": 12,
+    "rows": [
+      "...fffff....",
+      "...fffff....",
+      "....fff.....",
+      "............",
+      "............",
+      "......hhh...",
+      ".....hhhh...",
+      "............"
+    ],
+    "roads": [
+      {
+        "col": 1,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 2,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 3,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 4,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 5,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 6,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 7,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 8,
+        "row": 3,
+        "dir": 0
+      },
+      {
+        "col": 9,
+        "row": 3,
+        "dir": 0
+      }
+    ]
+  },
+  "features": [
+    {
+      "id": "west",
+      "name": "West Road",
+      "kind": "beachhead",
+      "col": 1,
+      "row": 3,
+      "note": "Withdrawal point: survivors must reach within one grid cell by the end of turn 6."
+    },
+    {
+      "id": "junction",
+      "name": "Crossroads",
+      "kind": "utility",
+      "col": 5,
+      "row": 3,
+      "note": "Hold within one grid cell through turn 4, then withdraw west."
+    },
+    {
+      "id": "wood",
+      "name": "North Wood",
+      "kind": "shelter",
+      "col": 6,
+      "row": 1,
+      "note": "Short sight lines. Scouts can observe or conceal themselves here."
+    },
+    {
+      "id": "ridge",
+      "name": "Low Ridge",
+      "kind": "relay",
+      "col": 7,
+      "row": 5,
+      "note": "Observation of the southern approach; little shelter on its crest."
+    }
+  ],
+  "units": [
+    {
+      "id": "line",
+      "name": "Line Detachment",
+      "class": "line",
+      "col": 5,
+      "row": 3,
+      "strength": 12,
+      "known": true,
+      "brief": "Your men can hold a steady line, but do not let the scouts disappear beyond supporting distance. Falling back with survivors is better than a last stand."
+    },
+    {
+      "id": "scouts",
+      "name": "Scout Detachment",
+      "class": "scouts",
+      "col": 5,
+      "row": 2,
+      "strength": 8,
+      "known": true,
+      "brief": "Scout the northern approach, report contacts, and protect the line's flank. You are not strong enough to win a prolonged close assault alone."
+    },
+    {
+      "id": "east",
+      "name": "East Raiders",
+      "class": "raiders",
+      "col": 8,
+      "row": 3,
+      "strength": 10,
+      "known": true
+    },
+    {
+      "id": "wood",
+      "name": "Wood Raiders",
+      "class": "raiders",
+      "col": 8,
+      "row": 1,
+      "strength": 8,
+      "known": false
+    }
+  ],
+  "mission": [
+    {
+      "id": "hold",
+      "text": "Hold the Crossroads uncontested through turn 4.",
+      "kind": "hold",
+      "units": [
+        "line",
+        "scouts"
+      ],
+      "feature": "junction",
+      "radius": 1,
+      "from": 1,
+      "through": 4
+    },
+    {
+      "id": "withdraw",
+      "text": "Bring survivors of both detachments to West Road during turns 5\u20136.",
+      "kind": "extract",
+      "units": [
+        "line",
+        "scouts"
+      ],
+      "feature": "west",
+      "radius": 1,
+      "from": 5,
+      "through": 6
+    }
+  ]
+}

@@ -57,3 +57,12 @@ func (s *Server) decideNarrative(w http.ResponseWriter, r *http.Request) {
 		return room.DecideNarrative(me, op, turn, r.FormValue("action"), r.FormValue("text"))
 	})
 }
+
+func (s *Server) setAutomatic(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		if s.ai == nil {
+			return game.ErrBadRequest
+		}
+		return room.SetAutomatic(me, r.FormValue("action"), time.Now())
+	})
+}

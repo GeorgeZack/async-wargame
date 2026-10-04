@@ -33,3 +33,30 @@ func TestResolve(t *testing.T) {
 		}
 	}
 }
+
+func TestEqualOpponentsHaveSymmetricDiceOutcomes(t *testing.T) {
+	// Exhaust the 100 possible d10 pairs rather than using a flaky random sample.
+	a, b := Party{Name: "Alpha", Bonus: 2}, Party{Name: "Bravo", Bonus: 2}
+	wins, losses, ties := 0, 0, 0
+	for da := 1; da <= 10; da++ {
+		for db := 1; db <= 10; db++ {
+			result, _ := Resolve(a, da, &b, db)
+			reversed, _ := Resolve(b, db, &a, da)
+			margin := result.A.Total - result.B.Total
+			if margin != -(reversed.A.Total - reversed.B.Total) {
+				t.Fatal("side ordering changed the result")
+			}
+			switch {
+			case margin > 0:
+				wins++
+			case margin < 0:
+				losses++
+			default:
+				ties++
+			}
+		}
+	}
+	if wins != 45 || losses != 45 || ties != 10 {
+		t.Fatalf("asymmetric totals: %d/%d/%d", wins, losses, ties)
+	}
+}

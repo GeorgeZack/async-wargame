@@ -1,6 +1,7 @@
 package game
 
 import (
+	"asyncwargame/internal/rules"
 	"fmt"
 	"slices"
 )
@@ -9,6 +10,7 @@ import (
 // they're good at, what they carry, how they are, and what's been
 // established about them.
 type UnitCard struct {
+	Character     *rules.WaywardCharacter
 	FormationName string
 	Companions    []string
 	Unit          UnitView
@@ -45,6 +47,7 @@ type UnitCard struct {
 // returns what me may see of it. During adjudication, players see units as
 // they were at the lock.
 func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, error) {
+	r = r.forViewer(me)
 	ref := me.Role == RoleReferee
 	units := r.Units
 	if !ref && r.Phase == PhaseResolving && r.LockedUnits != nil {
@@ -89,6 +92,7 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		card.SideName = "Unknown"
 		return card, nil
 	}
+	card.Character = mod.Class(u.Class).Character
 	card.Quality, card.Veteran, card.Kit, card.Notes = QualityOf(mod, u), VeteranOf(u), KitOf(mod, u), u.Notes
 	if b, why := baseBonus(mod, u); why != "" {
 		card.Bonus = fmt.Sprintf("%+d (%s)", b, why)
@@ -100,7 +104,7 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		card.Brief = u.Brief
 	}
 	if ref {
-		card.CanEdit, card.RawID, card.Strength, card.Status = true, u.ID, u.Strength, u.Status
+		card.CanEdit, card.RawID, card.Strength, card.Status = !r.MissionComplete() && r.Wayward == nil, u.ID, u.Strength, u.Status
 		card.Known, card.Identified, card.Kits, card.KnownTo = u.Known, u.Identified, mod.Class(u.Class).Kit, u.KnownTo
 		if !side.Playable {
 			for _, m := range r.Members {
@@ -112,11 +116,13 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 	}
 	if side.Playable {
 		card.Operations, card.Record = u.Operations, u.Record
-		card.CanPropose = me.Status == StatusApproved
+		card.CanPropose = me.Status == StatusApproved && r.Wayward == nil
 		if m := r.Member(u.AssignedTo); m != nil {
 			card.Commander = m.Name
 		}
-		card.RadioText, card.RadioDown = r.radioText(u), u.OutOfContact
+		if !uv.Destroyed {
+			card.RadioText, card.RadioDown = r.radioText(u), u.OutOfContact
+		}
 		if o := r.CurrentOrder(u.ID); o != nil {
 			shared := o.Status == OrderCommitted || o.Status == OrderLocked
 			if r.seesOrder(me, u) && (ref || shared || r.CanOrder(mod, me, u)) {

@@ -45,7 +45,7 @@ func (r *Room) members(fid string) []*Unit {
 }
 
 // together reports whether a unit is in its formation's token.
-func (u *Unit) together() bool { return u.Formation != "" && !u.Detached }
+func (u *Unit) together() bool { return u.Formation != "" && !u.Detached && !u.Destroyed() }
 
 // formationAnchor is where a formation's token stands: with its first
 // member still in it. ok is false when every member has split off.
@@ -76,6 +76,9 @@ func (r *Room) moveWithFormation(u *Unit) {
 // SplitOff takes a unit out of its formation's token: it gets a chit of its
 // own, set just beside the formation.
 func (r *Room) SplitOff(actor *Member, unitID string) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
@@ -83,7 +86,7 @@ func (r *Room) SplitOff(actor *Member, unitID string) error {
 	if u == nil {
 		return ErrNotFound
 	}
-	if u.Formation == "" || u.Detached {
+	if u.Formation == "" || u.Detached || u.Destroyed() {
 		return bad("%s isn't with a formation to split off from", u.Name)
 	}
 	from := u.Pos()
@@ -101,6 +104,9 @@ func (r *Room) SplitOff(actor *Member, unitID string) error {
 
 // Rejoin puts a unit back in its formation's token, wherever that stands.
 func (r *Room) Rejoin(actor *Member, unitID string) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
@@ -108,7 +114,7 @@ func (r *Room) Rejoin(actor *Member, unitID string) error {
 	if u == nil {
 		return ErrNotFound
 	}
-	if u.Formation == "" || !u.Detached {
+	if u.Formation == "" || !u.Detached || u.Destroyed() {
 		return bad("%s is already with their formation", u.Name)
 	}
 	from := u.Pos()
@@ -145,4 +151,14 @@ func (r *Room) squadForAI(u *Unit) string {
 		return "the last of " + f.Name
 	}
 	return fmt.Sprintf("with %s (moving together with %s)", f.Name, strings.Join(with, ", "))
+}
+
+func (r *Room) livingMembers(fid string) []*Unit {
+	var out []*Unit
+	for _, u := range r.members(fid) {
+		if !u.Destroyed() {
+			out = append(out, u)
+		}
+	}
+	return out
 }

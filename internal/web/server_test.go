@@ -171,7 +171,7 @@ func TestJoinApproveAssignFlow(t *testing.T) {
 	}
 	ref.post("/r/"+code+"/start", nil)
 	_, body = player.room("/r/" + code)
-	mustContain(t, body, "Say what your marine does: 0 of 1 orders committed", "Sgt. Reyes", "Shamblers by the canal")
+	mustContain(t, body, "Give your units orders: 0 of 1 orders committed", "Sgt. Reyes", "Shamblers by the canal")
 	// Hidden state stays on the server.
 	mustNotContain(t, body, "Hospital survivors", "Basement crawler", "Old town runners", "Duarte", "Referee notes", "requested access")
 
@@ -507,7 +507,7 @@ func TestInvitesAndChainOfCommand(t *testing.T) {
 	ref.post(base+"/start", nil)
 	cmd.post(base+"/briefed", nil)
 	_, body = cmd.room(base)
-	mustContain(t, body, "Your command", "Hicks", "Hudson", "Say what your marine does: 0 of 2 orders committed")
+	mustContain(t, body, "Your command", "Hicks", "Hudson", "Give your units orders: 0 of 2 orders committed")
 	mustNotContain(t, body, "/i/"+code, "Create invite link", "Promote to commander")
 	if res, _ := cmd.post(base+"/invites", url.Values{"role": {"player"}, "uses": {"1"}}); res.StatusCode != 403 {
 		t.Errorf("commander created an invite: %d", res.StatusCode)

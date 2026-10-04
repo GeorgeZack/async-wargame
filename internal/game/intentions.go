@@ -60,7 +60,7 @@ func (r *Room) SetIntention(actor *Member, mod *Module, unitID, text string) err
 		return err
 	}
 	u := r.Unit(unitID)
-	if u == nil || mod.Side(u.Side).Playable {
+	if u == nil || u.Destroyed() || mod.Side(u.Side).Playable {
 		return bad("intentions are for units the players don't control")
 	}
 	text = strings.Join(strings.Fields(text), " ")
@@ -87,7 +87,7 @@ type IntentionView struct {
 func (r *Room) intentionViews(mod *Module, me *Member) []IntentionView {
 	var out []IntentionView
 	for _, u := range r.Units {
-		if s := mod.Side(u.Side); s == nil || !s.Enemy {
+		if s := mod.Side(u.Side); s == nil || !s.Enemy || u.Destroyed() {
 			continue
 		}
 		iv := IntentionView{Unit: unitView(r, u, mod, me)}
@@ -110,7 +110,10 @@ func (r *Room) intentionsPrompt(mod *Module, run *Run) (string, string, bool) {
 	}
 	var enemies []enemy
 	for _, u := range r.Units {
-		if s := mod.Side(u.Side); s == nil || !s.Enemy {
+		if run.Automatic() && !r.autoOwnsUnit(u.ID) {
+			continue
+		}
+		if s := mod.Side(u.Side); s == nil || !s.Enemy || u.Destroyed() {
 			continue
 		}
 		e := enemy{promptUnit: r.promptUnit(mod, u), Current: r.IntentionOf(u.ID)}
@@ -155,7 +158,7 @@ func (r *Room) applyIntentions(mod *Module, run *Run, reply string, decode func(
 	for _, x := range out.Intentions {
 		u := r.Unit(x.Unit)
 		text := clip(strings.Join(strings.Fields(x.Intent), " "), maxIntentionLen)
-		if u == nil || !mod.Side(u.Side).Enemy || text == "" {
+		if u == nil || u.Destroyed() || !mod.Side(u.Side).Enemy || text == "" {
 			continue
 		}
 		if cur := r.intention(u.ID); cur != nil && cur.Source != "ai" {

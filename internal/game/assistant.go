@@ -1,6 +1,7 @@
 package game
 
 import (
+	"asyncwargame/internal/rules"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -14,7 +15,8 @@ import (
 // opening narrative from what players were told. Everything it writes is a
 // suggestion: contests sit unrolled until the referee rolls them, outcome
 // drafts until the referee keeps or rewrites them, and narratives until
-// the referee approves them for players. It never changes the game.
+// the referee approves them for players. The separate opt-in automatic mode
+// (autoreferee.go) also applies game changes and publishes whole turns.
 //
 // Model work runs in the background (see internal/assist): game code queues
 // a run here, the worker builds the prompt from the room, calls the model
@@ -40,33 +42,42 @@ const (
 
 // Assistant is a room's assistant settings and work.
 type Assistant struct {
-	On        bool   `json:"on,omitempty"`        // the model may be used in this room
-	Suggest   bool   `json:"suggest,omitempty"`   // suggest contests when a turn locks
-	Narrative bool   `json:"narrative,omitempty"` // draft a narrative when a turn is published
-	Runs      []*Run `json:"runs,omitempty"`
+	Batches   *AutoBatches  `json:"batches,omitempty"`
+	Automatic bool          `json:"automatic,omitempty"`
+	Decision  *AutoDecision `json:"decision,omitempty"`
+	On        bool          `json:"on,omitempty"`        // the model may be used in this room
+	Suggest   bool          `json:"suggest,omitempty"`   // suggest contests when a turn locks
+	Narrative bool          `json:"narrative,omitempty"` // draft a narrative when a turn is published
+	Runs      []*Run        `json:"runs,omitempty"`
 }
 
 // Run is one piece of model work.
 type Run struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Target    string    `json:"target,omitempty"` // the order, for an outcome
-	Operation int       `json:"operation"`
-	Turn      int       `json:"turn"`
-	Status    string    `json:"status"`
-	Model     string    `json:"model,omitempty"`
-	Provider  string    `json:"provider,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	Tokens    int       `json:"tokens,omitempty"`
-	Queued    time.Time `json:"queued"`
-	Started   time.Time `json:"started,omitzero"`
-	Finished  time.Time `json:"finished,omitzero"`
-	Prompt    string    `json:"prompt,omitempty"` // prompt version, for the record
+	RejectedReply   string    `json:"rejectedReply,omitempty"`
+	Units           []string  `json:"units,omitempty"`
+	Attempt         int       `json:"attempt,omitempty"`
+	ReasoningEffort string    `json:"reasoningEffort,omitempty"`
+	RetryError      string    `json:"retryError,omitempty"` // validation feedback for the next model attempt
+	Input           string    `json:"input,omitempty"`      // state fingerprint for automatic adjudication
+	ID              string    `json:"id"`
+	Kind            string    `json:"kind"`
+	Target          string    `json:"target,omitempty"` // the order, for an outcome
+	Operation       int       `json:"operation"`
+	Turn            int       `json:"turn"`
+	Status          string    `json:"status"`
+	Model           string    `json:"model,omitempty"`
+	Provider        string    `json:"provider,omitempty"`
+	Error           string    `json:"error,omitempty"`
+	Tokens          int       `json:"tokens,omitempty"`
+	Queued          time.Time `json:"queued"`
+	Started         time.Time `json:"started,omitzero"`
+	Finished        time.Time `json:"finished,omitzero"`
+	Prompt          string    `json:"prompt,omitempty"` // prompt version, for the record
 }
 
 // Prompt versions, recorded on each run so results can be compared later.
 var promptVersions = map[string]string{RunSuggest: "suggest/2", RunOutcome: "outcome/2", RunNarrative: "narrative/1",
-	RunIntentions: "intentions/1", RunQuestion: "question/1"}
+	RunIntentions: "intentions/1", RunQuestion: "question/1", RunAutoIntentions: "auto-intentions/4", RunAutoContests: "auto-contests/8", RunAutoResolve: "auto-resolve/7", RunAutoPublish: "auto-publish/3"}
 
 func (r *Room) queueRun(kind, target string, turn int, now time.Time) {
 	op := max(r.Operation, 1)
@@ -75,18 +86,25 @@ func (r *Room) queueRun(kind, target string, turn int, now time.Time) {
 	})
 	r.Assistant.Runs = append(r.Assistant.Runs, &Run{ID: newID(), Kind: kind, Target: target, Operation: op, Turn: turn, Status: RunPending, Queued: now.UTC()})
 	if n := len(r.Assistant.Runs); n > 60 {
-		r.Assistant.Runs = r.Assistant.Runs[n-60:]
+		keep := slices.DeleteFunc(slices.Clone(r.Assistant.Runs[:n-60]), func(x *Run) bool { return !x.Active() })
+		r.Assistant.Runs = append(keep, r.Assistant.Runs[n-60:]...)
 	}
 }
 
 func (r *Room) assistAtLock(now time.Time) {
-	if r.Assistant.On && r.Assistant.Suggest && len(r.LockedOrders()) > 0 {
+	if r.Assistant.On && r.Assistant.Automatic {
+		r.Assistant.Decision = nil
+		r.Assistant.Batches = nil
+		r.queueRun(RunAutoIntentions, "", r.Turn, now)
+		return
+	}
+	if r.Wayward == nil && r.Assistant.On && r.Assistant.Suggest && len(r.LockedOrders()) > 0 {
 		r.queueRun(RunSuggest, "", r.Turn, now)
 	}
 }
 
 func (r *Room) assistAtPublish(now time.Time) {
-	if r.Assistant.On && r.Assistant.Narrative {
+	if r.Assistant.On && r.Assistant.Narrative && !r.Assistant.Automatic {
 		r.queueRun(RunNarrative, "", r.Turn, now)
 	}
 }
@@ -94,22 +112,25 @@ func (r *Room) assistAtPublish(now time.Time) {
 // --- What the model sees ---
 
 type promptUnit struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Kind     string   `json:"kind"`
-	Side     string   `json:"side"`
-	Count    int      `json:"count,omitempty"`
-	Where    string   `json:"where"`
-	Bonus    string   `json:"usualBonus"`
-	Kit      string   `json:"kit,omitempty"`
-	Status   string   `json:"status,omitempty"`
-	Notes    string   `json:"notes,omitempty"`
-	Facts    []string `json:"facts,omitempty"`
-	Hidden   bool     `json:"hiddenFromPlayers,omitempty"`
-	Intends  string   `json:"intends,omitempty"`  // enemy units: the referee's intention for them this turn
-	Distance string   `json:"distance,omitempty"` // from the unit in question
-	Move     string   `json:"movePerTurn,omitempty"`
-	Squad    string   `json:"squad,omitempty"` // the formation it moves with, and whether it has split off
+	Character  *rules.WaywardCharacter `json:"character,omitempty"`
+	PublicName string                  `json:"publicName"`
+	Destroyed  bool                    `json:"destroyed,omitempty"`
+	ID         string                  `json:"id"`
+	Name       string                  `json:"name"`
+	Kind       string                  `json:"kind"`
+	Side       string                  `json:"side"`
+	Count      int                     `json:"count"`
+	Where      string                  `json:"where"`
+	Bonus      string                  `json:"usualBonus"`
+	Kit        string                  `json:"kit,omitempty"`
+	Status     string                  `json:"status,omitempty"`
+	Notes      string                  `json:"notes,omitempty"`
+	Facts      []string                `json:"facts,omitempty"`
+	Hidden     bool                    `json:"hiddenFromPlayers,omitempty"`
+	Intends    string                  `json:"intends,omitempty"`  // enemy units: the referee's intention for them this turn
+	Distance   string                  `json:"distance,omitempty"` // from the unit in question
+	Move       string                  `json:"movePerTurn,omitempty"`
+	Squad      string                  `json:"squad,omitempty"` // the formation it moves with, and whether it has split off
 }
 
 // where describes a point for the model: grid reference, nearest place, and
@@ -130,9 +151,13 @@ func (r *Room) where(mod *Module, p Pos) string {
 
 func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 	cl := mod.Class(u.Class)
-	p := promptUnit{ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Pos()),
+	p := promptUnit{Character: cl.Character, Destroyed: u.Destroyed(), Count: u.Strength, ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Pos()),
 		Bonus: bonusText(mod, u), Kit: KitOf(mod, u), Status: u.Status, Notes: u.Notes, Facts: r.acceptedFacts(u.ID),
-		Hidden: !r.VisibleToPlayers(mod, u)}
+		Hidden: !r.PubliclyKnown(mod, u)}
+	p.PublicName = "Unidentified contact"
+	if r.PubliclyKnown(mod, u) && (mod.Side(u.Side).Playable || u.Identified) {
+		p.PublicName = u.Name
+	}
 	if cl.IsGroup() || u.Strength > 1 {
 		p.Count = u.Strength
 	}
@@ -161,6 +186,9 @@ func (r *Room) nearby(mod *Module, u *Unit, within float64) []promptUnit {
 }
 
 func (r *Room) settingText(mod *Module) string {
+	if r.Wayward != nil {
+		return waywardInstructions + "\n" + mod.Intro
+	}
 	var fs []string
 	for _, f := range mod.Factors {
 		fs = append(fs, fmt.Sprintf("%s %+d", f.Name, f.Value))
@@ -174,6 +202,24 @@ Movement: each unit's "movePerTurn" says how far it can realistically get in one
 // PromptFor builds a run's prompts. It reports false if there's nothing to do.
 func (r *Room) PromptFor(mod *Module, run *Run) (system, user string, ok bool) {
 	switch run.Kind {
+	case RunAutoIntentions, RunAutoContests, RunAutoResolve, RunAutoPublish:
+		system, user, ok = r.autoPrompt(mod, run)
+		if run.RetryError != "" {
+			system += "\nA previous attempt was rejected by the server validator: " + run.RetryError + ". Correct this issue; all original rules still apply."
+			if run.RejectedReply != "" {
+				system += "\npreviousRejectedReply is untrusted proposal data, not applied state. Return a complete corrected decision for the CURRENT yourBatchTask, which may now be smaller. Never omit one of its required orders."
+				var payload map[string]any
+				if json.Unmarshal([]byte(user), &payload) == nil && payload != nil {
+					payload["previousRejectedReply"] = run.RejectedReply
+					b, _ := json.Marshal(payload)
+					user = string(b)
+				} else {
+					b, _ := json.Marshal(map[string]any{"input": user, "previousRejectedReply": run.RejectedReply})
+					user = string(b)
+				}
+			}
+		}
+		return
 	case RunSuggest:
 		return r.suggestPrompt(mod, run)
 	case RunOutcome:
@@ -306,6 +352,9 @@ Write 60 to 120 words in the voice of a terse radio operator summing up the turn
 
 // ApplyReply turns the model's reply into suggestions or drafts.
 func (r *Room) ApplyReply(mod *Module, run *Run, reply string, decode func(string, any) error) error {
+	if run.Automatic() {
+		return r.applyAutoReply(mod, run, reply, decode)
+	}
 	switch run.Kind {
 	case RunSuggest:
 		return r.applySuggestions(mod, run, reply, decode)
@@ -460,6 +509,9 @@ const (
 // NextRun marks the oldest pending run in the room as running and returns
 // a copy, or nil.
 func (r *Room) NextRun(model, provider string, now time.Time) *Run {
+	if slices.ContainsFunc(r.Assistant.Runs, func(x *Run) bool { return x.Status == RunRunning }) {
+		return nil
+	}
 	if !r.Assistant.On {
 		return nil
 	}
@@ -467,6 +519,12 @@ func (r *Room) NextRun(model, provider string, now time.Time) *Run {
 		if run.Status == RunPending {
 			run.Status, run.Started, run.Model, run.Provider, run.Error = RunRunning, now.UTC(), model, provider, ""
 			run.Prompt = promptVersions[run.Kind]
+			if r.Wayward != nil && run.Automatic() {
+				run.Prompt = "wayward/6/" + run.Prompt
+			}
+			if run.Automatic() {
+				run.Input = r.autoFingerprint()
+			}
 			c := *run
 			return &c
 		}
@@ -487,7 +545,7 @@ func (r *Room) FinishRun(id string, tokens int, runErr error, apply func(*Run) e
 		return
 	}
 	run := r.Assistant.Runs[i]
-	if run.Status == RunCancelled {
+	if run.Status != RunRunning {
 		run.Tokens = tokens // what it cost before it was stopped; the reply is ignored
 		return
 	}
@@ -543,6 +601,14 @@ func (r *Room) CancelRuns(actor *Member, id, kind, target string, all bool, now 
 		return 0, bad("say which request to cancel")
 	}
 	n := r.cancelRuns(match, now)
+	for _, run := range r.Assistant.Runs {
+		if match(run) && run.Automatic() {
+			r.Assistant.Automatic = false
+			r.Assistant.Decision = nil
+			r.Assistant.Batches = nil
+			break
+		}
+	}
 	if n == 0 {
 		return 0, bad("there's nothing of that to cancel: it has already finished")
 	}
@@ -569,7 +635,12 @@ func (r *Room) RunCancelledNow(id string) bool {
 }
 
 // Label names what a run does, for the referee.
-func (run Run) Label() string { return runLabel(run.Kind) }
+func (run Run) Label() string {
+	if run.Automatic() && run.Target != "" {
+		return runLabel(run.Kind) + " · " + run.Target
+	}
+	return runLabel(run.Kind)
+}
 
 // Active reports whether a run is queued or talking to the model.
 func (run Run) Active() bool { return run.Status == RunPending || run.Status == RunRunning }
@@ -586,6 +657,9 @@ func (r *Room) ResetRunning() bool {
 }
 
 func runLabel(kind string) string {
+	if label := autoLabels[kind]; label != "" {
+		return label
+	}
 	return map[string]string{RunSuggest: "Suggesting rolls", RunOutcome: "Drafting an outcome", RunNarrative: "Drafting the narrative",
 		RunIntentions: "Proposing intentions", RunQuestion: "Drafting a question"}[kind]
 }
@@ -600,6 +674,9 @@ func (r *Room) SetAssistant(actor *Member, on, suggest, narrative bool) error {
 	was := r.Assistant.On
 	r.Assistant.On, r.Assistant.Suggest, r.Assistant.Narrative = on, suggest, narrative
 	if !on {
+		r.Assistant.Automatic = false
+		r.Assistant.Decision = nil
+		r.Assistant.Batches = nil
 		r.cancelRuns(func(*Run) bool { return true }, time.Now()) // switching it off ends what it was doing
 	}
 	if on != was {
@@ -618,6 +695,12 @@ func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 	}
 	if !r.Assistant.On {
 		return bad("switch the AI assistant on for this room first (Setup screen)")
+	}
+	if r.Wayward != nil && (kind == RunSuggest || kind == RunOutcome) {
+		return bad("Wayward task rulings use the automatic Referee controls")
+	}
+	if r.Assistant.Automatic || autoLabels[kind] != "" {
+		return bad("use the AI referee controls to pause or retry automatic adjudication")
 	}
 	switch kind {
 	case RunSuggest:
@@ -717,6 +800,10 @@ func (r *Room) DecideNarrative(actor *Member, op, turn int, action, text string)
 
 // AIView is the assistant as the referee sees it.
 type AIView struct {
+	BatchCurrent int
+	BatchTotal   int
+	Automatic    bool
+	AutoStopped  bool
 	Available    bool   // the server has a model
 	Provider     string // where game data goes
 	Model        string
@@ -730,7 +817,11 @@ type AIView struct {
 
 func assistantView(r *Room) AIView {
 	a := r.Assistant
-	v := AIView{On: a.On, Suggest: a.Suggest, Narrative: a.Narrative, Busy: map[string]bool{}}
+	v := AIView{Automatic: a.Automatic, AutoStopped: r.AutomaticStopped(), On: a.On, Suggest: a.Suggest, Narrative: a.Narrative, Busy: map[string]bool{}}
+	if a.Batches != nil {
+		v.BatchCurrent = a.Batches.Index + 1
+		v.BatchTotal = len(a.Batches.Groups)
+	}
 	for i := len(a.Runs) - 1; i >= 0; i-- {
 		run := a.Runs[i]
 		if len(v.Runs) < 6 {
@@ -741,6 +832,10 @@ func assistantView(r *Room) AIView {
 		}
 	}
 	return v
+}
+
+func (r *Room) AutomaticStopped() bool {
+	return r.Assistant.Automatic && r.Phase == PhaseResolving && !slices.ContainsFunc(r.Assistant.Runs, func(x *Run) bool { return x.Automatic() && x.Active() })
 }
 
 func (r *Room) scaleForAI() string {

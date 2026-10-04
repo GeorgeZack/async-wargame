@@ -1,0 +1,150 @@
+{
+  "id": "wayward-tollhouse",
+  "name": "Wayward: The Silent Tollhouse (2 players)",
+  "module": "wayward",
+  "summary": "An asynchronous, cooperative Wayward exploration playtest for two characters and an AI Referee. Investigate a missing caravan through conversation, tracking and careful investigation.",
+  "objectives": [
+    "Learn where the caravan went.",
+    "Find its route through the flooded grounds.",
+    "Establish what happened at the abandoned storehouse."
+  ],
+  "briefing": [
+    "Give Mara to one player and Rook to the other; a solo tester can hold both. The host starts the adventure with the AI Referee already enabled. Use Game Chat to coordinate, and submit actions in the Orders panel. A committed action is ready; when both are ready, the next clock tick locks the exchange. Otherwise the deadline locks it, and missing characters wait safely.",
+    "A caravan carrying the winter grain never reached the town. At the old tollhouse, the keeper Edda watches floodwater curl around the empty yard. She is wary of strangers but not hostile. You arrive together in daylight. Question her, investigate the grounds, or propose another plausible approach.",
+    "Your objective is to learn the caravan\u2019s fate. Discoveries persist and the server checks completion. Reach a place before investigating it in a later exchange. Failed checks cost an exchange and change the situation; try a genuinely new approach.",
+    "This is a short outdoor exploration playtest, with fixed pregenerated characters. Combat, spellcasting, Hero Points, buying or transferring items, fatigue and advancement are not implemented. The AI must explain when an action requires those systems."
+  ],
+  "refereeNotes": "Edda is a person at the tollhouse, not a combat unit. Roleplay her through routine conversation and task stakes. She wants assurance the town will help stranded families. The caravan was diverted to help flood refugees, not stolen. Do not reveal the challenge success text until that discovery succeeds. Checks only when risk and failure matter: Social reassurance, Stealth reading visible records under her distracted gaze, Craft following tracks. Never force combat. Keep the scene in daylight and within a short outdoor visit. Freeform exploration is welcome but only server challenge results unlock the authored discoveries. Consequences are narrative setbacks; no damage or resource expenditure. Do not prescribe player choices. Completed discoveries are party knowledge. All locations are safe to reach, but their clues require their prerequisites.",
+  "board": {
+    "background": "hex",
+    "grid": "hex",
+    "distance": {
+      "amount": 10,
+      "unit": "m"
+    },
+    "turn": {
+      "amount": 10,
+      "unit": "minutes"
+    }
+  },
+  "map": {
+    "cols": 8,
+    "rows": [
+      "........",
+      "........",
+      "........",
+      "........",
+      "........",
+      "........"
+    ]
+  },
+  "features": [
+    {
+      "id": "tollhouse",
+      "name": "Old Tollhouse",
+      "kind": "shelter",
+      "col": 1,
+      "row": 2,
+      "note": "Edda waits by the ledger window. The caravan passed here yesterday."
+    },
+    {
+      "id": "yard",
+      "name": "Flooded Yard",
+      "kind": "utility",
+      "col": 4,
+      "row": 2,
+      "note": "Mud, driftwood and overlapping wagon tracks."
+    },
+    {
+      "id": "storehouse",
+      "name": "Abandoned Storehouse",
+      "kind": "shelter",
+      "col": 6,
+      "row": 3,
+      "note": "A dry building beyond the flooded grounds. Its old tally boards remain."
+    }
+  ],
+  "units": [
+    {
+      "id": "mara",
+      "name": "Mara",
+      "class": "merchant",
+      "col": 1,
+      "row": 2,
+      "known": true,
+      "brief": "You used to negotiate grain contracts. Find out whether these people need help before promising anything."
+    },
+    {
+      "id": "rook",
+      "name": "Rook",
+      "class": "burglar",
+      "col": 1,
+      "row": 2,
+      "known": true,
+      "brief": "You left a thieves\u2019 guild that mistook caution for cowardice. Locks and traces tell stories, but people sometimes do too."
+    }
+  ],
+  "challenges": [
+    {
+      "id": "destination",
+      "name": "The keeper\u2019s account",
+      "feature": "tollhouse",
+      "approaches": {
+        "Social": 8,
+        "Stealth": 10
+      },
+      "success": "The caravan turned into the flooded yard to answer a call for help. Edda points out the wagon mark to follow.",
+      "failure": "Edda closes the ledger and becomes guarded. The exchange is spent; a different approach or a new reason to trust you is needed."
+    },
+    {
+      "id": "trail",
+      "name": "The wagon trail",
+      "feature": "yard",
+      "approaches": {
+        "Craft": 8,
+        "Physical": 10
+      },
+      "requires": [
+        "destination"
+      ],
+      "success": "The marked wagon tracks lead to the abandoned storehouse. Small footprints accompany the wheels, with no signs of pursuit.",
+      "failure": "A wash of muddy water obscures the first trail. The exchange is spent; seek a different line of tracks or another vantage point.",
+      "blocked": "The yard is crossed by many wagons. Learn the caravan\u2019s distinguishing wagon mark from Edda or her records before following its trail."
+    },
+    {
+      "id": "truth",
+      "name": "The caravan\u2019s fate",
+      "feature": "storehouse",
+      "approaches": {
+        "Craft": 8,
+        "Stealth": 8
+      },
+      "requires": [
+        "trail"
+      ],
+      "success": "The tally boards and shelter marks establish that the caravan carried flood refugees to higher ground. The grain was distributed as relief, and the town can now trace the survivors.",
+      "failure": "Damp tallies and overlapping marks defeat the first reading. The exchange is spent; examine different evidence or change your method.",
+      "blocked": "These old tallies do not identify the missing caravan by themselves. Trace its wagon mark through the flooded yard first, then match that evidence here."
+    }
+  ],
+  "mission": [
+    {
+      "id": "destination",
+      "kind": "discovery",
+      "discovery": "destination",
+      "text": "Learn where the caravan went."
+    },
+    {
+      "id": "trail",
+      "kind": "discovery",
+      "discovery": "trail",
+      "text": "Find its route through the flooded grounds."
+    },
+    {
+      "id": "truth",
+      "kind": "discovery",
+      "discovery": "truth",
+      "text": "Establish what happened at the abandoned storehouse."
+    }
+  ]
+}

@@ -249,6 +249,9 @@ type BoardEdit struct {
 // points; switching backgrounds may leave some off the new board, and
 // they're pulled back onto its edge.
 func (r *Room) SetBoard(actor *Member, e BoardEdit) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}
@@ -303,6 +306,9 @@ func (r *Room) SetBoard(actor *Member, e BoardEdit) error {
 // SetBoardImage records an uploaded map image and switches to it. Markers
 // on the old background are scaled to the same relative places.
 func (r *Room) SetBoardImage(actor *Member, name string, w, h int) error {
+	if r.MissionComplete() {
+		return bad("reopen the final turn before changing the completed mission")
+	}
 	if actor.Role != RoleReferee {
 		return ErrForbidden
 	}

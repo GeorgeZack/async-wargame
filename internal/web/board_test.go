@@ -78,7 +78,7 @@ func TestBriefsAndRevealsOverHTTP(t *testing.T) {
 
 	ref.post(base+"/units/m2/edit", url.Values{"brief": {"Your sister's girlfriend works at the hospital."}})
 	_, body := hicks.get(base)
-	mustContain(t, body, "Private brief", "sister&#39;s girlfriend")
+	mustContain(t, body, "Character background and private instructions", "sister&#39;s girlfriend")
 	_, body = vasq.get(base)
 	mustNotContain(t, body, "sister&#39;s girlfriend")
 	if res, _ := vasq.get(base + "/units/m2"); res.StatusCode == 200 {

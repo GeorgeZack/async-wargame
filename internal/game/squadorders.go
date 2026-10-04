@@ -10,7 +10,7 @@ import (
 // history. Their shared Group makes them one instruction on the desk. Writing
 // an individual order removes that member from the shared instruction.
 func (r *Room) CanOrderSquad(mod *Module, actor *Member, fid string) bool {
-	members := r.members(fid)
+	members := r.livingMembers(fid)
 	if r.formation(fid) == nil || len(members) < 2 {
 		return false
 	}
@@ -23,7 +23,7 @@ func (r *Room) CanOrderSquad(mod *Module, actor *Member, fid string) bool {
 }
 
 func (r *Room) SquadOrder(fid string) *Order {
-	for _, u := range r.members(fid) {
+	for _, u := range r.livingMembers(fid) {
 		if o := r.CurrentOrder(u.ID); o != nil && o.Group == fid {
 			return o
 		}
@@ -32,15 +32,15 @@ func (r *Room) SquadOrder(fid string) *Order {
 }
 
 func (r *Room) SaveSquadOrder(actor *Member, mod *Module, fid, text string, mark *Pos, commit bool, now time.Time) (*Order, error) {
-	if r.Phase != PhasePlanning {
-		return nil, bad("orders can only be written while a turn is in planning")
+	if err := r.ordersOpen(now); err != nil {
+		return nil, err
 	}
 	if !r.CanOrderSquad(mod, actor, fid) {
 		return nil, ErrForbidden
 	}
 	// Existing individual orders remain exceptions when the global order changes.
 	var members []*Unit
-	for _, u := range r.members(fid) {
+	for _, u := range r.livingMembers(fid) {
 		if o := r.CurrentOrder(u.ID); o == nil || o.Group == fid {
 			members = append(members, u)
 		}
@@ -72,7 +72,7 @@ func (r *Room) OrderMembers(o *Order) []*Unit {
 	}
 	var members []*Unit
 	for _, u := range r.members(o.Group) {
-		if current := r.CurrentOrder(u.ID); current != nil && current.Group == o.Group {
+		if current := r.CurrentOrder(u.ID); current != nil && current.Group == o.Group && current.Status == o.Status {
 			members = append(members, u)
 		}
 	}

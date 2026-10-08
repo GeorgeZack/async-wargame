@@ -322,10 +322,7 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Members: []*Member{ref},
 		Mission: newMission(sc.Mission), Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), Objectives: slices.Clone(sc.Objectives), RefereeNotes: sc.RefereeNotes,
 	}
-	if mod.Engine == "wayward" {
-		r.Wayward = newWayward(sc.Challenges)
-		r.Assistant.On, r.Assistant.Automatic = true, true
-	}
+	engineFor(mod).setup(r, sc)
 	for _, f := range sc.Formations {
 		f := f
 		r.Formations = append(r.Formations, &f)

@@ -1,19 +1,48 @@
 {{define "sec-next"}}
 <div class="next" id="next" data-live role="status">
-    <p><strong>Next:</strong> {{.NextAction}}</p>
+    {{if and .Setup (not .Pending)}}<p><strong>Before you start</strong></p>
+    {{else}}<p><strong>Next:</strong> {{.NextAction}}</p>{{end}}
     {{if .Watched}}<p class="small">The referee is in admin view and can see this turn's orders as you write them.</p>{{end}}
     {{if and .IsReferee .Clock.AllIn}}
     <form method="post" action="{{.Base}}/turn/lock" data-enhance data-confirm="Lock turn {{.Turn}} now? Players can't change orders after this.">
       <button type="submit">Lock turn {{.Turn}} now</button>
     </form>
     {{end}}
-    {{if and .IsReferee (eq .Phase "setup")}}
-    <p class="muted small">Setup: players see a holding page until you start. Check the map, scale, and briefs on the <a href="{{.Base}}/setup">Setup</a> screen first.</p>
+    {{if .Setup}}{{template "setup-checklist" .}}{{end}}
+  </div>
+{{end}}
+
+{{define "setup-checklist"}}
+<ol class="checklist" aria-label="Before you start">
+  <li class="{{if eq .Setup.Assigned .Setup.Units}}done{{end}}">
+    <strong>Players.</strong> {{.Setup.Assigned}} of {{.Setup.Units}} {{if eq .Setup.Units 1}}unit has{{else}}units have{{end}} a player{{if lt .Setup.Assigned .Setup.Units}}; you hold the rest{{end}}.
+    {{if lt .Setup.Assigned .Setup.Units}}<span class="muted small">Share room code <span class="mono">{{.CodeDisplay}}</span> and assign units on <a href="{{.Base}}/people">People</a>, or try it yourself:</span>{{end}}
+    {{if .Setup.CanSeat}}<form method="post" action="{{.Base}}/test-seats/fill" data-enhance>
+      <button type="submit" class="secondary">Set up test players</button>
+      <span class="muted small">One puppet player per unassigned unit. Each opens in its own tab.</span>
+    </form>{{end}}
+    {{if .TestSeats}}<ul class="plain seat-links">
+      {{range .TestSeats}}<li><a href="/r/{{$.Code}}/k/{{.Key}}" target="_blank" rel="noopener">Open {{.Name}}</a>{{with .Units}} <span class="muted small">plays {{.}}</span>{{end}}</li>{{end}}
+    </ul>{{end}}
+  </li>
+  <li class="{{if or .AI.Automatic (not .Setup.NeedsAI)}}done{{end}}">
+    <strong>Referee.</strong>
+    {{if .AI.Automatic}}The AI referee ({{.AI.Model}}) judges and publishes each turn after orders lock. You can pause it and take over on the <a href="{{.Base}}/desk">Desk</a>.
+    {{else if .AI.Available}}You judge each turn on the <a href="{{.Base}}/desk">Desk</a>.
+      <form method="post" action="{{.Base}}/assistant/automatic" data-enhance data-confirm="Let the AI referee run turns? Unit names and stats, orders, positions and report lines go to {{.AI.Provider}}. Messages and people's names do not.">
+        <button type="submit" name="action" value="enable" class="secondary">Let the AI referee run turns</button>
+        <span class="muted small">{{.AI.Model}} via {{.AI.Provider}}</span>
+      </form>
+    {{else if .Setup.NeedsAI}}<span class="alert">This scenario needs an AI referee, and this server has no AI model configured.</span> <span class="muted small">Set <span class="mono">ai</span> and <span class="mono">ai-model</span> in the server's config file and restart.</span>
+    {{else}}You judge each turn on the <a href="{{.Base}}/desk">Desk</a>. <span class="muted small">No AI model is configured on this server, so there is no AI referee or assistant.</span>{{end}}
+  </li>
+  <li>
+    <strong>Start.</strong> Players see a holding page until you do. The map, scale and briefs can be changed on <a href="{{.Base}}/setup">Setup</a>.
     <form method="post" action="{{.Base}}/start" data-confirm="Start the operation? Players will see the map and turn 1 opens.">
       <button type="submit">Start the operation</button>
     </form>
-    {{end}}
-  </div>
+  </li>
+</ol>
 {{end}}
 
 {{define "sec-map-tools"}}

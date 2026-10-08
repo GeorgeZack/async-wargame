@@ -145,7 +145,7 @@ func (r *Room) AddContest(actor *Member, mod *Module, orderID, title string, a P
 	if actor.Role != RoleReferee {
 		return nil, ErrForbidden
 	}
-	if r.Wayward != nil {
+	if !r.rules().d10Contests() {
 		return nil, bad("Wayward uses task checks, not d10 contests")
 	}
 	d, err := r.desk()

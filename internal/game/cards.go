@@ -104,7 +104,7 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		card.Brief = u.Brief
 	}
 	if ref {
-		card.CanEdit, card.RawID, card.Strength, card.Status = !r.MissionComplete() && r.Wayward == nil, u.ID, u.Strength, u.Status
+		card.CanEdit, card.RawID, card.Strength, card.Status = !r.MissionComplete() && r.rules().editableSheets(), u.ID, u.Strength, u.Status
 		card.Known, card.Identified, card.Kits, card.KnownTo = u.Known, u.Identified, mod.Class(u.Class).Kit, u.KnownTo
 		if !side.Playable {
 			for _, m := range r.Members {
@@ -116,7 +116,7 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 	}
 	if side.Playable {
 		card.Operations, card.Record = u.Operations, u.Record
-		card.CanPropose = me.Status == StatusApproved && r.Wayward == nil
+		card.CanPropose = me.Status == StatusApproved && r.rules().editableSheets()
 		if m := r.Member(u.AssignedTo); m != nil {
 			card.Commander = m.Name
 		}

@@ -178,3 +178,22 @@ func TestOpenRouterReasoningWireFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestJSONModeOnlyOnStructuredPrompts(t *testing.T) {
+	var formats []any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		json.NewDecoder(r.Body).Decode(&req)
+		formats = append(formats, req["response_format"])
+		w.Write([]byte(`{"choices":[{"message":{"content":"{}"}}]}`))
+	}))
+	defer srv.Close()
+	on := New(Config{BaseURL: srv.URL + "/v1", Model: "m", Name: "test", JSONMode: true})
+	off := New(Config{BaseURL: srv.URL + "/v1", Model: "m", Name: "test"})
+	on.Complete(context.Background(), `Decide. Reply JSON {"contests":[]}`, "u", 10)
+	on.Complete(context.Background(), "Write a short situation briefing. Plain prose.", "u", 10)
+	off.Complete(context.Background(), `Decide. Reply JSON {"contests":[]}`, "u", 10)
+	if len(formats) != 3 || formats[0] == nil || formats[1] != nil || formats[2] != nil {
+		t.Fatalf("response_format per call: %v", formats)
+	}
+}

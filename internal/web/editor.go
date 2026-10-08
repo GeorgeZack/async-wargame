@@ -79,7 +79,7 @@ func (s *Server) editText(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) start(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
-		if room.Wayward != nil && s.ai == nil {
+		if room.RequiresAI() && s.ai == nil {
 			return fmt.Errorf("%w: configure the AI API and model before starting Wayward", game.ErrBadRequest)
 		}
 		return room.StartOperation(me, s.store.Cat.Modules[room.ModuleID], time.Now())
@@ -89,6 +89,14 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) {
 func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, func(room *game.Room, me *game.Member) error {
 		return room.ResetToScenario(me, s.store.Cat.Scenarios[room.ScenarioID], s.store.Cat.Modules[room.ModuleID])
+	})
+}
+
+// seatTestPlayers creates and assigns a puppet player for each unassigned unit.
+func (s *Server) seatTestPlayers(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, func(room *game.Room, me *game.Member) error {
+		_, err := room.SeatTestPlayers(me, s.store.Cat.Modules[room.ModuleID])
+		return err
 	})
 }
 

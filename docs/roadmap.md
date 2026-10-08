@@ -55,11 +55,11 @@ The 100-player wargame target does not imply 100-character Wayward party support
 | Campaign continuity | Basic survivor and service records exist; requisition and richer progression do not. |
 | Images | One optional vignette per brief, using a separate API, model and key with referee review. |
 
-The earlier client work was pushed as `9a3abfe`. At this roadmap's writing,
+The earlier client work is pushed. At this roadmap's writing,
 the automatic-referee prototype is local and not deployed. Go tests, race
 checks and browser tests pass. **Real-model testing is in progress and has
 exposed invalid formation decisions and slow/truncated provider responses.
-The judge is not yet proven reliable.** See [HANDOFF.md](HANDOFF.md) for working-tree status
+The judge is not yet proven reliable.** See [worklog.md](worklog.md) for working-tree status
 and test evidence.
 
 The automatic decision format currently supports existing units' positions,
@@ -250,7 +250,7 @@ misassigned order outcomes, prompting strict ownership checks, explicit batch
 tasks and smaller repair groups. A subsequent 100-player turn completed
 unattended in about nine minutes, but individual result prose still exposed
 cross-group contradictions about enemy movement. Details are in
-[HANDOFF.md](HANDOFF.md).
+[worklog.md](worklog.md).
 Crossroads provides a small mission with measurable conditions; its objective
 engine is an early Milestone 2 foundation, not completion of that milestone.
 
@@ -259,7 +259,7 @@ during contest selection, deadline lag, partial-state UI leaks and exact hidden
 name leaks in public prose. Paired real-model calibration preserved the direction
 of dice advantages but varied casualty severity. The remaining acceptance work
 includes shared encounter decisions, explicit visibility/terrain constraints and
-repeatable consequence bounds; see the current audit in HANDOFF.md.
+repeatable consequence bounds; see the current audit in worklog.md.
 
 For the current 100-player target, next expand the real-model regression set to
 dense formations, cross-group combat and longer histories. Measure complete turn

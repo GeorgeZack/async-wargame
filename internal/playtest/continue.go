@@ -70,8 +70,8 @@ func previousSeats(store *game.Store) (string, []seat, error) {
 		for _, m := range r.Members {
 			if m.InPlay() {
 				profile := playerProfiles[len(seats)%len(playerProfiles)]
-				if r.Wayward != nil {
-					profile = "Explore cooperatively using your character’s strengths. Follow discovered clues, change approach after failure, and avoid combat or resource spending."
+				if p := r.BotProfile(); p != "" {
+					profile = p
 				}
 				seats = append(seats, seat{m.ID, profile})
 			}

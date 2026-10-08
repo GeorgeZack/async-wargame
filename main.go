@@ -39,6 +39,7 @@ func main() {
 	aiRetries := flag.Int("ai-retries", 1, "automatic retries per failed unchanged referee stage (0–2); dice are preserved")
 	aiConcurrency := flag.Int("ai-concurrency", 1, "concurrent referee requests across rooms (1–16); each room stays sequential")
 	aiEffort := flag.String("ai-reasoning-effort", "", "optional reasoning effort supported by your provider/model: none, minimal, low, medium, high, xhigh or max; empty keeps its default")
+	aiJSON := flag.Bool("ai-json-mode", false, "ask the model for strict JSON (response_format json_object) on structured prompts; only for providers/models that support it")
 	aiModel := flag.String("ai-model", "", "model ID (default: glm-5.2 for opencode, big-pickle for opencode-zen, llama3.1 for ollama)")
 	aiLlama := flag.String("ai-llama-server", "llama-server", `llama.cpp server binary for -ai local`)
 	aiLocalModel := flag.String("ai-local-model", "", "GGUF model file for -ai local")
@@ -99,7 +100,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions, *aiEffort)
+		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions, *aiEffort, *aiJSON)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -158,7 +159,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("AI: %v", err)
 		}
-		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions, *aiEffort)
+		client, local, err := startAI(ctx, *aiFlag, *aiModel, *aiLlama, *aiLocalModel, *aiContext, instructions, *aiEffort, *aiJSON)
 		if err != nil {
 			log.Fatalf("AI: %v", err)
 		}
@@ -211,7 +212,7 @@ func main() {
 }
 
 // startAI sets up the assistant's model from the -ai flags.
-func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int, instructions, effort string) (*ai.Client, *ai.Local, error) {
+func startAI(ctx context.Context, which, model, llama, localModel string, contextSize int, instructions, effort string, jsonMode bool) (*ai.Client, *ai.Local, error) {
 	key := os.Getenv("AW_AI_KEY")
 	if key == "" {
 		key = os.Getenv("OPENCODE_API_KEY") // what OpenCode's own tools use
@@ -219,7 +220,7 @@ func startAI(ctx context.Context, which, model, llama, localModel string, contex
 	if !slices.Contains([]string{"", "none", "minimal", "low", "medium", "high", "xhigh", "max"}, effort) {
 		return nil, nil, fmt.Errorf("unknown ai-reasoning-effort %q", effort)
 	}
-	cfg := ai.Config{ReasoningEffort: effort, BaseURL: which, Model: model, APIKey: key, Name: which, Instructions: instructions}
+	cfg := ai.Config{ReasoningEffort: effort, JSONMode: jsonMode, BaseURL: which, Model: model, APIKey: key, Name: which, Instructions: instructions}
 	var local *ai.Local
 	switch p, ok := ai.Presets[which]; {
 	case ok:

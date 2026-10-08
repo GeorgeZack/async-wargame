@@ -3,7 +3,6 @@ package game
 import (
 	"asyncwargame/internal/rules"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strings"
 )
@@ -50,7 +49,7 @@ func (s *WaywardState) challenge(id string) *WaywardChallenge {
 }
 
 func (sc *Scenario) validateWayward(mod *Module) error {
-	if mod.Engine != "wayward" {
+	if mod.Engine != engineWayward {
 		if len(sc.Challenges) > 0 {
 			return bad("discoveries require the Wayward engine")
 		}
@@ -350,36 +349,4 @@ func (r *Room) applyWaywardDiscoveries() {
 			r.Wayward.Discoveries = append(r.Wayward.Discoveries, a.Challenge)
 		}
 	}
-}
-
-func (r *Room) waywardReady() bool {
-	if r.Wayward == nil || !r.Assistant.Automatic || !r.Assistant.On || r.Phase != PhasePlanning {
-		return false
-	}
-	// Every character must have a current committed action, including host-held
-	// characters. Missing players wait for the normal deadline.
-	n := 0
-	for _, u := range r.Units {
-		if u.Destroyed() {
-			continue
-		}
-		n++
-		o := r.CurrentOrder(u.ID)
-		if o == nil || o.Status != OrderCommitted {
-			return false
-		}
-	}
-	return n > 0
-}
-
-func (r *Room) waywardDiscoveryText() []string {
-	var out []string
-	if r.Wayward != nil {
-		for _, id := range r.Wayward.Discoveries {
-			if c := r.Wayward.challenge(id); c != nil {
-				out = append(out, fmt.Sprintf("%s: %s", c.Name, c.Success))
-			}
-		}
-	}
-	return out
 }

@@ -3,6 +3,7 @@ package game
 import (
 	"asyncwargame/internal/rules"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -54,6 +55,7 @@ type Assistant struct {
 // Run is one piece of model work.
 type Run struct {
 	RejectedReply   string    `json:"rejectedReply,omitempty"`
+	Invalid         bool      `json:"invalid,omitempty"` // failed validation, as opposed to a provider failure
 	Units           []string  `json:"units,omitempty"`
 	Attempt         int       `json:"attempt,omitempty"`
 	ReasoningEffort string    `json:"reasoningEffort,omitempty"`
@@ -98,7 +100,7 @@ func (r *Room) assistAtLock(now time.Time) {
 		r.queueRun(RunAutoIntentions, "", r.Turn, now)
 		return
 	}
-	if r.Wayward == nil && r.Assistant.On && r.Assistant.Suggest && len(r.LockedOrders()) > 0 {
+	if r.rules().d10Contests() && r.Assistant.On && r.Assistant.Suggest && len(r.LockedOrders()) > 0 {
 		r.queueRun(RunSuggest, "", r.Turn, now)
 	}
 }
@@ -185,19 +187,7 @@ func (r *Room) nearby(mod *Module, u *Unit, within float64) []promptUnit {
 	return out
 }
 
-func (r *Room) settingText(mod *Module) string {
-	if r.Wayward != nil {
-		return waywardInstructions + "\n" + mod.Intro
-	}
-	var fs []string
-	for _, f := range mod.Factors {
-		fs = append(fs, fmt.Sprintf("%s %+d", f.Name, f.Value))
-	}
-	return fmt.Sprintf(`The game: %s. %s %s.
-Rolls: when a situation is in doubt, each side rolls a d10 and adds one bonus: everything that matters summed into a single number (how good the unit is, veterancy, the situation, surprise, the weather). The result is just the two totals, like "Okafor 5, the horde 9". There's no rule for what totals mean: the referee compares them, considers what each side was trying to do, and decides. A side can also roll alone, against the situation.
-Each unit's usual bonus (quality plus veterancy) is given. Factors that often count: %s.
-Movement: each unit's "movePerTurn" says how far it can realistically get in one turn at a careful pace and at a run, at this map's scale. An order's "wantsToReach" says where its pin is and how far that is. Hold orders to that: a unit asked to go farther than it can only gets part of the way, less through rubble, crowds, water, darkness, or a fight, and running is loud and tiring. Say where it ends up.`, mod.Name, mod.Intro, r.scaleForAI(), strings.Join(fs, ", "))
-}
+func (r *Room) settingText(mod *Module) string { return r.rules().settingText(r, mod) }
 
 // PromptFor builds a run's prompts. It reports false if there's nothing to do.
 func (r *Room) PromptFor(mod *Module, run *Run) (system, user string, ok bool) {
@@ -518,10 +508,7 @@ func (r *Room) NextRun(model, provider string, now time.Time) *Run {
 	for _, run := range r.Assistant.Runs {
 		if run.Status == RunPending {
 			run.Status, run.Started, run.Model, run.Provider, run.Error = RunRunning, now.UTC(), model, provider, ""
-			run.Prompt = promptVersions[run.Kind]
-			if r.Wayward != nil && run.Automatic() {
-				run.Prompt = "wayward/6/" + run.Prompt
-			}
+			run.Prompt = r.rules().promptVersion(run)
 			if run.Automatic() {
 				run.Input = r.autoFingerprint()
 			}
@@ -556,6 +543,7 @@ func (r *Room) FinishRun(id string, tokens int, runErr error, apply func(*Run) e
 	ref := r.Referee()
 	if runErr != nil {
 		run.Status, run.Error = RunFailed, clip(runErr.Error(), 300)
+		run.Invalid = errors.Is(runErr, ErrBadRequest)
 		if ref != nil {
 			r.notify(ref.ID, "The assistant couldn't finish", fmt.Sprintf("%s for turn %d failed: %s", runLabel(run.Kind), run.Turn, run.Error), "turn")
 		}
@@ -696,7 +684,7 @@ func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 	if !r.Assistant.On {
 		return bad("switch the AI assistant on for this room first (Setup screen)")
 	}
-	if r.Wayward != nil && (kind == RunSuggest || kind == RunOutcome) {
+	if !r.rules().d10Contests() && (kind == RunSuggest || kind == RunOutcome) {
 		return bad("Wayward task rulings use the automatic Referee controls")
 	}
 	if r.Assistant.Automatic || autoLabels[kind] != "" {

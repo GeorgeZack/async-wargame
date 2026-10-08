@@ -157,6 +157,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 	seat("POST /game-events/{id}/{action}", s.decideEvent)
 	seat("POST /threat", s.threat)
 	seat("POST /test-seats", s.addTestSeat)
+	seat("POST /test-seats/fill", s.seatTestPlayers)
 	seat("POST /invites", s.createInvite)
 	seat("POST /turn/schedule", s.setSchedule)
 	seat("POST /turn/defer", s.deferLock)
@@ -213,7 +214,7 @@ func New(store *game.Store, opts Options) (*Server, error) {
 		fileServer.ServeHTTP(w, r)
 	}))
 
-	s.handler = http.NewCrossOriginProtection().Handler(securityHeaders(gzipText(mux)))
+	s.handler = http.NewCrossOriginProtection().Handler(securityHeaders(gzipText(limitBodies(mux))))
 	return s, nil
 }
 
@@ -696,6 +697,19 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// maxFormBody bounds every posted form. Orders, messages and editor batches
+// are far smaller; the map upload sets its own, larger limit.
+const maxFormBody = 1 << 20
+
+func limitBodies(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && !strings.HasSuffix(r.URL.Path, "/board/image") {
+			r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

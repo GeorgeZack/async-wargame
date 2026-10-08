@@ -77,6 +77,7 @@ func (r *Room) SetAutomatic(actor *Member, action string, now time.Time) error {
 	kind := RunAutoIntentions
 	target := ""
 	retryError := ""
+	invalid := false
 	rejected := ""
 	attempt := 0
 	if action == "retry" {
@@ -87,7 +88,7 @@ func (r *Room) SetAutomatic(actor *Member, action string, now time.Time) error {
 			x := r.Assistant.Runs[i]
 			if x.Automatic() && x.Turn == r.Turn && x.Operation == max(r.Operation, 1) {
 				kind, target = x.Kind, x.Target
-				retryError = x.Error
+				retryError, invalid = x.Error, x.Invalid
 				rejected = x.RejectedReply
 				attempt = x.Attempt + 1
 				break
@@ -102,7 +103,7 @@ func (r *Room) SetAutomatic(actor *Member, action string, now time.Time) error {
 			r.Assistant.Decision = nil
 			rejected = ""
 		}
-		if kind == RunAutoResolve && strings.Contains(retryError, "bad request") {
+		if kind == RunAutoResolve && invalid {
 			r.splitFailedAutoBatch()
 		}
 	} else {
@@ -238,8 +239,8 @@ Turn sequence: treat all locked orders and enemy intentions as simultaneous. Fir
 		system += `
 This is one ownership batch of a simultaneous turn. Only units in units and orders in orders belong to you. otherBatches is read-only whole-turn context: account for their actions/support and the SAME recorded dice, but never edit their units or write their order outcomes. Do not claim their final casualties or positions; their own batch determines those. Shared formations stay in one batch. For an independent contest with empty order, party a must be your own unit. Do not duplicate an existing contest (including an exchange with its sides reversed). Threat proposals are combined by maximum, never added. Keep each outcome under 60 words and private reason under 180 characters.`
 	}
-	if r.Wayward != nil {
-		return r.waywardPrompt(mod, run)
+	if system, user, ok, handled := r.rules().autoPrompt(r, mod, run); handled {
+		return system, user, ok
 	}
 	if run.Kind == RunAutoContests {
 		return system + `
@@ -302,8 +303,8 @@ func (r *Room) applyAutoReply(mod *Module, run *Run, reply string, decode func(s
 		}
 		next, target = c.nextAutoBatch(RunAutoIntentions)
 	case RunAutoContests:
-		if c.Wayward != nil {
-			if err := c.applyWaywardActions(mod, reply, decode); err != nil {
+		if handled, err := c.rules().applyContests(c, mod, reply, decode); handled {
+			if err != nil {
 				return err
 			}
 			next = RunAutoResolve
@@ -440,10 +441,8 @@ func (r *Room) canonicalOrder(id string) bool {
 }
 
 func (r *Room) applyAutoDecision(mod *Module, d *AutoDecision) error {
-	if r.Wayward != nil {
-		if err := r.validateWaywardDecision(d); err != nil {
-			return err
-		}
+	if err := r.rules().validateDecision(r, d); err != nil {
+		return err
 	}
 	if strings.TrimSpace(d.Reason) == "" || len([]rune(d.Reason)) > 3000 {
 		return bad("include a decision reason, up to 3000 characters")
@@ -581,9 +580,7 @@ func (r *Room) applyAutoDecision(mod *Module, d *AutoDecision) error {
 	if d.Threat != nil {
 		r.Threat = *d.Threat
 	}
-	if r.Wayward != nil {
-		r.applyWaywardDiscoveries()
-	}
+	r.rules().decisionApplied(r)
 	return nil
 }
 

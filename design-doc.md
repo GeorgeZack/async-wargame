@@ -28,8 +28,11 @@ the world they play in.
   you're needed.
 - **Hidden stays hidden.** What a player may see is filtered on the server.
   Nothing secret reaches a browser that shouldn't have it.
-- **The AI helps the referee, never replaces them.** It can suggest rolls and
-  draft prose. The referee rolls, keeps, or rewrites.
+- **The AI works for the referee.** By default it only suggests rolls and
+  drafts prose; the referee rolls, keeps, or rewrites. A referee can opt a
+  room into the automatic referee, which judges and publishes turns itself.
+  Even then the server rolls the dice and validates every change, and the
+  referee can pause it, take over, or reopen and correct a published turn.
 
 ## A turn
 
@@ -110,8 +113,9 @@ machine). It can:
   were told.
 
 Every suggestion is labeled with the model that made it. Nothing takes
-effect until the referee rolls it, keeps it, or approves it. The model sees
-game data, never messages or anyone's name.
+effect until the referee rolls it, keeps it, or approves it, unless the
+referee has switched on the automatic referee for the room (see the README).
+The model sees game data, never messages or anyone's name.
 
 ## Settings and scenarios
 

@@ -48,7 +48,7 @@ func (sc *Scenario) validateMission(mod *Module) error {
 	seen := map[string]bool{}
 	for _, rule := range sc.Mission {
 		if rule.Kind == "discovery" {
-			if mod.Engine != "wayward" || rule.ID == "" || seen[rule.ID] || rule.Text == "" || !slices.ContainsFunc(sc.Challenges, func(c WaywardChallenge) bool { return c.ID == rule.Discovery }) {
+			if mod.Engine != engineWayward || rule.ID == "" || seen[rule.ID] || rule.Text == "" || !slices.ContainsFunc(sc.Challenges, func(c WaywardChallenge) bool { return c.ID == rule.Discovery }) {
 				return bad("invalid discovery objective")
 			}
 			seen[rule.ID] = true
@@ -94,7 +94,7 @@ func (r *Room) evaluateMission(mod *Module, rep *TurnReport) {
 		}
 		if rule.Kind == "discovery" {
 			o.CheckedTurn = r.Turn
-			if r.Wayward != nil && slices.Contains(r.Wayward.Discoveries, rule.Discovery) {
+			if r.rules().discovered(r, rule.Discovery) {
 				o.Status = "complete"
 			}
 			continue

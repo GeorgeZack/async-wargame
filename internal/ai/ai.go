@@ -45,6 +45,9 @@ type Config struct {
 	Model           string
 	Name            string // shown to referees: where game data goes
 	Timeout         time.Duration
+	// JSONMode asks for response_format json_object on prompts that ask for
+	// a JSON object. Off by default: not every compatible server accepts it.
+	JSONMode bool
 	// Session, if set, is sent as x-opencode-session: OpenCode groups a
 	// client's requests by it. One per server run.
 	Session string
@@ -128,6 +131,9 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 		"max_tokens":  maxTokens,
 		"stream":      false,
 	}
+	if c.cfg.JSONMode && wantsJSON(system) {
+		request["response_format"] = map[string]string{"type": "json_object"}
+	}
 	if c.cfg.ReasoningEffort != "" {
 		u, _ := url.Parse(c.cfg.BaseURL)
 		if u != nil && strings.EqualFold(u.Hostname(), "openrouter.ai") {
@@ -163,6 +169,12 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 		}
 	}
 	return "", total, lastErr
+}
+
+// wantsJSON reports whether a system prompt asks for a JSON object, as the
+// game's structured prompts do; briefings and drafts ask for prose.
+func wantsJSON(system string) bool {
+	return strings.Contains(system, "Reply JSON") || strings.Contains(system, "Reply with only a JSON object")
 }
 
 func (c *Client) once(ctx context.Context, body []byte) (string, Usage, bool, error) {

@@ -40,6 +40,7 @@ type View struct {
 	Base       string // URL prefix for this seat: /r/CODE or /r/CODE/k/KEY
 	AccessLink string // absolute link that opens this seat on another device or tab
 	TestSeats  []TestSeat
+	Setup      *SetupGuide // referee only, before the operation starts
 
 	Me         MemberView
 	IsReferee  bool
@@ -164,6 +165,19 @@ type TestSeat struct {
 	Name   string
 	Key    string
 	Status Status
+	Units  string // what this seat plays, for the setup checklist
+}
+
+// SetupGuide is the referee's checklist before the operation starts: who
+// plays what, who judges, and whether the room can start.
+type SetupGuide struct {
+	Units    int // playable units
+	Assigned int // of those, held by a player rather than the referee
+	// CanSeat is true while puppet players can still be created for the
+	// unassigned units.
+	CanSeat bool
+	// NeedsAI means these rules can't be played without a text model.
+	NeedsAI bool
 }
 
 type ForceGroup struct {
@@ -223,7 +237,7 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 	ref := me.Role == RoleReferee
 	v := &View{
 		Code: r.Code, CodeDisplay: DisplayCode(r.Code), Name: r.Name,
-		Wayward: r.Wayward != nil, Discoveries: r.waywardDiscoveryText(), Mission: r.Mission, ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing, Objectives: r.Objectives,
+		Wayward: r.rules().id() == engineWayward, Discoveries: r.rules().discoveries(r), Mission: r.Mission, ScenarioName: sc.Name, Summary: sc.Summary, Briefing: r.Briefing, Objectives: r.Objectives,
 		ModuleName: mod.Name, ModuleVer: r.ModuleVersion, ScaleText: r.Board.ScaleText(), Board: r.Board,
 		Turn: r.Turn, Operation: max(r.Operation, 1), Phase: r.Phase, Version: r.Version, IsReferee: ref,
 		Me: memberView(r, me, me),
@@ -232,8 +246,27 @@ func BuildView(r *Room, sc *Scenario, mod *Module, me *Member) *View {
 		v.RefereeNotes = r.RefereeNotes
 		for _, m := range r.Members {
 			if m.TestKey != "" && (m.Status == StatusApproved || m.Status == StatusPending) {
-				v.TestSeats = append(v.TestSeats, TestSeat{Name: m.Name, Key: m.TestKey, Status: m.Status})
+				var plays []string
+				for _, u := range r.Units {
+					if u.AssignedTo == m.ID {
+						plays = append(plays, u.Name)
+					}
+				}
+				v.TestSeats = append(v.TestSeats, TestSeat{Name: m.Name, Key: m.TestKey, Status: m.Status, Units: strings.Join(plays, ", ")})
 			}
+		}
+		if r.Phase == PhaseSetup {
+			g := &SetupGuide{NeedsAI: r.RequiresAI()}
+			for _, u := range r.Units {
+				if s := mod.Side(u.Side); s != nil && s.Playable {
+					g.Units++
+					if u.AssignedTo != "" {
+						g.Assigned++
+					}
+				}
+			}
+			g.CanSeat = g.Assigned < g.Units && len(v.TestSeats) < maxTestSeats
+			v.Setup = g
 		}
 	}
 

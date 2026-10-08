@@ -167,8 +167,8 @@ func (r *Room) applyEdit(mod *Module, op EditOp) error {
 		}
 
 	case "unit-add":
-		if r.Wayward != nil && (len(r.Units) >= 6 || op.Strength > 1) {
-			return bad("Wayward supports up to six individual characters")
+		if err := r.rules().rosterError(r, op.Strength); err != nil {
+			return err
 		}
 		if len(r.Units) >= maxUnits {
 			return bad("a map can hold at most %d units", maxUnits)
@@ -349,8 +349,8 @@ func (r *Room) StartOperation(actor *Member, mod *Module, now time.Time) error {
 	if r.Phase != PhaseSetup {
 		return bad("the operation has already started")
 	}
-	if r.Wayward != nil && (len(r.Units) < 1 || len(r.Units) > 6 || len(r.Formations) > 0) {
-		return bad("Wayward needs 1–6 individual characters without formations")
+	if err := r.rules().startError(r); err != nil {
+		return err
 	}
 	r.logf(VisAll, "The operation has begun.")
 	r.openTurn(1, now)
@@ -417,6 +417,45 @@ func (r *Room) AddTestSeat(actor *Member) (string, error) {
 		TokenHash: hash, RequestedAt: now, DecidedAt: &now, TestKey: token})
 	r.logf(VisAll, "%s (test seat) joined the operation.", name)
 	return token, nil
+}
+
+// SeatTestPlayers gives every playable unit the referee still holds its own
+// puppet player, so one person can try a scenario from several tabs without
+// creating and assigning seats by hand. It returns how many seats it made.
+func (r *Room) SeatTestPlayers(actor *Member, mod *Module) (int, error) {
+	if actor.Role != RoleReferee {
+		return 0, ErrForbidden
+	}
+	if r.Phase != PhaseSetup {
+		return 0, bad("the operation has already started; add test players on the People screen")
+	}
+	made := 0
+	for _, u := range r.Units {
+		if s := mod.Side(u.Side); s == nil || !s.Playable || u.AssignedTo != "" {
+			continue
+		}
+		key, err := r.AddTestSeat(actor)
+		if err != nil {
+			if made > 0 {
+				break // the seat limit: keep what was made
+			}
+			return 0, err
+		}
+		var seat *Member
+		for _, m := range r.Members {
+			if m.TestKey == key {
+				seat = m
+			}
+		}
+		if err := r.Assign(actor, mod, u.ID, seat.ID); err != nil {
+			return made, err
+		}
+		made++
+	}
+	if made == 0 {
+		return 0, bad("every unit already has a player")
+	}
+	return made, nil
 }
 
 // --- editor view ---

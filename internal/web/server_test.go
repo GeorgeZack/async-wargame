@@ -884,3 +884,50 @@ func TestLiveStreamIsNotCompressed(t *testing.T) {
 		t.Errorf("first bytes %q", buf[:n])
 	}
 }
+
+func TestSetupChecklistSeatsTestPlayers(t *testing.T) {
+	ts, store := newTestServer(t)
+	ref := newBrowser(t, ts)
+	code := createRoom(t, ref)
+	_, body := ref.room("/r/" + code)
+	mustContain(t, body, "0 of 4 units have a player", "Set up test players", "No AI model is configured")
+	ref.post("/r/"+code+"/test-seats/fill", nil)
+	_, body = ref.room("/r/" + code)
+	mustContain(t, body, "4 of 4 units have a player", "Open Tester 1", "Open Tester 4")
+	if strings.Contains(body, "Set up test players") {
+		t.Error("the button remains although every unit has a player")
+	}
+	store.Read(code, func(r *game.Room) {
+		held := map[string]int{}
+		for _, u := range r.Units {
+			if u.AssignedTo != "" {
+				held[u.AssignedTo]++
+			}
+		}
+		if len(held) != 4 {
+			t.Errorf("want 4 seats holding one unit each, got %v", held)
+		}
+	})
+	// A second press has nothing to do, and players can't use it.
+	if res, _ := ref.post("/r/"+code+"/test-seats/fill", nil); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("refill: status %d", res.StatusCode)
+	}
+	var tester string
+	store.Read(code, func(r *game.Room) {
+		for _, m := range r.Members {
+			if m.Name == "Tester 1" {
+				tester = "/r/" + code + "/k/" + m.TestKey
+			}
+		}
+	})
+	fresh := newBrowser(t, ts)
+	if res, _ := fresh.post(tester+"/test-seats/fill", nil); res.StatusCode != http.StatusForbidden {
+		t.Errorf("player fill: status %d", res.StatusCode)
+	}
+	// The checklist goes away once the operation starts.
+	ref.post("/r/"+code+"/start", nil)
+	_, body = ref.room("/r/" + code)
+	if strings.Contains(body, "Before you start") {
+		t.Error("checklist still shown after start")
+	}
+}

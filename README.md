@@ -4,6 +4,24 @@ Browser-based, referee-led asynchronous wargames. See [design-doc.md](design-doc
 The interface uses an era-neutral field-manual style: paper and olive in light
 mode, charcoal and brass in dark mode, suitable for historical or future settings.
 
+## Try it alone in five minutes
+
+```sh
+mise install && go run .        # then open http://127.0.0.1:8080
+```
+
+1. Under **Host a campaign**, pick **Crossroads Rearguard (2 players)** and create the room.
+2. The checklist at the top of the Table has three steps. Press **Set up test
+   players**: each unit gets a puppet player, with a link that opens it in its
+   own tab.
+3. If the server has an AI model configured, press **Let the AI referee run
+   turns**. Without one you judge each turn yourself on the Desk.
+4. Press **Start the operation**, write an order in each player tab, then
+   **Lock turn** from the referee tab instead of waiting for the deadline.
+
+Running a session with other people, and what to write down while you do:
+[docs/playtest.md](docs/playtest.md).
+
 ## Wayward exploration playtest
 
 Choose **Wayward: The Silent Tollhouse (2 players)** for asynchronous RPG play
@@ -19,7 +37,7 @@ The existing wargame scenarios keep their own rules engine.
 ## Run
 
 ```sh
-mise install               # installs the pinned Go toolchain (see mise.toml)
+mise install               # installs the Go version pinned in mise.toml
 go run .                   # http://127.0.0.1:8080
 go run . -addr :8080       # accept connections from other machines on the LAN
 go test ./...
@@ -118,6 +136,11 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
   repeatedly timed out. This is a measured test result, not a latency guarantee.
   Reasoning and visible output can share the token budget; see the
   [provider documentation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+- **Strict JSON:** `ai-json-mode = true` sends `response_format: json_object`
+  on the prompts that ask for a JSON object (contests, resolutions, intentions),
+  which cuts malformed replies and retries. It is off by default because not
+  every compatible server or model accepts the field; briefings and drafts,
+  which are prose, never get it.
 - **Your own instructions to the model:** `ai-instructions` (one line;
   `\n` starts a new one) and/or `ai-instructions-file` are added to every
   prompt the assistant sends, for example "Answer directly. Don't reason at
@@ -284,7 +307,7 @@ Automatic judging permits one opposed exchange per pair of units per turn and
 hides already-rolled dice during contest selection. Both affected orders share
 those dice. Human referees can create distinct contests; replacing/deleting a
 rolled result leaves a private audit entry. Enemy perception and casualty
-severity remain model-dependent. See [the fairness audit](docs/HANDOFF.md) for
+severity remain model-dependent. See [the fairness audit](docs/worklog.md) for
 measured results and unresolved limits.
 
 ### Situation vignettes (separate image API)
@@ -437,6 +460,7 @@ main.go                       flags, wiring
 content/                      embedded module + scenario JSON
 internal/rules/               module schema and the dice (d10 + bonus)
 internal/game/                campaigns: rooms, orders, resolution, fog, views, store
+internal/game/engine.go       the rules-engine seam: d10 wargame and Wayward
 internal/web/                 HTTP handlers, templates, static JS/CSS
 internal/push/                web push: VAPID and payload encryption
 internal/ai/                  OpenAI-compatible model client; managed llama-server

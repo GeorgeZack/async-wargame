@@ -22,7 +22,7 @@ const autoBatchSize = 8
 const autoBatchThreshold = 12
 
 func (r *Room) prepareAutoBatches() {
-	if r.Wayward != nil || r.Assistant.Batches != nil || len(r.Units) <= autoBatchThreshold {
+	if !r.rules().batches() || r.Assistant.Batches != nil || len(r.Units) <= autoBatchThreshold {
 		return
 	}
 	units := slices.Clone(r.Units)
@@ -122,23 +122,8 @@ func (r *Room) mergeAutoBatches(mod *Module) error {
 
 // AutomaticReply avoids spending a provider request on empty enemy batches.
 func (r *Room) AutomaticReply(mod *Module, run *Run) (string, bool) {
-	if r.Wayward != nil && run.Kind == RunAutoResolve && r.Desk != nil {
-		d := AutoDecision{Reason: "Server applied the frozen Wayward rulings, destinations and dice."}
-		for _, a := range r.Desk.Wayward {
-			if r.Unit(a.Unit) == nil {
-				return `{"reason":"A ruled character no longer exists; pause and review the turn."}`, true
-			}
-			seen := SeenByAll
-			if a.Secret {
-				seen = SeenByReferee
-			}
-			d.Outcomes = append(d.Outcomes, AutoOutcome{Order: a.Order, Title: "Action", Text: a.Consequence(), Seen: seen})
-			if a.Succeeded() && a.At != nil && *a.At != r.Unit(a.Unit).Pos() {
-				d.Units = append(d.Units, AutoUnitEdit{Unit: a.Unit, At: a.At})
-			}
-		}
-		b, _ := json.Marshal(d)
-		return string(b), true
+	if reply, ok := r.rules().localReply(r, run); ok {
+		return reply, true
 	}
 	if run.Kind != RunAutoIntentions {
 		return "", false

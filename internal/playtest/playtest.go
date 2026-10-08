@@ -284,8 +284,8 @@ func setup(store *game.Store, scenario string, contact bool) (string, []seat, er
 		}
 		for i, unit := range playable {
 			profile := playerProfiles[i%len(playerProfiles)]
-			if r.Wayward != nil {
-				profile = "Explore cooperatively using your character’s strengths. Talk, investigate and follow clues. Change approach after failure; avoid combat and resource spending."
+			if p := r.BotProfile(); p != "" {
+				profile = p
 			}
 			m, e := r.RequestJoin(fmt.Sprintf("AI player %d", i+1), newHash())
 			if e != nil {

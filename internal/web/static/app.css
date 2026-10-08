@@ -1171,3 +1171,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .character-stats dt { font-size: .8rem; }
 .character-stats dd { margin: .2rem 0 0; font-size: 1.2rem; font-weight: 700; }
 .wayward-notice { margin-block: 1rem; padding: 1rem; border-inline-start: 3px solid currentColor; }
+
+/* Setup checklist: the referee's steps before the operation starts. */
+.checklist { margin: 0.6rem 0 0; padding-left: 1.4rem; }
+.checklist > li { margin: 0 0 0.6rem; padding-left: 0.2rem; }
+.checklist > li:last-child { margin-bottom: 0; }
+.checklist > li.done::marker { content: "\2713  "; color: var(--accent); }
+.checklist form { margin-top: 0.4rem; }
+.checklist .seat-links { margin: 0.4rem 0 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; }

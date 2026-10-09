@@ -22,7 +22,7 @@ The point is to learn the screens before inviting anyone.
    press **Join the operation**.
 4. In each player tab, write an order and commit it. In the referee tab,
    press **Lock turn** rather than waiting for the deadline.
-5. Watch the Desk while the AI works through its four stages. When the report
+5. Watch the Judge while the AI works through its four stages. When the report
    appears, read it in a player tab, then open **Order results and rolls**.
 6. Play to the end, or at least through turn 4.
 

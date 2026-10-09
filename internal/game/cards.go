@@ -10,37 +10,38 @@ import (
 // they're good at, what they carry, how they are, and what's been
 // established about them.
 type UnitCard struct {
-	Character     *rules.WaywardCharacter
-	FormationName string
-	Companions    []string
-	Unit          UnitView
-	Counter       Stack // for drawing the counter
-	SideName      string
-	Contact       bool // a player's view of an unidentified unit
-	Playable      bool
-	Quality       int    // the unit's quality bonus
-	Veteran       int    // suggested veterancy bonus
-	Bonus         string // what a roll usually starts from: "+3 (quality +2, veteran +1)"
-	Kit           string
-	Notes         string
-	Record        []string
-	Operations    int
-	Commander     string
-	RadioText     string
-	RadioDown     bool
-	Order         *OrderView
-	Facts         []FactView
-	CanPropose    bool   // the viewer may propose a fact about this unit
-	CanEdit       bool   // the referee
-	Brief         string // private: the holder and the referee only
-	KnownTo       []string
-	Viewers       []Viewer // referee: who could be shown this unit privately
-	RawID         string
-	Strength      int
-	Status        string
-	Known         bool
-	Identified    bool
-	Kits          string // the template's kit, for the referee's edit form
+	RevealedToEnemy bool `json:"revealedToEnemy,omitempty"`
+	Character       *rules.WaywardCharacter
+	FormationName   string
+	Companions      []string
+	Unit            UnitView
+	Counter         Stack // for drawing the counter
+	SideName        string
+	Contact         bool // a player's view of an unidentified unit
+	Playable        bool
+	Quality         int    // the unit's quality bonus
+	Veteran         int    // suggested veterancy bonus
+	Bonus           string // what a roll usually starts from: "+3 (quality +2, veteran +1)"
+	Kit             string
+	Notes           string
+	Record          []string
+	Operations      int
+	Commander       string
+	RadioText       string
+	RadioDown       bool
+	Order           *OrderView
+	Facts           []FactView
+	CanPropose      bool   // the viewer may propose a fact about this unit
+	CanEdit         bool   // the referee
+	Brief           string // private: the holder and the referee only
+	KnownTo         []string
+	Viewers         []Viewer // referee: who could be shown this unit privately
+	RawID           string
+	Strength        int
+	Status          string
+	Known           bool
+	Identified      bool
+	Kits            string // the template's kit, for the referee's edit form
 }
 
 // BuildUnitCard finds a unit by id (or, for players, by contact id) and
@@ -104,6 +105,7 @@ func BuildUnitCard(r *Room, mod *Module, me *Member, id string) (*UnitCard, erro
 		card.Brief = u.Brief
 	}
 	if ref {
+		card.RevealedToEnemy = u.RevealedToEnemy
 		card.CanEdit, card.RawID, card.Strength, card.Status = !r.MissionComplete() && r.rules().editableSheets(), u.ID, u.Strength, u.Status
 		card.Known, card.Identified, card.Kits, card.KnownTo = u.Known, u.Identified, mod.Class(u.Class).Kit, u.KnownTo
 		if !side.Playable {

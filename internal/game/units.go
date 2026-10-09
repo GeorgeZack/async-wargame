@@ -53,19 +53,20 @@ func KitOf(mod *Module, u *Unit) string {
 
 // UnitEdit is the referee changing a unit during play.
 type UnitEdit struct {
-	Name       *string
-	At         *Pos
-	Strength   *int
-	Status     *string
-	Notes      *string
-	Kit        *string
-	Quality    *int
-	Known      *bool
-	KnownTo    *[]string // members who know it's there (when Known is false)
-	Identified *bool
-	Brief      *string
-	RadioDown  *bool
-	Remove     bool
+	RevealedToEnemy *bool
+	Name            *string
+	At              *Pos
+	Strength        *int
+	Status          *string
+	Notes           *string
+	Kit             *string
+	Quality         *int
+	Known           *bool
+	KnownTo         *[]string // members who know it's there (when Known is false)
+	Identified      *bool
+	Brief           *string
+	RadioDown       *bool
+	Remove          bool
 }
 
 // EditUnit applies a referee's change to a unit. During adjudication,
@@ -149,6 +150,9 @@ func (r *Room) EditUnit(actor *Member, mod *Module, id string, e UnitEdit) error
 	}
 	if e.Known != nil && !playable {
 		u.Known = *e.Known
+	}
+	if e.RevealedToEnemy != nil {
+		u.RevealedToEnemy = *e.RevealedToEnemy
 	}
 	if e.KnownTo != nil && !playable {
 		var ids []string

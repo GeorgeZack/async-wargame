@@ -135,29 +135,36 @@
     {
       "code": "u",
       "id": "urban",
-      "name": "Urban"
+      "name": "Urban",
+      "conceals": true
     },
     {
       "code": "U",
       "id": "dense",
       "name": "Dense urban",
-      "note": "Short sight lines. Contacts are hard to detect."
+      "note": "Short sight lines. Contacts are hard to detect.",
+      "conceals": true,
+      "blocksSight": true
     },
     {
       "code": "i",
       "id": "industrial",
-      "name": "Industrial"
+      "name": "Industrial",
+      "conceals": true
     },
     {
       "code": "f",
       "id": "forest",
-      "name": "Woods"
+      "name": "Woods",
+      "conceals": true,
+      "blocksSight": true
     },
     {
       "code": "h",
       "id": "hills",
       "name": "Hills",
-      "note": "Elevated. Good for observation and comms relays."
+      "note": "Elevated. Good for observation and comms relays.",
+      "blocksSight": true
     },
     {
       "code": "m",
@@ -192,14 +199,16 @@
       "crossings": [
         "pass"
       ],
-      "note": "Steep high ground. Ground units cross only at a pass."
+      "note": "Steep high ground. Ground units cross only at a pass.",
+      "blocksSight": true
     },
     {
       "id": "cliff",
       "name": "Cliff",
       "blocks": true,
       "crossings": [],
-      "note": "Impassable to ground units."
+      "note": "Impassable to ground units.",
+      "blocksSight": true
     },
     {
       "id": "wall",
@@ -208,7 +217,8 @@
       "crossings": [
         "gate"
       ],
-      "note": "Built obstacle. Engineers can breach it."
+      "note": "Built obstacle. Engineers can breach it.",
+      "blocksSight": true
     }
   ],
   "crossings": [
@@ -229,5 +239,9 @@
       "name": "Gate"
     }
   ],
-  "events": []
+  "events": [],
+  "awareness": {
+    "rangeCells": 3,
+    "concealedCells": 0
+  }
 }

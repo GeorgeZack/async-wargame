@@ -34,7 +34,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	}
 	r.Assistant.Decision = nil
 	r.Assistant.Batches = nil
-	r.cancelRuns(func(x *Run) bool { return x.Automatic() }, now)
+	r.Assistant.cancelRuns(func(x *Run) bool { return x.Automatic() }, now)
 	r.Undo = nil
 	op := max(r.Operation, 1)
 	rec := OperationRecord{Number: op, Scenario: sc.Name, Turns: r.Turn, EndedAt: now.UTC()}
@@ -66,6 +66,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 		if s := survivors[tu.ID]; s != nil {
 			s.Formation, s.Detached = tu.Formation, false
 			s.X, s.Y = tu.X, tu.Y // survivors redeploy at the start positions
+			s.RevealedToEnemy = tu.RevealedToEnemy
 			units = append(units, s)
 			delete(survivors, tu.ID)
 			continue
@@ -82,6 +83,7 @@ func (r *Room) EndOperation(actor *Member, sc *Scenario, mod *Module, now time.T
 	}
 	r.Formations = fresh.Formations
 	r.Mission = fresh.Mission
+	r.Awareness = fresh.Awareness
 	r.Wayward = fresh.Wayward
 	r.Moves, r.Plans = nil, nil
 	r.Units = units

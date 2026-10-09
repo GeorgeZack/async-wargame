@@ -27,14 +27,14 @@
   </li>
   <li class="{{if or .AI.Automatic (not .Setup.NeedsAI)}}done{{end}}">
     <strong>Referee.</strong>
-    {{if .AI.Automatic}}The AI referee ({{.AI.Model}}) judges and publishes each turn after orders lock. You can pause it and take over on the <a href="{{.Base}}/desk">Desk</a>.
-    {{else if .AI.Available}}You judge each turn on the <a href="{{.Base}}/desk">Desk</a>.
+    {{if .AI.Automatic}}The AI referee ({{.AI.Model}}) judges and publishes each turn after orders lock. You can pause it and take over on <a href="{{.Base}}/desk">Judge</a>.
+    {{else if .AI.Available}}You judge each turn on <a href="{{.Base}}/desk">Judge</a>.
       <form method="post" action="{{.Base}}/assistant/automatic" data-enhance data-confirm="Let the AI referee run turns? Unit names and stats, orders, positions and report lines go to {{.AI.Provider}}. Messages and people's names do not.">
         <button type="submit" name="action" value="enable" class="secondary">Let the AI referee run turns</button>
         <span class="muted small">{{.AI.Model}} via {{.AI.Provider}}</span>
       </form>
     {{else if .Setup.NeedsAI}}<span class="alert">This scenario needs an AI referee, and this server has no AI model configured.</span> <span class="muted small">Set <span class="mono">ai</span> and <span class="mono">ai-model</span> in the server's config file and restart.</span>
-    {{else}}You judge each turn on the <a href="{{.Base}}/desk">Desk</a>. <span class="muted small">No AI model is configured on this server, so there is no AI referee or assistant.</span>{{end}}
+    {{else}}You judge each turn on <a href="{{.Base}}/desk">Judge</a>. <span class="muted small">No AI model is configured on this server, so there is no AI referee or assistant.</span>{{end}}
   </li>
   <li>
     <strong>Start.</strong> Players see a holding page until you do. The map, scale and briefs can be changed on <a href="{{.Base}}/setup">Setup</a>.
@@ -43,6 +43,63 @@
     </form>
   </li>
 </ol>
+{{end}}
+
+{{define "judge-overview"}}
+<section class="judge-overview" id="judge-overview" data-live aria-labelledby="judge-h">
+  <div>
+    <p class="eyebrow">{{if eq .Phase "resolving"}}Orders locked · {{if .AI.Automatic}}AI referee{{else}}You are judging{{end}}{{else if eq .Phase "planning"}}Players are writing orders{{else if eq .Phase "setup"}}Prepare the operation{{else}}Operation complete{{end}}</p>
+    <h1 id="judge-h">{{if eq .Phase "resolving"}}Judge turn {{.Turn}}{{else}}Referee workspace{{end}}</h1>
+    <p class="small">{{if eq .Phase "resolving"}}{{if .AI.Automatic}}The AI judges and publishes this turn. Use the AI controls to pause and take over.{{else}}Read an order, decide what happens, move or change the units, then save its ruling. Players see changes when you publish.{{end}}{{else}}Use this map for both player and enemy chits. Set enemy intentions here; player orders appear after the turn locks.{{end}}</p>
+  </div>
+  <nav class="judge-links" aria-label="Referee tasks">
+    {{if .Desk}}<a href="#desk" data-judge-section="desk">Orders &amp; rulings{{with .Desk.Unwritten}} <span class="count">{{.}}</span>{{end}}</a>{{end}}
+    {{if .Intentions}}<a href="#intentions" data-judge-section="intentions">Enemy actions</a>{{end}}
+    <a href="#referee-chits" data-judge-section="referee-chits">Move chits{{if .Data.Plans}} <span class="count calm">{{len .Data.Plans}}</span>{{end}}</a>
+    {{if .Desk}}<a href="#publish-review" data-judge-section="publish-review">Review &amp; publish</a>{{end}}
+    {{if .AI.Available}}<a href="#assistant" data-judge-section="assistant">AI controls</a>{{end}}
+  </nav>
+</section>
+{{end}}
+
+{{define "referee-chits"}}
+<section class="panel" id="referee-chits" data-live aria-labelledby="chits-h">
+  <h2 id="chits-h">Move player &amp; enemy chits</h2>
+  <p class="small">{{if eq .Phase "resolving"}}Moves are staged until publication. Solid chits show current positions; outlined chits and arrows show your staged destinations.{{else}}Drag a chit to move it, or select it below and use its Move chit control.{{end}}</p>
+  <div class="row tight js-only">
+    <label class="sr-only" for="referee-unit">Choose a chit</label>
+    <select id="referee-unit" class="grow-input">
+      <option value="">Choose a chit…</option>
+      {{range .Forces}}<optgroup label="{{.Name}}">{{range .Units}}<option value="{{.ID}}">{{.Name}} · {{if .AssignedName}}{{.AssignedName}}{{else}}referee controlled{{end}}{{if .Hidden}} · hidden{{end}}{{if .Destroyed}} · destroyed{{end}}</option>{{end}}</optgroup>{{end}}
+    </select>
+    <button type="button" class="secondary small-btn" data-select-chit>Select chit</button>
+  </div>
+  <div id="staged-move-list">
+    {{if .Data.Plans}}<h3 class="small">Staged destinations · {{len .Data.Plans}} {{if eq (len .Data.Plans) 1}}unit{{else}}units{{end}}</h3><ul class="plain small">
+      {{range .Data.Plans}}{{$p := .}}{{range $.Data.Units}}{{if eq .ID $p.Unit}}<li><strong>{{.Name}}</strong>: {{.Where}} → <span data-destination-x="{{$p.To.X}}" data-destination-y="{{$p.To.Y}}">({{num $p.To.X}}, {{num $p.To.Y}})</span></li>{{end}}{{end}}{{end}}
+    </ul>{{else if eq .Phase "resolving"}}<p class="small muted">No moves staged yet. Units without a staged move stay where they are.</p>{{end}}
+  </div>
+</section>
+{{end}}
+
+{{define "publish-review"}}
+<section class="panel publish-review" id="publish-review" data-live aria-labelledby="publish-h"{{if not .Desk}} hidden{{end}}>
+  <h2 id="publish-h">Review &amp; publish</h2>
+  {{with .Desk}}
+    {{if .Unwritten}}<p><strong>{{.Unwritten}} {{if eq .Unwritten 1}}order still needs{{else}}orders still need{{end}} a ruling.</strong> <a href="#desk" data-judge-section="desk">Return to orders</a></p>{{else}}<p><strong>Every committed order has a saved ruling.</strong></p>{{end}}
+    {{with .Unrolled}}<p class="small alert">{{.}} {{if eq . 1}}contest has{{else}}contests have{{end}} not been rolled.</p>{{end}}
+    <ul class="plain review-list">
+      {{range .Items}}<li><strong>{{.Order.UnitName}}</strong>: {{if and .Outcome .Outcome.Text}}{{.Outcome.Text}} <span class="tag">{{if eq .Outcome.Seen "all"}}whole squad{{else if eq .Outcome.Seen "holder"}}only this player{{else}}referee only{{end}}</span>{{else}}<span class="alert">No ruling saved</span>{{end}} <a href="#item-{{.Order.ID}}" data-ruling="{{.Order.ID}}">Review ruling</a></li>{{end}}
+      {{range .Extra}}<li><strong>{{.Title}}</strong>: {{.Text}} <span class="tag">{{if eq .Seen "all"}}whole squad{{else}}referee only{{end}}</span></li>{{end}}
+    </ul>
+    {{with .Missing}}<p class="small">No committed order: {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}.</p>{{end}}
+  {{end}}
+  <p class="small">{{len .Data.Plans}} staged unit moves will take effect. Check destinations on the map and confirm that strength, status and visibility match your rulings.</p>
+  <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? Staged moves take effect, players receive the report, and turn {{.Clock.NextTurn}} opens.{{if .Clock.Unwritten}} {{.Clock.Unwritten}} order(s) have no saved ruling; players will read 'carried out without incident'.{{end}}">
+    <button type="submit"{{if .AI.Automatic}} disabled title="Pause the AI referee to publish manually"{{end}}>Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button>
+  </form>
+  {{if .AI.Automatic}}<p class="small">The AI publishes automatically. <a href="#assistant" data-judge-section="assistant">Pause AI to take over</a></p>{{end}}
+</section>
 {{end}}
 
 {{define "sec-map-tools"}}
@@ -63,7 +120,7 @@
 
 {{define "sec-inspector"}}
 <div id="inspector" class="inspector" aria-live="polite">
-      <p class="muted js-only">Select a counter or a place to read about it.{{if .IsReferee}} Drag a counter to move it; to move several together, Shift-click them (or use Select several) or Shift-drag a box around them, then drag any one.{{end}} Use Measure (or press M) to find a distance.</p>
+      <p class="muted js-only">{{if .IsReferee}}Select a player or enemy chit on the map{{if eq .Screen "desk"}}, or choose one above{{end}}. Its movement and unit controls appear here.{{else}}Select a counter or a place to read about it.{{end}} Use Measure (or press M) to find a distance.</p>
     </div>
 {{end}}
 
@@ -106,7 +163,7 @@
 {{end}}
 
 {{define "sec-desk"}}
-<section class="panel desk" id="desk" data-live{{if .Desk}} aria-labelledby="desk-h"{{else}} hidden{{end}}>
+<section class="panel desk" id="desk" data-live data-no-fold{{if .Desk}} aria-labelledby="desk-h"{{else}} hidden{{end}}>
   {{with .Desk}}
   <div class="desk-head">
     <h2 id="desk-h">Turn {{$.Turn}}: what happens</h2>
@@ -123,27 +180,38 @@
     <datalist id="factor-list">{{range .Factors}}<option value="{{.Name}} {{signed .Value}}"></option>{{end}}</datalist>
   </div>
 
+  <nav class="ruling-queue" aria-label="Orders to judge">
+    {{range .Items}}<a href="#item-{{.Order.ID}}" data-ruling="{{.Order.ID}}"><strong>{{.Order.UnitName}}</strong><span class="tag{{if and .Outcome .Outcome.Text}} tag-order-committed{{end}}">{{if and .Outcome .Outcome.Text}}Ruling saved{{else}}Needs ruling{{end}}</span></a>{{end}}
+    <a href="#extra-h" data-judge-section="extra-h">Enemy &amp; other results</a>
+  </nav>
   {{range .Items}}{{$it := .}}
-  <article class="desk-item" id="item-{{.Order.ID}}" aria-labelledby="item-h-{{.Order.ID}}">
+  <details class="desk-item" id="item-{{.Order.ID}}" data-order="{{.Order.ID}}" data-ruling-unit="{{.Unit.ID}}" open>
+    <summary class="ruling-summary"><strong>{{.Order.UnitName}}</strong><span class="tag{{if and .Outcome .Outcome.Text}} tag-order-committed{{end}}">{{if and .Outcome .Outcome.Text}}Ruling saved{{else}}Needs ruling{{end}}</span>{{range .Contests}}{{if not .Result}}<span class="tag tag-pending">Roll pending</span>{{end}}{{end}}</summary>
+    <div class="ruling-body">
     <header class="item-head">
       {{template "radio" .Unit}}<span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span>
       <h3 id="item-h-{{.Order.ID}}"><a href="{{$.Base}}/units/{{.Unit.ID}}{{if .Order.Group}}?squad=1{{end}}" class="unit-link" data-card>{{.Order.UnitName}}</a></h3>
-      <a href="{{$.Base}}#map" class="small" data-goto="{{.Unit.ID}}">{{.Unit.Where}}</a>
+      <a href="{{$.Base}}#map" class="small" data-goto="{{.Unit.ID}}">Show chit · {{.Unit.Where}}</a>
       <span class="muted small">{{.Unit.AssignedName}}</span>
       {{if .Outcome}}{{if .Outcome.Text}}<span class="tag tag-order-committed">written</span>{{end}}{{end}}
     </header>
     {{with .Unit.Status}}<p class="small unit-status">{{.}}</p>{{end}}
+    <h4 class="ruling-step">1 · Read the order</h4>
     <blockquote class="order-text">{{.Order.Text}}</blockquote>
     {{if .Wants}}<p class="small">Pin: {{.Wants}}.</p>{{else if .Order.Mark}}<p class="small muted">Pin: {{.Order.MarkLabel}}</p>{{end}}
     {{with .Reach}}<p class="small muted">Moves {{.}}.</p>{{end}}
     {{with .Moved}}<p class="small moved">{{.Text}}</p>{{end}}
     {{if .Order.Group}}<p class="small muted">Members: {{.Order.Members}}. Choose the member whose ability is relevant for each roll.</p>{{else if not $.Wayward}}<p class="small muted">Usual bonus {{.Bonus}}{{with .Kit}} · Kit: {{.}}{{end}}</p>{{end}}
 
+    <h4 class="ruling-step">2 · Decide &amp; roll if uncertain</h4>
     {{range .Contests}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
     {{range .Wayward}}<p class="small">{{.}}</p>{{end}}
     {{if not $.Wayward}}{{template "add-roll" (dict "V" $ "Order" .Order.ID "Unit" .Unit.ID "Open" false)}}{{end}}
 
-    <form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance>
+    <h4 class="ruling-step">3 · Move or change units</h4>
+    <p class="small"><button type="button" class="secondary small-btn js-only" data-ref-move="{{.Unit.ID}}">Move {{.Order.UnitName}}</button> <a href="{{$.Base}}/units/{{.Unit.ID}}{{if .Order.Group}}?squad=1{{end}}" data-card>Edit strength, status &amp; visibility</a></p>
+    <h4 class="ruling-step">4 · Record the ruling</h4>
+    <form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance data-draft="outcome-{{.Order.ID}}">
       <input type="hidden" name="order" value="{{.Order.ID}}">
       <label class="small"><strong>What happened</strong>
         {{with .Outcome}}{{if eq .Source "ai"}}<span class="tag">{{if .Edited}}AI draft, edited{{else}}AI draft{{with .Model}} · {{.}}{{end}}{{end}}</span>{{end}}{{end}}
@@ -154,7 +222,8 @@
             <option value="all"{{if eq $seen "all"}} selected{{end}}>the whole squad</option>
             <option value="holder"{{if eq $seen "holder"}} selected{{end}}>only this player</option>
             <option value="referee"{{if eq $seen "referee"}} selected{{end}}>nobody yet (my notes)</option></select></label>
-        <button type="submit" class="small-btn">Save</button>
+        <button type="submit" class="small-btn">Save ruling</button>
+        <span class="small muted draft-state" role="status">{{if and .Outcome .Outcome.Text}}Saved{{else}}Not saved yet{{end}}</span>
       </div>
     </form>
     {{if and $.AI.On (not $.AI.Automatic) (not $.Wayward)}}<form method="post" action="{{$.Base}}/assistant/run" class="row tight" data-enhance>
@@ -164,9 +233,9 @@
     {{with .Outcome}}{{with .Draft}}<div class="ai-draft small"><p><strong>AI draft</strong> (beside your text): {{.}}</p>
       <form method="post" action="{{$.Base}}/assistant/draft" data-enhance><input type="hidden" name="order" value="{{$it.Order.ID}}"><button type="submit" class="link small">Use this instead</button></form></div>{{end}}{{end}}
 
-    {{if .Holder}}<details class="small ask-player"{{if .Question}}{{if not .Question.Sent.IsZero}}{{else}} open{{end}}{{end}}><summary>Ask {{.Holder}} about this order{{with .Question}}{{if not .Sent.IsZero}} <span class="tag tag-order-committed">asked</span>{{else if eq .Source "ai"}} <span class="tag">AI draft</span>{{end}}{{end}}</summary>
+    {{if .Holder}}<details class="small ask-player" id="ask-{{.Order.ID}}"{{if .Question}}{{if not .Question.Sent.IsZero}}{{else}} open{{end}}{{end}}><summary>Ask {{.Holder}} about this order{{with .Question}}{{if not .Sent.IsZero}} <span class="tag tag-order-committed">asked</span>{{else if eq .Source "ai"}} <span class="tag">AI draft</span>{{end}}{{end}}</summary>
       {{with .Question}}{{if not .Sent.IsZero}}<p class="small">You asked: “{{.Text}}” The answer arrives in your private messages with {{$it.Holder}}.</p>{{end}}{{end}}
-      <form method="post" action="{{$.Base}}/desk/ask" class="stack" data-enhance>
+      <form method="post" action="{{$.Base}}/desk/ask" class="stack" data-enhance data-draft="question-{{.Order.ID}}">
         <input type="hidden" name="order" value="{{.Order.ID}}"><input type="hidden" name="target" value="{{.Order.ID}}">
         <textarea name="text" rows="2" maxlength="600" required aria-label="Question for {{.Holder}}" placeholder="When you say you pull back, do you mean to the bridge or all the way to the beach?">{{with .Question}}{{if .Sent.IsZero}}{{.Text}}{{end}}{{end}}</textarea>
         <div class="row tight"><button type="submit" class="small-btn">Send to {{.Holder}}</button>
@@ -174,24 +243,25 @@
       </form>
       {{if .Asking}}{{template "ai-cancel" (dict "V" $ "Kind" "question" "Target" .Order.ID)}}{{end}}
     </details>{{end}}
-    <details class="small unit-quick"><summary>Change {{.Unit.Name}}</summary>
-      <form method="post" action="{{$.Base}}/units/{{.Unit.ID}}/edit" class="row tight" data-enhance>
+    <details class="small unit-quick" id="quick-{{.Order.ID}}"><summary>Change {{.Unit.Name}}</summary>
+      <form method="post" action="{{$.Base}}/units/{{.Unit.ID}}/edit" class="row tight" data-enhance data-draft="status-{{.Order.ID}}">
         <label class="inline grow">Status <input name="status" value="{{.Unit.Status}}" maxlength="200" placeholder="pinned, wounded: left arm" class="compact-input grow-input"></label>
         <input type="hidden" name="radio_down_set" value="1">
         <label class="toggle"><input type="checkbox" name="radio_down"{{if eq .Unit.Radio "down"}} checked{{end}}> Out of contact</label>
         <button type="submit" class="secondary small-btn">Save</button>
       </form></details>
-  </article>
+    </div>
+  </details>
   {{end}}
 
   <section class="desk-extra" aria-labelledby="extra-h">
-    <h3 id="extra-h">Everything else</h3>
-    <p class="small muted">Enemy movement, a retreat, a building catching fire: things that happened without anyone ordering them. Drag counters on the Table to move them.</p>
+    <h3 id="extra-h">Enemy &amp; other results</h3>
+    <p class="small">Decide what the enemy actions below achieve. Move their chits on this map, add a roll if needed, and record any result that is not covered by a player order. Writing a result does not move a chit or change its strength.</p>
     {{with .Moves}}<h4 class="moves-h">Counters you moved this turn</h4>
     <ul class="plain small moves">{{range .}}<li><strong>{{.Unit}}</strong>: {{.Text}}</li>{{end}}</ul>{{end}}
     {{range .Loose}}{{template "contest" (dict "V" $ "C" .)}}{{end}}
     {{if not $.Wayward}}{{template "add-roll" (dict "V" $ "Order" "" "Unit" "" "Open" false)}}{{end}}
-    {{range .Extra}}<form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance>
+    {{range .Extra}}<form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance data-draft="extra-{{.ID}}">
       <input type="hidden" name="id" value="{{.ID}}">
       <input name="title" value="{{.Title}}" maxlength="80" class="compact-input" placeholder="Heading" aria-label="Heading">
       <textarea name="text" rows="3" maxlength="3000" aria-label="What happened">{{.Text}}</textarea>
@@ -201,13 +271,13 @@
         <button type="submit" class="small-btn">Save</button>
         <span class="muted small">Clear the text and save to remove it.</span></div>
     </form>{{end}}
-    <details class="small"><summary>Add something that happened</summary>
-      <form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance data-reset>
+    <details class="small" id="add-extra-result"><summary>Add an enemy or other result</summary>
+      <form method="post" action="{{$.Base}}/desk/outcome" class="stack outcome-form" data-enhance data-reset data-draft="extra-new">
         <input name="title" maxlength="80" class="compact-input" placeholder="Heading: The street fills up" aria-label="Heading">
         <textarea name="text" rows="3" maxlength="3000" required aria-label="What happened"></textarea>
         <div class="row tight"><select name="seen" class="compact" aria-label="Who hears about it">
             <option value="all">the whole squad</option><option value="referee">nobody yet (my notes)</option></select>
-          <button type="submit" class="small-btn">Add</button></div>
+          <button type="submit" class="small-btn">Save result</button></div>
       </form></details>
   </section>
   {{end}}
@@ -675,10 +745,11 @@
         <button type="submit"{{if not .Clock.AllIn}} class="secondary"{{end}}>Lock turn {{.Turn}} now</button></form>
       <span class="small">{{if .Clock.AllIn}}Every player has committed.{{else}}Orders in: {{.Clock.OrdersIn}} of {{.Clock.OrdersTotal}}.{{with .Clock.Waiting}} Waiting on {{range $i, $w := .}}{{if $i}}, {{end}}{{$w}}{{end}}.{{end}}{{end}} Otherwise it locks {{.Clock.DeadlineText}}. <a href="{{.Base}}/setup#turn-clock">Defer or change the schedule</a></span>
     {{else}}
-      {{if and (eq $stage "judge") (ne .Screen "desk")}}<a class="button secondary" href="{{.Base}}/desk#desk">Go to the desk</a>{{end}}
+      {{if ne .Screen "desk"}}<a class="button" href="{{.Base}}/desk#desk">Judge turn {{.Turn}}</a>{{end}}
+      {{if ne .Screen "desk"}}<a class="button secondary" href="{{.Base}}/desk#publish-review">Review &amp; publish</a>{{else}}
       <form method="post" action="{{.Base}}/turn/next" data-enhance data-confirm="Publish turn {{.Turn}}? All referee-staged moves take effect, players get the report, and turn {{.Clock.NextTurn}} opens.{{if .Clock.Unwritten}} {{.Clock.Unwritten}} order(s) have no outcome written; players will read 'carried out without incident'.{{end}}">
         {{if .Data.Plans}}<p class="small">{{len .Data.Plans}} staged unit move(s) will be applied with this report.</p>{{end}}
-        <button type="submit"{{if .AI.Automatic}} disabled title="Pause the AI referee to publish manually"{{end}}{{if .Clock.Unwritten}} class="secondary"{{end}}>Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>
+        <button type="submit"{{if .AI.Automatic}} disabled title="Pause the AI referee to publish manually"{{end}}{{if .Clock.Unwritten}} class="secondary"{{end}}>Publish turn {{.Turn}} and open turn {{.Clock.NextTurn}}</button></form>{{end}}
     {{end}}
   </div>
   {{end}}
@@ -826,8 +897,8 @@
   {{end}}
   <div class="row tight">
     <form method="post" action="{{$v.Base}}/desk/contests/{{$c.ID}}/roll" data-enhance><button type="submit" class="small-btn{{if $c.Result}} secondary{{end}}">{{if $c.Result}}Roll again{{else}}Roll{{end}}</button></form>
-    <details class="table-dice"><summary class="small">Rolled at the table?</summary>
-      <form method="post" action="{{$v.Base}}/desk/contests/{{$c.ID}}/roll" class="row tight" data-enhance>
+    <details class="table-dice" id="table-dice-{{$c.ID}}"><summary class="small">Rolled at the table?</summary>
+      <form method="post" action="{{$v.Base}}/desk/contests/{{$c.ID}}/roll" class="row tight" data-enhance data-draft="dice-{{$c.ID}}">
         <label class="inline small">{{$c.A.Name}} d10 <input type="number" name="die_a" min="1" max="10" required class="num-s"></label>
         {{if $c.B}}<label class="inline small">{{$c.B.Name}} d10 <input type="number" name="die_b" min="1" max="10" required class="num-s"></label>{{end}}
         <button type="submit" class="secondary small-btn">Use these</button></form></details>
@@ -837,8 +908,8 @@
 {{end}}
 
 {{define "add-roll"}}{{$v := .V}}{{$d := $v.Desk}}
-<details class="add-roll"{{if .Open}} open{{end}}><summary class="small">Add a roll</summary>
-  <form method="post" action="{{$v.Base}}/desk/contests" class="stack roll-form" data-enhance data-reset>
+<details class="add-roll" id="roll-details-{{.Order}}"{{if .Open}} open{{end}}><summary class="small">Add a roll</summary>
+  <form method="post" action="{{$v.Base}}/desk/contests" class="stack roll-form" data-enhance data-reset data-draft="roll-{{.Order}}">
     <input type="hidden" name="order" value="{{.Order}}">
     <input name="title" maxlength="80" class="compact-input" placeholder="What's in doubt: the grenade, getting past the lobby" aria-label="What's in doubt">
     <p class="muted small">Each side rolls a d10 plus one bonus. For a unit, it starts from its usual bonus (quality and veterancy); add the situation here. For anyone else, give the whole bonus.</p>
@@ -907,13 +978,13 @@
 
 {{define "sec-intentions"}}
 <section class="panel intentions" id="intentions" data-live aria-labelledby="int-h"{{if not .Intentions}} hidden{{end}}>
-      <h2 id="int-h">The other side</h2>
-      <p class="small muted">What each of them means to do this turn. Best decided while players are still writing orders, so you're not reacting to them. Players never see this.</p>
+      <h2 id="int-h">Enemy actions</h2>
+      <p class="small muted">{{if eq .Phase "resolving"}}These are their intentions, not resolved results. Decide what succeeds, move their chits, and record the consequences under <a href="#extra-h" data-judge-section="extra-h">Enemy &amp; other results</a>.{{else}}Decide what each enemy means to do before player orders lock. Saving an intention does not move its chit.{{end}} Players never see these intentions.</p>
       {{if and .AI.On (not .AI.Automatic)}}<form method="post" action="{{.Base}}/assistant/run" data-enhance><input type="hidden" name="kind" value="intentions">
         <button type="submit" class="secondary small-btn"{{if index .AI.Busy "intentions/"}} disabled{{end}}>{{if index .AI.Busy "intentions/"}}Proposing…{{else}}Propose intentions with AI{{end}}</button></form>
       {{if index .AI.Busy "intentions/"}}{{template "ai-cancel" (dict "V" $ "Kind" "intentions" "Target" "")}}{{end}}{{end}}
       <ul class="plain list">{{range .Intentions}}<li>
-        <form method="post" action="{{$.Base}}/intentions" class="intent-row" data-enhance>
+        <form method="post" action="{{$.Base}}/intentions" class="intent-row" data-enhance data-draft="intention-{{.Unit.ID}}">
           <input type="hidden" name="unit" value="{{.Unit.ID}}">
           <label for="int-{{.Unit.ID}}"><span class="abbr side-{{.Unit.Side}}" aria-hidden="true">{{.Unit.Abbr}}</span><a href="{{$.Base}}/units/{{.Unit.ID}}" class="unit-link" data-card>{{.Unit.Name}}</a>
             <span class="small muted">{{.Unit.Where}}</span>
@@ -921,8 +992,10 @@
             {{if eq .Source "ai"}}<span class="tag" title="Proposed by {{.Model}}">AI</span>{{end}}</label>
           <div class="row tight">
             <input name="text" id="int-{{.Unit.ID}}" value="{{.Text}}" maxlength="400" class="compact-input grow-input" placeholder="watch the approach; hold the reserve">
-            <button type="submit" class="secondary small-btn">Save</button></div>
-        </form></li>{{end}}</ul>
+            <button type="submit" class="secondary small-btn">Save intention</button></div>
+        </form>
+        <div class="row tight small"><a href="{{$.Base}}#map" data-goto="{{.Unit.ID}}">Show chit · {{.Unit.Where}}</a><button type="button" class="secondary small-btn js-only" data-ref-move="{{.Unit.ID}}">Move {{.Unit.Name}}</button><a href="{{$.Base}}/units/{{.Unit.ID}}" data-card>Edit unit</a></div>
+        </li>{{end}}</ul>
     </section>
 {{end}}
 

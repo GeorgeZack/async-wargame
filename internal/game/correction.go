@@ -112,7 +112,7 @@ func (r *Room) ReopenTurn(actor *Member, reason string, now time.Time) error {
 	}
 	r.Assistant.Automatic, r.Assistant.Decision = false, nil
 	r.Assistant.Batches = nil
-	r.cancelRuns(func(run *Run) bool { return run.Automatic() }, now)
+	r.Assistant.cancelRuns(func(run *Run) bool { return run.Automatic() }, now)
 	r.Undo = nil
 	r.LockedAt = now.UTC() // the referee gets a full window before any takeover
 	r.Corrections = append(r.Corrections, Correction{Turn: r.Turn, At: now.UTC(), Reason: reason})

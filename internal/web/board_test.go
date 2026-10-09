@@ -67,6 +67,30 @@ func hicksGet(b *browser, path string) int {
 	return res.StatusCode
 }
 
+func TestEnemyRevelationIsRefereeOnlyOverHTTP(t *testing.T) {
+	_, store, ref, player, code, _ := setupSquad(t)
+	base := "/r/" + code
+	ref.post(base+"/start", nil)
+	form := url.Values{"revealed_to_enemy_set": {"1"}, "revealed_to_enemy": {"on"}}
+	if res, _ := player.post(base+"/units/m2/edit", form); res.StatusCode != 403 {
+		t.Fatal("player changed enemy awareness")
+	}
+	if res, _ := ref.post(base+"/units/m2/edit", form); res.StatusCode != 200 {
+		t.Fatal("referee could not reveal a unit")
+	}
+	store.Read(code, func(r *game.Room) {
+		if !r.Unit("m2").RevealedToEnemy {
+			t.Error("revelation not persisted")
+		}
+	})
+	_, body := ref.get(base + "/units/m2")
+	mustContain(t, body, "Revealed to enemies", `name="revealed_to_enemy" checked`)
+	_, body = player.get(base + "/units/m2")
+	mustNotContain(t, body, "Revealed to enemies", "revealed_to_enemy", "revealedToEnemy")
+	_, body = player.get(base)
+	mustNotContain(t, body, "revealedToEnemy")
+}
+
 func TestBriefsAndRevealsOverHTTP(t *testing.T) {
 	ts, store, ref, hicks, code, h := setupSquad(t)
 	base := "/r/" + code

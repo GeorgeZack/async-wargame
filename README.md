@@ -15,12 +15,25 @@ mise install && go run .        # then open http://127.0.0.1:8080
    players**: each unit gets a puppet player, with a link that opens it in its
    own tab.
 3. If the server has an AI model configured, press **Let the AI referee run
-   turns**. Without one you judge each turn yourself on the Desk.
+   turns**. Without one you judge each turn yourself on Judge.
 4. Press **Start the operation**, write an order in each player tab, then
    **Lock turn** from the referee tab instead of waiting for the deadline.
 
 Running a session with other people, and what to write down while you do:
 [docs/playtest.md](docs/playtest.md).
+
+## Play solo as the referee
+
+You can play from the referee seat alone. Leave the player units unassigned,
+start the operation, and use **Write an order** on Table or Judge for each unit.
+Lock the turn, then open **Judge**: read orders and roll when needed, set enemy
+actions, move either side's chits, and save the rulings. Moves are staged until
+**Review & publish** applies them and opens the next turn. Select a chit and
+use its unit-card link for strength, status and visibility changes.
+
+If a text model is configured, enable the automatic referee before locking
+to have it judge and publish instead. Test players are optional; use them when
+you want to check what a separate player can see.
 
 ## Wayward exploration playtest
 
@@ -123,7 +136,7 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
   Zen models log prompts or use them for training (see
   [opencode.ai/docs/zen](https://opencode.ai/docs/zen/)).
 - **Cancelling:** every queued or running AI request has a Cancel button
-  (next to the busy button that started it, and in the Desk's Assistant
+  (next to the busy button that started it, and in the Judge's Assistant
   panel, with Cancel all). A request already waiting on the model is cut
   off, and an answer that arrives anyway is thrown away. Switching the
   assistant off for a room cancels its requests too.
@@ -158,7 +171,7 @@ OPENCODE_API_KEY=... ./async-wargame -ai opencode-zen -ai-model big-pickle
 
 ### Automatic referee (opt-in)
 
-On the **Desk** or **Setup** screen, choose **Enable automatic referee**.
+On the **Judge** or **Setup** screen, choose **Enable automatic referee**.
 This uses the configured text model (`ai` / `ai-model`). Host the room, admit
 players, set up the scenario and start the operation normally. Thereafter,
 each scheduled lock starts a four-stage turn without a manual Publish step:
@@ -172,11 +185,13 @@ each scheduled lock starts a four-stage turn without a manual Publish step:
    changes and publish the report together. The next planning deadline opens,
    unless the scenario’s objective checks complete the mission.
 
-Larger turns are processed in persisted batches, targeting eight units each and
-keeping formations together. Each unit/order has exactly one writer; other
-orders remain read-only context. Dice relevant to a batch accompany its task.
-All batches must pass the full-turn validator before any map change or report
-is published. The referee can see batch progress on the Desk.
+Larger turns are processed in persisted batches, targeting eight units each.
+Formations and connected opposed engagements stay together, even if that needs
+a larger batch. Both sides share one writer and the same recorded dice. After
+the full-turn validator accepts the merged changes, a separate reporting pass
+rewrites every provisional outcome against the recorded starting and final
+states. It cannot change units, threat or audiences. Nothing is published until
+that pass and the public briefing finish. The referee can see progress on Judge.
 
 **Pause AI · take over** cancels pending work and rejects late replies.
 `ai-retries` defaults to one automatic retry for a failed, unchanged stage
@@ -212,9 +227,19 @@ status change notify everyone. Browsers coalesce bursts of updates and defer ref
 Batching still carries shared world/order context; it is not
 full encounter isolation. Dense formations, long orders, tactical consistency,
 long-range dependencies and long campaign histories need further testing. Result
-prose can still contradict another group's unit changes; shared engagement
-resolution is needed before treating this as reliable large-campaign judging.
+prose is regenerated from merged state, but its tactical and semantic accuracy
+still depends on the model and needs real-player testing. Regeneration is not
+a deterministic proof that every sentence matches state.
 Creating/closing rooms and configuring campaigns remain host actions.
+
+Enemy planning receives contacts filtered by observation range, concealing
+terrain and sight-blocking terrain/edges, with estimated numbers. It receives
+neither player orders nor global referee notes. The referee can mark a player
+unit **Revealed to enemies** on its card; automatic resolution can record the
+same change. Revelation bypasses concealment while the unit remains in range
+with a clear sight line. Clear it when the unit regains concealment. This
+setting is private to the referee. Uploaded image boards have no terrain
+geometry for the sight-line filter; their observations use distance only.
 
 ### Two-player test scenario
 
@@ -363,7 +388,7 @@ cross the canal, reach the hospital, and bring the survivors out.
 - **One page for players:** the situation (latest report, briefing,
   history), the map, their character with a **private brief** only they and
   the referee can read, the order box, and game chat. The referee has four
-  screens: Table (map, orders, game chat), Desk (judging, the other side, events,
+  screens: Table (map, orders, game chat), Judge (judging, the other side, events,
   facts), People, and Setup (map and scale, scenario, schedule, settings).
 - **The map** is the drawn hex map or an image the referee uploads (a
   sketch, a scan, a city plan), with a hex grid, a square grid, or none laid
@@ -403,21 +428,21 @@ cross the canal, reach the hospital, and bring the survivors out.
 - **Facts are co-created.** Players propose something true about their
   marine or the world from a card ("the hospital has a loading dock on the
   canal side"); the referee accepts it, changes it, or turns it down on the
-  Desk. Accepted facts show on the cards and in "What we know" (or stay
+  Judge. Accepted facts show on the cards and in "What we know" (or stay
   private between one player and the referee).
 - **The dice:** when a situation is in doubt, each side rolls a d10 plus one
   bonus, everything that matters summed (quality, veterancy, cover, ambush,
   weather). The result is just the totals, "Okafor 5, the horde 9", and the
   referee reads them against what each side wanted, like an old Braunstein
   game. The server rolls, or the referee enters dice from the table.
-- **The desk.** At the lock, every order lands on the referee's Desk.
+- **The desk.** At the lock, every order lands on the referee's Judge.
   For each, the referee rolls where needed, writes what happened, and
   chooses who hears about it (the whole squad, only that player, or nobody
   yet). They move counters and change units (status, skills, kit, notes,
   radio) as they go; players keep seeing the board as it stood at the lock
   until the turn is published. Secret rolls stay on the referee's side of
   the report.
-- **The other side.** On the Desk the referee notes what each enemy
+- **The other side.** On the Judge the referee notes what each enemy
   unit intends this turn, ideally before reading the players' orders.
   Players never see it; it guides the judging (and the AI's suggestions).
 - **Asking about an order.** At the desk, the referee can send a player a

@@ -99,14 +99,23 @@ func (r *Room) intentionViews(mod *Module, me *Member) []IntentionView {
 	return out
 }
 
+type noticedUnit struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Side     string `json:"side"`
+	Where    string `json:"where"`
+	Distance string `json:"distance"`
+	Numbers  string `json:"estimatedNumbers"`
+}
+
 func (r *Room) intentionsPrompt(mod *Module, run *Run) (string, string, bool) {
 	if run.Turn != r.Turn || r.intentionsOpen() != nil {
 		return "", "", false
 	}
 	type enemy struct {
 		promptUnit
-		Current string       `json:"currentIntention,omitempty"`
-		Senses  []promptUnit `json:"whatItCouldNotice,omitempty"`
+		Current string        `json:"currentIntention,omitempty"`
+		Senses  []noticedUnit `json:"whatItCouldNotice,omitempty"`
 	}
 	var enemies []enemy
 	for _, u := range r.Units {
@@ -117,14 +126,15 @@ func (r *Room) intentionsPrompt(mod *Module, run *Run) (string, string, bool) {
 			continue
 		}
 		e := enemy{promptUnit: r.promptUnit(mod, u), Current: r.IntentionOf(u.ID)}
-		// The enemy decides on what it could notice: anything within three
-		// hexes. It knows nothing of the players' orders.
+		// Do not send the referee's full unit sheets as observed contacts.
 		for _, x := range r.Units {
-			if x != u && r.Cells(u.Pos(), x.Pos()) <= 3 {
-				p := r.promptUnit(mod, x)
-				p.Distance = r.DistanceText(u.Pos(), x.Pos())
-				p.Kit, p.Notes, p.Facts, p.Hidden = "", "", nil, false
-				e.Senses = append(e.Senses, p)
+			if r.enemyNotices(mod, u, x) {
+				cl := mod.Class(x.Class)
+				numbers := "one contact"
+				if cl.IsGroup() {
+					numbers = estimate(x.Strength)
+				}
+				e.Senses = append(e.Senses, noticedUnit{x.ID, cl.Name, mod.Side(x.Side).Name, r.where(mod, x.Pos()), r.DistanceText(u.Pos(), x.Pos()), numbers})
 			}
 		}
 		enemies = append(enemies, e)
@@ -132,13 +142,13 @@ func (r *Room) intentionsPrompt(mod *Module, run *Run) (string, string, bool) {
 	if len(enemies) == 0 {
 		return "", "", false
 	}
-	system := `You are Jev, assistant to the referee of a referee-led, old-school roleplaying wargame. Before the turn is judged, the referee decides what the opposition intends, without knowing what the players ordered. Propose one intention for each enemy unit: what it means to do this turn, in one sentence, true to what it is (mindless things follow noise and hunger; cunning things wait and ambush) and based only on what it could notice nearby. Keep a unit's current intention if it still makes sense.
+	system := `You are Jev, assistant to the referee of a referee-led, old-school roleplaying wargame. Before the turn is judged, the referee decides what the opposition intends, without knowing what the players ordered. Propose one intention for each enemy unit: what it means to do this turn, in one sentence, true to what it is (mindless things follow noise and hunger; cunning things wait and ambush) and based only on its server-filtered whatItCouldNotice contacts. Absent contacts are unknown; never infer their positions, strength or actions. Contact numbers are estimates, not exact headcounts. Keep a unit's current intention if it still makes sense.
 
 ` + r.settingText(mod) + `
 
 Reply with only a JSON object:
 {"intentions":[{"unit":"<unit id>","intent":"<one sentence>"}]}`
-	b, _ := json.MarshalIndent(map[string]any{"turn": run.Turn, "threat": r.Threat, "enemies": enemies, "refereeNotes": r.RefereeNotes}, "", " ")
+	b, _ := json.MarshalIndent(map[string]any{"turn": run.Turn, "threat": r.Threat, "enemies": enemies}, "", " ")
 	return system, string(b), true
 }
 

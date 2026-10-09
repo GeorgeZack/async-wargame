@@ -85,7 +85,7 @@ func (s *Server) editUnit(w http.ResponseWriter, r *http.Request) {
 		return &v
 	}
 	e := game.UnitEdit{Name: str("name"), At: formPos(r, "x", "y"), Brief: str("brief"), Status: str("status"), Notes: str("notes"), Kit: str("kit"),
-		Known: flag("known"), Identified: flag("identified"), RadioDown: flag("radio_down"), Remove: r.FormValue("remove") == "1"}
+		Known: flag("known"), Identified: flag("identified"), RevealedToEnemy: flag("revealed_to_enemy"), RadioDown: flag("radio_down"), Remove: r.FormValue("remove") == "1"}
 	if v := r.FormValue("strength"); v != "" {
 		n := formInt(r, "strength")
 		e.Strength = &n

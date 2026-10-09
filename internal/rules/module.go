@@ -11,6 +11,7 @@ package rules
 import (
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 )
@@ -20,6 +21,7 @@ var ErrInvalid = errors.New("bad request")
 
 // Module is a versioned setting.
 type Module struct {
+	Awareness *Awareness `json:"awareness,omitempty"`
 	Engine    string     `json:"engine,omitempty"` // empty: wargame; wayward: exploration playtest
 	ID        string     `json:"id"`
 	Version   string     `json:"version"`
@@ -36,6 +38,21 @@ type Module struct {
 	terrainByCode map[byte]*Terrain
 	classByID     map[string]*Class
 	sideByID      map[string]*Side
+}
+
+// Awareness bounds the opposition's observations, in board cells. A scenario
+// may override it. Revealed contacts bypass concealment, not range or obstacles.
+type Awareness struct {
+	RangeCells     float64 `json:"rangeCells"`
+	ConcealedCells float64 `json:"concealedCells"`
+}
+
+func (a Awareness) Validate() error {
+	if math.IsNaN(a.RangeCells) || math.IsInf(a.RangeCells, 0) || a.RangeCells <= 0 || a.RangeCells > 100 ||
+		math.IsNaN(a.ConcealedCells) || math.IsInf(a.ConcealedCells, 0) || a.ConcealedCells < 0 || a.ConcealedCells > a.RangeCells {
+		return fmt.Errorf("awareness needs rangeCells greater than 0 and at most 100, and concealedCells between 0 and rangeCells")
+	}
+	return nil
 }
 
 // Factor is something that often counts toward one side's bonus: "ambush
@@ -85,22 +102,25 @@ func (c *Class) IsGroup() bool { return c.Kind == "" || c.Kind == "group" }
 
 // Terrain is how a hex is drawn and what it's called.
 type Terrain struct {
-	Code    string `json:"code"`
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	IsWater bool   `json:"water,omitempty"`
-	Note    string `json:"note,omitempty"`
+	Conceals    bool   `json:"conceals,omitempty"`
+	BlocksSight bool   `json:"blocksSight,omitempty"`
+	Code        string `json:"code"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	IsWater     bool   `json:"water,omitempty"`
+	Note        string `json:"note,omitempty"`
 }
 
 func (t *Terrain) Water() bool { return t.IsWater }
 
 // EdgeType is a feature drawn along hex sides: a river, a ridge, a wall.
 type EdgeType struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Blocks    bool     `json:"blocks,omitempty"` // a real obstacle; random events route around it
-	Crossings []string `json:"crossings"`        // crossings allowed on this edge
-	Note      string   `json:"note,omitempty"`
+	BlocksSight bool     `json:"blocksSight,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Blocks      bool     `json:"blocks,omitempty"` // a real obstacle; random events route around it
+	Crossings   []string `json:"crossings"`        // crossings allowed on this edge
+	Note        string   `json:"note,omitempty"`
 }
 
 type Crossing struct {
@@ -157,6 +177,11 @@ func (m *Module) HasTerrain(id string) bool {
 
 // Index builds lookups and validates the module.
 func (m *Module) Index() error {
+	if m.Awareness != nil {
+		if err := m.Awareness.Validate(); err != nil {
+			return err
+		}
+	}
 	if m.Engine != "" && m.Engine != "wayward" {
 		return fmt.Errorf("unknown rules engine %q", m.Engine)
 	}

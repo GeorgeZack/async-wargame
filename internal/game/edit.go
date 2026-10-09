@@ -373,6 +373,7 @@ func (r *Room) ResetToScenario(actor *Member, sc *Scenario, mod *Module) error {
 	fresh := newRoom(r.Code, r.Name, sc, mod, "", "")
 	r.BriefingVignette = nil
 	r.Mission = fresh.Mission
+	r.Awareness = fresh.Awareness
 	r.Wayward = fresh.Wayward
 	r.Objectives = append([]string{}, fresh.Objectives...)
 	r.Map, r.Features, r.Units = fresh.Map, fresh.Features, fresh.Units

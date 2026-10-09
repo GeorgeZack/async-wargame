@@ -8,10 +8,14 @@ in [roadmap.md](roadmap.md).
 
 - Everything through the automatic referee, the 100-player scale tests and the
   Wayward exploration slice is on `origin/master`.
-- `go vet`, `gofmt` and `go test ./...` pass. CI (`.github/workflows/test.yml`)
-  runs them, plus race checks for game/assist/web, on every push.
+- `go vet`, `gofmt`, `go test -count=1 ./...`, race checks for game/assist/web,
+  and `node --check internal/web/static/app.js` pass locally. CI
+  (`.github/workflows/test.yml`) runs the Go checks on every push.
 - No human group has played a full game yet. Milestone 1 in the roadmap is
   open, and it is the next thing to close.
+- The referee UI and original handoff tasks 1–3 are committed locally.
+  Assistant run bookkeeping has moved onto `Assistant`; the remaining
+  `Room` decomposition is optional follow-up. The owner pushes when ready.
 
 ## Changed on 2026-10-08
 
@@ -31,18 +35,43 @@ in [roadmap.md](roadmap.md).
 - **`ai-json-mode`** (off by default) requests strict JSON on structured prompts.
 - Posted forms are capped at 1 MB (the map upload keeps its 15 MB limit).
 - Go is pinned in `mise.toml`.
+- **Judge workspace:** map and chit selection beside an order-by-order
+  ruling queue, explicit roll/move/save steps, enemy actions, and a review
+  before publication. Both sides' moves use the map or coordinates and stay
+  staged until publication. Edited form drafts survive live refreshes.
+- **Solo referee play** works with player units left unassigned. Orders can
+  be written on Table or Judge. A full solo turn and the test-player setup,
+  order, commit and lock flow were exercised in a disposable browser at
+  desktop and 390 px widths; no paid model was used.
+- **Shared engagements:** canonical opposed contests and their connected
+  participants have one resolution writer. Validated merged state fills a
+  shared record for both parties. A separate model reporting pass regenerates
+  provisional outcomes against starting/final state; it cannot edit state
+  or audiences. Deterministic contradiction and connected-engagement tests
+  pass, along with the 100-player soak.
+- **Enemy awareness:** module/scenario distances, concealing terrain and
+  sight blockers filter contacts on the server. Enemy prompts get estimated
+  numbers and no global referee notes. Referee-only `revealedToEnemy` state
+  records discoveries independently of player visibility. Privacy, persistence
+  and concealed/revealed regression tests pass.
+- **Assistant bookkeeping:** queueing, retention, cancellation and restart
+  recovery now belong to `Assistant`, within the existing game package.
+  Room authorization and worker APIs are unchanged.
 
 ## Known limits, most important first
 
-1. **Judge consistency across batches.** In large rooms one batch's prose can
-   describe an enemy doing something its recorded state doesn't show. Needs a
-   shared engagement record. Small rooms (12 units or fewer) run as one batch
-   and are not affected.
-2. **Enemy awareness.** Enemy intentions see every unit within three cells,
-   with exact strength; there is no line-of-sight or concealment filter.
+1. **Judgment quality still needs people.** Batch reporting is regenerated
+   against authoritative state, but natural-language agreement is not a
+   deterministic proof that every sentence is correct. This adds one model
+   request to batched turns. A connected engagement may exceed the target
+   batch size; the existing prompt-size limit still applies.
+2. **Enemy awareness is deliberately simple.** Drawn hex maps use terrain
+   and edge sight blockers; image maps have no such geometry and use range.
+   Revelation is explicit shared enemy knowledge, not per-observer memory.
+   Clearing it when concealment returns is a referee/model decision.
 3. **`Room` is still large**: about 250 methods in one package. The engine
-   seam removed the cross-engine branching; splitting membership, board, turn
-   and assistant state into their own types is not done.
+   seam removed the cross-engine branching; assistant run bookkeeping is the
+   first state decomposition. Membership, board and turn work remain.
 4. **Storage.** One JSON file, rewritten and fsynced on every change under a
    global lock, with history never pruned. Fine for a few small rooms.
 5. **Seat keys in URLs** (`/r/CODE/k/KEY`) appear in browser history and in
@@ -51,8 +80,8 @@ in [roadmap.md](roadmap.md).
 ## Next
 
 Run the sessions in [playtest.md](playtest.md) and record rulings people
-disagree with. Fix what those sessions find before adding features. Then
-limits 1 and 2 above.
+disagree with. Fix what those sessions find before adding features. Do not
+claim Milestone 1 complete from mock tests and solo browser checks.
 
 ## Working rules
 

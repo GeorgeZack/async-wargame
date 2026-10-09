@@ -271,7 +271,7 @@
 
     // The referee can drag counters (and, in the editor, places).
     draggable(target) {
-      if (ruler.on || orders.mode === "picking") return null;
+      if (ruler.on || orders.mode === "picking" || refereeMove.unit) return null;
       if (planning.on) {
         const m = target.closest?.("[data-unit]");
         const u = mapData()?.units?.find((u) => u.id === m?.dataset.unit);
@@ -496,6 +496,7 @@
       if (s && s.box && this.moved) { this.endBox(); return; }
       if (s && !this.moved) {
         const p = this.toSvg(e.clientX, e.clientY);
+        if (refereeMove.unit) { refereeMove.send(refereeMove.unit, p); return; }
         if (ruler.click(p, s.target)) return;
         if (!planning.on && editor.click(p)) return;
         if (orders.click(p)) return;
@@ -523,7 +524,7 @@
       else if (e.key === "-") { this.zoom("out"); }
       else if (e.key === "0") { this.zoom("reset"); }
       else if (e.key === "m" || e.key === "M") { ruler.toggle(); }
-      else if (e.key === "Escape") { this.cancelDrag(); ruler.stop(); this.setMulti(false); this.clear(); this.clearPanel(); }
+      else if (e.key === "Escape") { refereeMove.stop(); this.cancelDrag(); ruler.stop(); this.setMulti(false); this.clear(); this.clearPanel(); }
     },
 
     cursorAt(p) {
@@ -557,6 +558,7 @@
       if (pan) this.centerOn(p);
       this.save();
       inspect(id);
+      judge.selectUnit(id);
     },
 
     showPlace(i) {
@@ -727,6 +729,9 @@
     const orderID = data.orders?.units?.find((x) => x.id === u.id || u.members?.includes(x.id))?.id;
     const canOrder = !u.destroyed && data.orders?.open && orderID;
     const ref = data.referee && main()?.dataset.phase !== "complete";
+    const staged = data.plans?.find((p) => p.unit === (u.card || u.id) || u.members?.includes(p.unit));
+    const chooser = document.getElementById("referee-unit");
+    if (chooser) chooser.value = u.card || u.id;
     box.replaceChildren(...[
       el("div", {}, el("span", { class: `abbr side-${u.side}`, "aria-hidden": "true" }, u.abbr),
         el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "unit-link", "data-card": "" }, el("strong", {}, u.name)),
@@ -734,11 +739,14 @@
       el("div", { class: "muted small" }, [u.class, u.strength, u.where, u.commander].filter(Boolean).join(" · ")),
       u.destroyed ? el("div", { class: "small destroyed-status" }, "Destroyed · out of action") : null,
       u.status ? el("div", { class: "small unit-status" }, u.status) : null,
+      ref && staged ? el("p", { class: "staged-destination small" }, `Staged destination: ${whereText(staged.to, data) || `(${staged.to.x}, ${staged.to.y})`}. Applies when you publish.`) : null,
       ref ? el("p", { class: "muted small" }, main()?.dataset.phase === "resolving" ? "Drag to stage its final position. Publishing applies the move." : "Drag it to move it.") : null,
       el("div", { class: "row tight" },
+        ref && !u.destroyed ? el("button", { type: "button", class: "secondary small-btn", "data-ref-move": u.id }, "Move chit · click destination") : null,
         el("button", { type: "button", class: "link small", "data-measure-unit": u.id, "data-name": u.name }, "Measure from here"),
         canOrder ? el("button", { type: "button", class: "link small", "data-order-unit": orderID }, data.orders.orders?.[orderID] ? "Edit order" : "Write order") : null,
-        el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "small", "data-card": "" }, "Open card"))].filter(Boolean));
+        el("a", { href: `${main().dataset.base}/units/${u.card || u.id}${u.members?.length ? "?squad=1" : ""}`, class: "small", "data-card": "" }, ref ? "Edit strength, status & visibility" : "Open card"))].filter(Boolean));
+    if (ref && !u.destroyed) box.append(refereeMove.form(u, data));
     const ms = u.members ? data.units.filter((m) => !m.members && m.formation === u.formation) : u.formation ? [u] : [];
     for (const m of ms) {
       const row = el("p", { class: "small" }, [m.name, m.class, m.commander, m.destroyed ? "destroyed" : m.status, m.destroyed ? "out of action" : m.detached ? "split off" : m.stale ? "last known position" : "together"].filter(Boolean).join(" · "));
@@ -789,6 +797,131 @@
     },
   };
   document.addEventListener("click", (e) => { if (e.target.closest("[data-plan]")) planning.toggle(); });
+
+  // Referees can pick a destination without dragging, including on a phone.
+  // The same server endpoint stages resolving moves and validates formations.
+  const refereeMove = {
+    unit: null,
+    start(id) {
+      if (!mapData()?.referee || main()?.dataset.phase === "complete" || !map.marker(id)) return;
+      this.stop(); ruler.stop(); map.cancelDrag(); map.setMulti(false);
+      if (orders.mode === "picking") orders.stopPicking();
+      map.select(id, true);
+      this.unit = id;
+      map.svg.classList.add("picking");
+      ruler.hint("Click the destination for this chit. Press Escape to cancel.");
+      map.svg.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      map.svg.focus({ preventScroll: true });
+    },
+    stop() { this.unit = null; map.svg?.classList.remove("picking"); ruler.hint(""); },
+    form(u, d) {
+      const form = el("form", { class: "row tight chit-destination", "data-chit-destination": u.id });
+      if (d.grid === "hex" || d.grid === "square") {
+        form.append(el("label", { class: "inline small" }, d.grid === "hex" ? "Destination hex " : "Destination cell ",
+          el("input", { name: "cell", required: "", maxlength: "12", class: "compact-input", placeholder: d.grid === "hex" ? "0804" : "B4" })));
+      } else {
+        for (const [name, value, max] of [["x", u.x, d.width], ["y", u.y, d.height]]) {
+          form.append(el("label", { class: "inline small" }, `${name.toUpperCase()} `,
+            el("input", { name, type: "number", required: "", min: "0", max, step: "any", value, class: "num-s" })));
+        }
+      }
+      form.append(el("button", { type: "submit", class: "secondary small-btn" }, main()?.dataset.phase === "resolving" ? "Stage move" : "Move chit"));
+      return form;
+    },
+    submit(form) {
+      const d = mapData(), cell = form.elements.cell;
+      let at;
+      if (cell) {
+        const value = cell.value.trim().toUpperCase();
+        cell.setCustomValidity("");
+        if (d.grid === "hex" && /^\d{4}$/.test(value)) {
+          const col = +value.slice(0, 2) - 1, row = +value.slice(2) - 1;
+          if (col >= 0 && row >= 0) at = hexCenter(col, row, d.cell);
+        } else if (d.grid === "square" && /^[A-Z]+[1-9]\d*$/.test(value)) {
+          const [, letters, number] = value.match(/^([A-Z]+)(\d+)$/);
+          let col = 0;
+          for (const letter of letters) col = col * 26 + letter.charCodeAt(0) - 64;
+          at = { x: (col - 0.5) * d.cell, y: (+number - 0.5) * d.cell };
+        }
+        if (!at || at.x > d.width || at.y > d.height) {
+          cell.setCustomValidity(d.grid === "hex" ? "Enter a hex on this map, such as 0804." : "Enter a cell on this map, such as B4.");
+          cell.reportValidity();
+          return;
+        }
+      } else at = { x: +form.elements.x.value, y: +form.elements.y.value };
+      this.send(form.dataset.chitDestination, at);
+    },
+    async send(id, at) {
+      if (!mapData()?.referee || main()?.dataset.phase === "complete") return;
+      const m = map.marker(id);
+      if (!m) return;
+      const body = new URLSearchParams();
+      for (const unit of (m.dataset.members || m.dataset.unit).split(" ")) {
+        body.append("unit", unit); body.append("x", at.x.toFixed(1)); body.append("y", at.y.toFixed(1));
+      }
+      this.stop();
+      try {
+        const res = await fetch(`${main().dataset.base}/units/move`, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
+        if (!res.ok) throw new Error((await res.text()) || "Couldn't move the chit.");
+        await refresh();
+      } catch (err) { alert(err.message || "Couldn't reach the server."); }
+    },
+  };
+
+  const judge = {
+    init() {
+      const items = [...document.querySelectorAll("details.desk-item")];
+      const first = items.find((item) => item.querySelector(".outcome-form textarea")?.value === "") || items[0];
+      items.forEach((item) => { item.open = item === first; });
+      if (first) map.select(first.dataset.rulingUnit, false);
+    },
+    open(id, select = true) {
+      const item = document.getElementById(`item-${id}`);
+      if (!item) return;
+      document.querySelectorAll("details.desk-item").forEach((other) => { other.open = other === item; });
+      if (select) map.select(item.dataset.rulingUnit, true);
+      return item;
+    },
+    selectUnit(id) {
+      if (!main()?.classList.contains("screen-desk")) return;
+      const marker = map.marker(id);
+      const item = [...document.querySelectorAll("details.desk-item")].find((x) => map.marker(x.dataset.rulingUnit) === marker);
+      if (item) this.open(item.dataset.order, false);
+    },
+    destinations() {
+      const d = mapData();
+      if (!d) return;
+      document.querySelectorAll("[data-destination-x]").forEach((node) => {
+        const at = { x: +node.dataset.destinationX, y: +node.dataset.destinationY };
+        node.textContent = whereText(at, d) || `(${at.x}, ${at.y})`;
+      });
+    },
+  };
+
+  document.addEventListener("click", (e) => {
+    const move = e.target.closest("[data-ref-move]");
+    if (move) { refereeMove.start(move.dataset.refMove); return; }
+    if (e.target.closest("[data-select-chit]")) {
+      const id = document.getElementById("referee-unit")?.value;
+      if (id) map.select(id, true);
+      return;
+    }
+    const ruling = e.target.closest("[data-ruling]");
+    if (ruling) {
+      e.preventDefault();
+      judge.open(ruling.dataset.ruling)?.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+    const section = e.target.closest("[data-judge-section]");
+    if (section) {
+      const target = document.getElementById(section.dataset.judgeSection);
+      if (target?.classList.contains("is-collapsed")) folds.show(target, target.querySelector(".fold-btn"), true);
+      if (target?.tagName === "DETAILS") target.open = true;
+    }
+  });
+  document.addEventListener("toggle", (e) => {
+    if (e.target.matches("details.desk-item") && e.target.open) judge.open(e.target.dataset.order);
+  }, true);
 
   // ---------- scenario editor ----------
   //
@@ -1255,6 +1388,14 @@
         location.reload();
         return;
       }
+      if (cur.classList.contains("screen-desk") && cur.dataset.phase !== next.dataset.phase) {
+        deskDrafts.clear();
+        location.reload();
+        return;
+      }
+      const disclosures = [...cur.querySelectorAll("details[id]")].map((node) => [node.id, node.open]);
+      const focused = document.activeElement?.closest("form[data-draft]");
+      const focus = focused ? { key: focused.dataset.draft, name: document.activeElement.name, start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd } : null;
       for (const node of doc.querySelectorAll("[data-live][id]")) {
         const old = document.getElementById(node.id);
         if (!old) continue;
@@ -1263,8 +1404,13 @@
         old.replaceWith(document.importNode(node, true));
       }
       const turnChanged = cur.dataset.turn !== next.dataset.turn || cur.dataset.operation !== next.dataset.operation;
-      for (const key of ["version", "turn", "phase", "operation", "seat"]) cur.dataset[key] = next.dataset[key];
-      if (turnChanged) { planning.on = false; orders.dialog?.close(); orders.load(); }
+      for (const key of ["version", "turn", "phase", "operation", "seat", "automatic"]) cur.dataset[key] = next.dataset[key];
+      if (turnChanged) { deskDrafts.clear(); planning.on = false; orders.dialog?.close(); orders.load(); }
+      for (const [id, open] of disclosures) {
+        const node = document.getElementById(id);
+        if (node?.tagName === "DETAILS") node.open = open;
+      }
+      deskDrafts.restore(focus);
       announceTurn();
       document.getElementById("edit-preview")?.replaceChildren();
       localizeTimes();
@@ -1273,6 +1419,7 @@
       threadToEnd();
       map.afterRefresh();
       planning.draw();
+      judge.destinations();
       folds.apply();
     } catch {
       // Offline or server restarting; the event stream will retry.
@@ -1331,12 +1478,72 @@
 
   // ---------- forms and controls ----------
 
+  // A map move or another saved ruling refreshes the desk. Keep only edited
+  // fields, so server updates (including AI drafts) still reach untouched forms.
+  const deskDrafts = {
+    values: new Map(), revision: 0,
+    record(form, field) {
+      const key = form.dataset.draft;
+      const draft = this.values.get(key) || { fields: new Map() };
+      draft.fields.set(field.name, field.type === "checkbox" || field.type === "radio" ? field.checked : field.value);
+      draft.revision = ++this.revision;
+      this.values.set(key, draft);
+      this.status();
+    },
+    restore(focus) {
+      for (const form of document.querySelectorAll("form[data-draft]")) {
+        const draft = this.values.get(form.dataset.draft);
+        if (!draft) continue;
+        for (const [name, value] of draft.fields) {
+          const field = form.elements.namedItem(name);
+          if (!field) continue;
+          if (typeof value === "boolean") field.checked = value;
+          else field.value = value;
+        }
+        if (focus?.key === form.dataset.draft) {
+          const field = form.elements.namedItem(focus.name);
+          field?.focus({ preventScroll: true });
+          if (field?.setSelectionRange && focus.start != null) field.setSelectionRange(focus.start, focus.end);
+        }
+      }
+      this.status();
+    },
+    status() {
+      document.querySelectorAll("form[data-draft] .draft-state").forEach((node) => {
+        if (this.values.has(node.closest("form").dataset.draft)) node.textContent = "Unsaved changes";
+      });
+      const review = document.getElementById("publish-review");
+      if (!review) return;
+      let note = document.getElementById("unsaved-rulings");
+      if (!note) { note = el("p", { id: "unsaved-rulings", class: "alert small", role: "status" }); review.append(note); }
+      note.hidden = !this.values.size;
+      note.textContent = `${this.values.size} unsaved form(s). Save your changes before publishing.`;
+    },
+    clear() { this.values.clear(); },
+  };
+
+  document.addEventListener("input", (e) => {
+    const field = e.target;
+    if (field.closest("[data-chit-destination]")) field.setCustomValidity("");
+    const form = field.closest("form[data-draft]");
+    if (form && field.name) deskDrafts.record(form, field);
+  });
+  document.addEventListener("change", (e) => {
+    const form = e.target.closest("form[data-draft]");
+    if (form && e.target.name) deskDrafts.record(form, e.target);
+  });
+
   document.addEventListener("submit", async (e) => {
     const form = e.target;
+    if (form.hasAttribute("data-chit-destination")) { e.preventDefault(); refereeMove.submit(form); return; }
+    if (form.getAttribute("action")?.endsWith("/turn/next") && deskDrafts.values.size) {
+      e.preventDefault(); alert("Save your unsaved rulings and other edits before publishing."); return;
+    }
     if (form.dataset.confirm && !confirm(form.dataset.confirm)) { e.preventDefault(); return; }
     if (!form.hasAttribute("data-enhance")) return;
     e.preventDefault();
     const action = e.submitter?.getAttribute("formaction") || form.getAttribute("action");
+    const draftRevision = deskDrafts.values.get(form.dataset.draft)?.revision;
     // Read the fields before disabling them: disabled controls aren't submitted.
     const body = new URLSearchParams(new FormData(form, e.submitter));
     const buttons = form.querySelectorAll("button, select");
@@ -1348,6 +1555,7 @@
         headers: { "X-Requested-With": "fetch" },
       });
       if (!res.ok) alert((await res.text()) || "That didn't work.");
+      if (res.ok && action === form.getAttribute("action") && deskDrafts.values.get(form.dataset.draft)?.revision === draftRevision) deskDrafts.values.delete(form.dataset.draft);
       if (res.ok && form.hasAttribute("data-reset")) form.reset();
       await refresh();
       if (res.ok && form.id === "order-form") {
@@ -1508,6 +1716,7 @@
 
     apply() {
       document.querySelectorAll(".screen section.panel").forEach((panel) => {
+        if (panel.hasAttribute("data-no-fold") || main()?.classList.contains("screen-desk") && (panel.classList.contains("map-panel") || panel.classList.contains("selected-panel") || panel.id === "referee-chits" || panel.id === "publish-review")) return;
         const head = this.header(panel);
         const k = this.key(panel);
         if (!head || !k) return;
@@ -1569,6 +1778,8 @@
     map.init();
     editor.init();
     orders.init();
+    judge.init();
+    judge.destinations();
     planning.draw();
     announceTurn();
     localizeTimes();

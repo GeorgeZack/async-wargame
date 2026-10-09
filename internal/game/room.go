@@ -43,6 +43,7 @@ const (
 
 // Room is one hosted campaign: its membership, canonical state, and history.
 type Room struct {
+	Awareness        *Awareness        `json:"awareness,omitempty"` // scenario override; otherwise module defaults
 	Wayward          *WaywardState     `json:"wayward,omitempty"`
 	Mission          *MissionState     `json:"mission,omitempty"`
 	BriefingVignette *Vignette         `json:"briefingVignette,omitempty"`
@@ -127,24 +128,25 @@ type Member struct {
 // Its class is the template it started from; everything on it can be
 // changed by the referee as the story goes.
 type Unit struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Class      string   `json:"class"`
-	Side       string   `json:"side"`
-	X          float64  `json:"x"` // position on the board
-	Y          float64  `json:"y"`
-	Strength   int      `json:"strength"`             // headcount
-	Quality    *int     `json:"quality,omitempty"`    // overrides the class's quality
-	Kit        *string  `json:"kit,omitempty"`        // overrides the class's kit
-	Notes      string   `json:"notes,omitempty"`      // the referee's notes, shown on the card
-	Status     string   `json:"status,omitempty"`     // "pinned", "wounded: left arm"
-	Brief      string   `json:"brief,omitempty"`      // private: only its holder and the referee read it
-	Known      bool     `json:"known"`                // every player knows it's there
-	KnownTo    []string `json:"knownTo,omitempty"`    // members who know it's there, when not everyone does
-	Identified bool     `json:"identified,omitempty"` // those who know it's there know what it is
-	AssignedTo string   `json:"assignedTo,omitempty"`
-	Operations int      `json:"operations,omitempty"` // operations survived in this campaign
-	Record     []string `json:"record,omitempty"`     // service record
+	RevealedToEnemy bool     `json:"revealedToEnemy,omitempty"` // referee knowledge, independent of player visibility
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Class           string   `json:"class"`
+	Side            string   `json:"side"`
+	X               float64  `json:"x"` // position on the board
+	Y               float64  `json:"y"`
+	Strength        int      `json:"strength"`             // headcount
+	Quality         *int     `json:"quality,omitempty"`    // overrides the class's quality
+	Kit             *string  `json:"kit,omitempty"`        // overrides the class's kit
+	Notes           string   `json:"notes,omitempty"`      // the referee's notes, shown on the card
+	Status          string   `json:"status,omitempty"`     // "pinned", "wounded: left arm"
+	Brief           string   `json:"brief,omitempty"`      // private: only its holder and the referee read it
+	Known           bool     `json:"known"`                // every player knows it's there
+	KnownTo         []string `json:"knownTo,omitempty"`    // members who know it's there, when not everyone does
+	Identified      bool     `json:"identified,omitempty"` // those who know it's there know what it is
+	AssignedTo      string   `json:"assignedTo,omitempty"`
+	Operations      int      `json:"operations,omitempty"` // operations survived in this campaign
+	Record          []string `json:"record,omitempty"`     // service record
 	// Radio contact, set by the referee and by events.
 	RadioDown    bool `json:"radioDown,omitempty"`
 	OutOfContact bool `json:"outOfContact,omitempty"` // worked out by RefreshComms
@@ -323,6 +325,10 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		Mission: newMission(sc.Mission), Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), Objectives: slices.Clone(sc.Objectives), RefereeNotes: sc.RefereeNotes,
 	}
 	engineFor(mod).setup(r, sc)
+	if sc.Awareness != nil {
+		a := *sc.Awareness
+		r.Awareness = &a
+	}
 	for _, f := range sc.Formations {
 		f := f
 		r.Formations = append(r.Formations, &f)
@@ -340,7 +346,8 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		}
 		p := su.Pos()
 		r.Units = append(r.Units, &Unit{
-			ID: su.ID, Name: su.Name, Class: su.Class, Side: cl.Side,
+			RevealedToEnemy: su.RevealedToEnemy,
+			ID:              su.ID, Name: su.Name, Class: su.Class, Side: cl.Side,
 			X: p.X, Y: p.Y, Strength: str, Brief: su.Brief, Formation: su.Formation,
 			Known: su.Known || side.Playable, Identified: su.Known || side.Playable,
 		})

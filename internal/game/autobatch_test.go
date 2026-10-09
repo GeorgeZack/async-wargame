@@ -89,7 +89,7 @@ func TestBatchRestartAndStaleRetry(t *testing.T) {
 	r.Assistant.Batches.Index = 1
 	r.Assistant.Batches.Decisions = []AutoDecision{{Reason: "checkpoint"}}
 	r.Assistant.Runs = nil
-	r.queueRun(RunAutoResolve, "batch-2", r.Turn, time.Now())
+	r.Assistant.queueRun(RunAutoResolve, "batch-2", r.Operation, r.Turn, time.Now())
 	run := r.NextRun("test", "test", time.Now())
 	data, _ := json.Marshal(r)
 	var resumed Room
@@ -161,5 +161,139 @@ func TestRepairSplitKeepsCompletedBatchesAndFormationOwnership(t *testing.T) {
 		if seen[u.ID] != 1 {
 			t.Fatal("repair lost/duplicated a unit")
 		}
+	}
+}
+
+func TestBatchContradictoryOutcomeIsRegeneratedFromMergedState(t *testing.T) {
+	r, mod := batchRoom(t)
+	p := r.Assistant.Batches
+	// A batch claims an enemy retreated, while the enemy's writer holds it.
+	enemy := r.Unit("z1")
+	if enemy == nil {
+		t.Fatal("missing enemy fixture")
+	}
+	before := enemy.Pos()
+	for i := range p.Groups {
+		p.Index = i
+		d := AutoDecision{Reason: "Resolve this ownership batch."}
+		for _, o := range r.autoBatchOrders() {
+			d.Outcomes = append(d.Outcomes, AutoOutcome{Order: o.ID, Title: "Exchange", Text: enemy.Name + " broke east.", Seen: SeenByReferee})
+		}
+		p.Decisions = append(p.Decisions, d)
+	}
+	if err := r.mergeAutoBatches(mod); err != nil {
+		t.Fatal(err)
+	}
+	r.Assistant.Runs = nil
+	r.Assistant.queueRun(RunAutoResolve, "merged-outcomes", r.Operation, r.Turn, time.Now())
+	run := r.NextRun("mock", "mock", time.Now())
+	system, user, ok := r.PromptFor(mod, run)
+	if !ok || !strings.Contains(system, "Rewrite every outcome") || !strings.Contains(user, "mergedState") || !strings.Contains(user, "broke east") {
+		t.Fatal("contradictory draft was not sent for regeneration against merged state")
+	}
+	var out []AutoOutcome
+	for _, o := range r.LockedOrders() {
+		out = append(out, AutoOutcome{Order: o.ID, Title: "Exchange", Text: "Both sides held position.", Seen: SeenByReferee})
+	}
+	// The reporting pass can rewrite words, but cannot change the decision to
+	// make a discarded claim true.
+	changed := Pos{X: before.X + 1, Y: before.Y}
+	wrong, _ := json.Marshal(AutoDecision{Outcomes: out, Units: []AutoUnitEdit{{Unit: enemy.ID, At: &changed}}, Reason: "Repair the prose."})
+	if err := r.ApplyReply(mod, run, string(wrong), jsonDecode); err == nil {
+		t.Fatal("reporting changed merged state")
+	}
+	reply, _ := json.Marshal(AutoDecision{Outcomes: out, Reason: "The recorded positions are unchanged."})
+	r.FinishRun(run.ID, 0, nil, func(stored *Run) error {
+		return r.ApplyReply(mod, stored, string(reply), jsonDecode)
+	}, false, time.Now())
+	if r.Assistant.Runs[0].Status != RunDone {
+		t.Fatal(r.Assistant.Runs[0].Error)
+	}
+	for _, o := range r.Assistant.Decision.Outcomes {
+		if strings.Contains(o.Text, "broke east") {
+			t.Fatal("contradictory draft survived regeneration")
+		}
+	}
+	if enemy.Pos() != before || r.Unit(enemy.ID).Pos() != before || r.Phase != PhaseResolving || len(r.Reports) != 0 {
+		t.Fatal("report regeneration published or changed the board")
+	}
+	autoFinish(t, r, mod, "The turn is complete.", false)
+	if len(r.Reports) != 1 || len(r.Reports[0].Entries) != len(out) {
+		t.Fatal("corrected turn was not published")
+	}
+	for _, entry := range r.Reports[0].Entries {
+		if strings.Contains(entry.Text, "broke east") {
+			t.Fatal("contradictory wording reached a published report")
+		}
+	}
+}
+
+func TestConnectedEngagementHasOneWriterAndSharedFinalRecord(t *testing.T) {
+	r, mod := batchRoom(t)
+	o := r.LockedOrders()[0]
+	a, b := r.Unit(o.Unit), r.Unit("z1")
+	ct, err := r.AddContest(r.Referee(), mod, o.ID, "Exchange", PartyInput{Unit: a.ID}, &PartyInput{Unit: b.ID}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RollContest(r.Referee(), ct.ID, 9, 2, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	other, err := r.AddContest(r.Referee(), mod, "", "Connected exchange", PartyInput{Unit: b.ID}, &PartyInput{Unit: "load-00"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RollContest(r.Referee(), other.ID, 2, 7, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	r.prepareAutoEngagements()
+	p := r.Assistant.Batches
+	writer := -1
+	for i, group := range p.Groups {
+		for _, id := range group {
+			if id == a.ID || id == b.ID || id == "load-00" {
+				if writer >= 0 && writer != i {
+					t.Fatal("connected engagement has multiple writers")
+				}
+				writer = i
+			}
+		}
+	}
+	if writer < 0 || len(p.Engagements) != 2 {
+		t.Fatal("missing shared engagements")
+	}
+	oldA, oldB := a.Strength, b.Strength
+	leftA, leftB := oldA-1, oldB-1
+	for i := range p.Groups {
+		p.Index = i
+		d := AutoDecision{Reason: "The shared dice determine both sides."}
+		for _, o := range r.autoBatchOrders() {
+			d.Outcomes = append(d.Outcomes, AutoOutcome{Order: o.ID, Title: "Exchange", Text: "Both sides took losses and held.", Seen: SeenByReferee})
+		}
+		if i == writer {
+			d.Units = []AutoUnitEdit{{Unit: a.ID, Strength: &leftA}, {Unit: b.ID, Strength: &leftB}}
+			desk := r.autoBatchDesk()
+			if len(desk.Contests) != 2 || desk.Contests[0].Result.A.Die != 9 || desk.Contests[1].Result.B.Die != 7 {
+				t.Fatal("shared dice changed")
+			}
+		}
+		if err := r.validateBatchDecision(mod, &d); err != nil {
+			t.Fatal(err)
+		}
+		p.Decisions = append(p.Decisions, d)
+	}
+	if err := r.mergeAutoBatches(mod); err != nil {
+		t.Fatal(err)
+	}
+	final := p.Engagements[0].Final
+	if len(final) != 2 || final[0].ID != a.ID || final[0].Strength != leftA || final[1].ID != b.ID || final[1].Strength != leftB {
+		t.Fatal("both sides missing from shared final record")
+	}
+	if r.Unit(a.ID).Strength != oldA || r.Unit(b.ID).Strength != oldB {
+		t.Fatal("shared proposal changed authoritative units")
+	}
+	p.Index = writer
+	if r.splitFailedAutoBatch() {
+		t.Fatal("report repair split an engagement")
 	}
 }

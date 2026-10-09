@@ -16,9 +16,9 @@ func TestIntentionsAndQuestionsOverHTTP(t *testing.T) {
 		t.Errorf("a player set an intention: %d", res.StatusCode)
 	}
 	_, body := ref.get(base + "/desk")
-	mustContain(t, body, "The other side", "Shuffle toward the bridge.")
+	mustContain(t, body, "Enemy actions", "Shuffle toward the bridge.")
 	_, body = hicks.room(base)
-	mustNotContain(t, body, "Shuffle toward the bridge.", "The other side")
+	mustNotContain(t, body, "Shuffle toward the bridge.", "Enemy actions")
 
 	hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {"Okafor deals with it."}, "submit": {"commit"}})
 	ref.post(base+"/turn/lock", nil)

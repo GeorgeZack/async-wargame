@@ -548,15 +548,15 @@ func nextAction(v *View) string {
 		}
 		if v.AI.Automatic {
 			if v.AI.AutoStopped {
-				return fmt.Sprintf("AI adjudication of turn %d stopped. Retry or take over on the Desk.", v.Turn)
+				return fmt.Sprintf("AI adjudication of turn %d stopped. Retry or take over on Judge.", v.Turn)
 			}
-			return fmt.Sprintf("The AI referee is adjudicating turn %d and will publish when finished. Pause it on the Desk to take over.", v.Turn)
+			return fmt.Sprintf("The AI referee is adjudicating turn %d and will publish when finished. Pause it on Judge to take over.", v.Turn)
 		}
 		if v.Desk != nil && v.Desk.Unwritten > 0 {
-			return fmt.Sprintf("Turn %d is locked. Work through %s on the Desk: roll where it's in doubt, write what happened, then publish.",
+			return fmt.Sprintf("Turn %d is locked. Work through %s on Judge: roll where it's in doubt, write what happened, then publish.",
 				v.Turn, plural(v.Desk.Unwritten, "order", "orders"))
 		}
-		return fmt.Sprintf("Turn %d is ready. Check the outcomes on the Desk, then publish it and open turn %d.", v.Turn, v.Turn+1)
+		return fmt.Sprintf("Turn %d is ready. Check the outcomes on Judge, then publish it and open turn %d.", v.Turn, v.Turn+1)
 	}
 	if v.Phase == PhasePlanning && len(v.MyOrders) > 0 && !v.IsReferee {
 		done, reachable := 0, 0
@@ -585,16 +585,16 @@ func nextAction(v *View) string {
 		case len(v.Pending) > 0:
 			return fmt.Sprintf("%s waiting on the People screen.", plural(len(v.Pending), "access request", "access requests"))
 		case v.OpenFacts > 0:
-			return fmt.Sprintf("%s on the Desk.", capitalize(plural(v.OpenFacts, "proposed fact is waiting", "proposed facts are waiting")))
+			return fmt.Sprintf("%s on Judge.", capitalize(plural(v.OpenFacts, "proposed fact is waiting", "proposed facts are waiting")))
 		case v.Phase == PhasePlanning && v.Clock.AllIn:
-			return fmt.Sprintf("Every order is in (%d of %d). Lock turn %d now, or wait for %s.",
+			return fmt.Sprintf("Every player order is in (%d of %d). Lock turn %d now, or wait for %s.",
 				v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Turn, v.Clock.DeadlineText)
 		case len(v.Proposals) > 0:
-			return fmt.Sprintf("Review %s on the Desk: apply or discard.", plural(len(v.Proposals), "proposed event", "proposed events"))
+			return fmt.Sprintf("Review %s on Judge: apply or discard.", plural(len(v.Proposals), "proposed event", "proposed events"))
 		case len(v.Players) == 0 && v.Phase == PhaseSetup:
 			return "Share room code " + v.CodeDisplay + " or an invite link with your players. Their requests will appear on the People screen."
 		case v.Phase == PhasePlanning:
-			return fmt.Sprintf("Turn %d: %d of %d orders committed. Orders lock %s.",
+			return fmt.Sprintf("Turn %d: %d of %d player orders committed. Orders lock %s.",
 				v.Turn, v.Clock.OrdersIn, v.Clock.OrdersTotal, v.Clock.DeadlineText)
 		case unassigned > 0:
 			return fmt.Sprintf("Assign the units: %s still held by the referee.", plural(unassigned, "unit is", "units are"))
@@ -713,7 +713,7 @@ var screenOrder = map[bool][]string{
 	false: {"map"},
 }
 
-var screenLabels = map[string]string{"map": "Table", "desk": "Desk", "people": "People", "setup": "Setup"}
+var screenLabels = map[string]string{"map": "Table", "desk": "Judge", "people": "People", "setup": "Setup"}
 
 // HasScreen reports whether the viewer has a screen by this name.
 func (v *View) HasScreen(screen string) bool {

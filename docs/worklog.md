@@ -553,3 +553,32 @@ access; do not request escalation or start a replacement for the shared daemon.
 - Browser test sessions and the disposable test server were stopped after use.
 - No deployment or live-server restart was performed.
 - Broader future work is in `docs/roadmap.md`.
+
+
+## 2026-10-08 — Referee usability and handoff fixes
+
+- Confirmed solo referee play with unassigned player units; documented the
+  workflow in README. Completed a solo turn using staged enemy/player moves,
+  server dice, saved rulings and publication.
+- Rebuilt Judge around a visible map, chit picker, one-order ruling queue,
+  explicit roll/move/save steps, enemy actions and publication review. Added
+  click/coordinate movement for both sides and preserved edited form drafts
+  across live refreshes. Clarified that readiness counts player orders.
+- Exercised Crossroads setup with both tester links, start, each player's
+  order/commit and lock in a disposable browser at desktop and 390 px widths.
+  Repeated solo judgment at 390 px; no horizontal overflow was present.
+- Added a failing deterministic contradiction test, then grouped connected
+  opposed engagements under one writer and persisted their shared final-state
+  records. Batched outcomes now regenerate against the validated merged state;
+  reporting cannot change state or audiences. This adds one model call per
+  batched turn; language agreement still needs real-player evaluation.
+- Added module/scenario-driven enemy range, concealment and sight filtering,
+  estimated contact strength, and referee-only revelation independent of player
+  visibility. Tested hidden/revealed prompts, blockers, overrides, reloads and
+  privacy through game views and HTTP.
+- Moved assistant queue, retention, cancellation and restart bookkeeping onto
+  Assistant in the existing package. Kept Room's worker-facing entry points.
+- Full go test -count=1 ./... passes, including the 100-player soak. go vet,
+  gofmt -l, node --check and git diff --check pass. Final race results are
+  recorded in the handoff. All model checks used mocks; no paid model runs or
+  live-server changes. Disposable servers and browser sessions were stopped.

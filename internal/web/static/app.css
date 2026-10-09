@@ -1142,6 +1142,47 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .vignette-figure figcaption { margin-top: .45rem; font-size: .85rem; }
 .vignette-desk { border-block-start: 1px solid var(--border); padding-top: .6rem; }
 .vignette-desk summary { cursor: pointer; font-weight: 600; }
+
+/* The referee judges beside the board, with one order open at a time. */
+.judge-overview { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--frame); background: var(--surface); }
+.judge-overview h1 { margin: .15rem 0 .4rem; font-size: 1.5rem; }
+.judge-overview p { margin: .2rem 0; }
+.judge-overview .eyebrow { color: var(--muted); font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.judge-links { display: flex; flex-wrap: wrap; gap: .4rem; }
+.judge-links a { padding: .4rem .65rem; border: 1px solid var(--border); background: var(--surface-2); text-decoration: none; font-weight: 600; font-size: .85rem; }
+.judge-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+.judge-work { display: grid; gap: 1rem; min-width: 0; }
+.judge-board #map { max-height: 48vh; min-height: 220px; }
+.judge-board .map-tools { width: 100%; }
+.judge-board .selected-panel { padding-top: 0 !important; }
+.judge-board .chit-destination { margin-top: .6rem; }
+.chit-destination input[name="cell"] { width: 7rem; }
+.staged-destination { padding: .4rem .6rem; background: var(--surface-2); border-left: 3px solid var(--ok); }
+.ruling-queue { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.ruling-queue a { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .4rem .5rem; border: 1px solid var(--border); text-decoration: none; font-size: .85rem; }
+.desk-item > .ruling-summary { cursor: pointer; padding: .7rem; display: list-item; list-style-position: inside; }
+.ruling-summary > strong { margin-right: .5rem; }
+.ruling-summary .tag { margin: .15rem; }
+.screen-desk .desk-item { padding: 0; border-left-color: var(--accent); scroll-margin-top: 7rem; }
+.desk-item[open] > .ruling-summary { background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.ruling-body { padding: .75rem; }
+.ruling-step { margin: .85rem 0 .35rem; font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.review-list li { padding: .6rem 0; border-bottom: 1px solid var(--border); white-space: pre-line; }
+.publish-review button[type="submit"] { width: 100%; }
+.judge-reference .cols { margin-top: 1rem; }
+.judge-work [id], #referee-chits { scroll-margin-top: 7rem; }
+@media (min-width: 1000px) {
+  .judge-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .judge-board { position: sticky; top: 6.5rem; max-height: calc(100vh - 7.5rem); overflow-y: auto; }
+  .judge-board #map { max-height: 42vh; }
+}
+@media (max-width: 700px) {
+  .judge-overview { padding: .75rem; }
+  .judge-links a { flex: 1 1 8rem; }
+  .judge-board .map-tools { gap: .4rem; }
+  .judge-work [id], #referee-chits { scroll-margin-top: 1rem; }
+  .ruling-body { padding: .6rem; }
+}
 .vignette-form { margin-top: .85rem; }
 .vignette-form textarea { min-height: 7rem; }
 

@@ -26,8 +26,9 @@ the problem. A module or scenario can't reuse a built-in id.
 | `factors` | `{name, value}`. Things that often count toward a roll's bonus ("Ambush or surprise" +3, "Night" -1). They're offered at the desk and to the AI; the referee can type anything. |
 | `sides` | `playable` sides are the players'; `enemy` sides are the referee's opposition; anything else is neutral (civilians). |
 | `classes` | Unit templates: `side`, `name`, `abbr`, `kind` (`group` for crowds, where strength is a headcount, or a single `soldier`, `special`, `monster`, ...), `symbol` (counter art), `strength` (the usual headcount), `quality` (a bonus to its rolls: 0 ordinary, +2 trained, more for the exceptional), `description`, `kit` (one sentence), optional `speed` and `run` (km/h at a careful pace and a run), and `contact` (`{abbr, label}`: how players see it before it's identified). |
-| `terrain` | Map art: one-character `code`, `id`, `name`, `water: true` for water, and an optional `note`. |
-| `edges`, `crossings` | Features drawn along hex sides (rivers, ridges, walls) and what can cross them. `blocks: true` makes random events route around an edge. |
+| `awareness` | Optional `{rangeCells, concealedCells}` for enemy observations; default range 3 cells, concealed range 0. A scenario may override it with the same object. Range must be greater than 0 and at most 100; concealed range must be between 0 and range. |
+| `terrain` | Map art: one-character `code`, `id`, `name`, `water: true` for water, and an optional `note`. `conceals: true` hides unrevealed opposing units beyond `concealedCells`; `blocksSight: true` blocks sight through intermediate hexes. |
+| `edges`, `crossings` | Features drawn along hex sides (rivers, ridges, walls) and what can cross them. `blocks: true` makes random events route around an edge. Independently, `blocksSight: true` blocks enemy observation across that edge, including crossings. |
 | `events` | The random event table (below). |
 
 Units in play can differ from their template: the referee changes quality,
@@ -65,9 +66,11 @@ Rolled events are proposals: nothing changes until the referee applies one.
 `board`, `map` (`cols`, `rows` of terrain codes, `edges`, `roads`),
 `features` (places: `kind` is one of beachhead, hospital, port, utility,
 police, shelter, relay, hive; `hidden` ones only the referee sees), `units`
-(`class`, position, optional `strength`, `known`, and `brief`), `briefing`
+(`class`, position, optional `strength`, `known`, `revealedToEnemy`, and `brief`), `briefing`
 paragraphs, an optional `objectives` array of goal strings (displayed below the
-briefing), and `refereeNotes`.
+briefing), and `refereeNotes`. Optional `awareness` overrides the module's
+observation distances. `revealedToEnemy` records whether enemies can notice
+a unit in concealing terrain; it is separate from player-facing `known`.
 
 `board` says what the map is and what it measures:
 

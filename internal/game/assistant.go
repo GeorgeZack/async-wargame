@@ -79,60 +79,49 @@ type Run struct {
 
 // Prompt versions, recorded on each run so results can be compared later.
 var promptVersions = map[string]string{RunSuggest: "suggest/2", RunOutcome: "outcome/2", RunNarrative: "narrative/1",
-	RunIntentions: "intentions/1", RunQuestion: "question/1", RunAutoIntentions: "auto-intentions/4", RunAutoContests: "auto-contests/8", RunAutoResolve: "auto-resolve/7", RunAutoPublish: "auto-publish/3"}
-
-func (r *Room) queueRun(kind, target string, turn int, now time.Time) {
-	op := max(r.Operation, 1)
-	r.Assistant.Runs = slices.DeleteFunc(r.Assistant.Runs, func(x *Run) bool {
-		return x.Kind == kind && x.Target == target && x.Turn == turn && x.Operation == op && (x.Status == RunPending || x.Status == RunFailed || x.Status == RunCancelled)
-	})
-	r.Assistant.Runs = append(r.Assistant.Runs, &Run{ID: newID(), Kind: kind, Target: target, Operation: op, Turn: turn, Status: RunPending, Queued: now.UTC()})
-	if n := len(r.Assistant.Runs); n > 60 {
-		keep := slices.DeleteFunc(slices.Clone(r.Assistant.Runs[:n-60]), func(x *Run) bool { return !x.Active() })
-		r.Assistant.Runs = append(keep, r.Assistant.Runs[n-60:]...)
-	}
-}
+	RunIntentions: "intentions/2", RunQuestion: "question/1", RunAutoIntentions: "auto-intentions/5", RunAutoContests: "auto-contests/9", RunAutoResolve: "auto-resolve/8", RunAutoPublish: "auto-publish/3"}
 
 func (r *Room) assistAtLock(now time.Time) {
 	if r.Assistant.On && r.Assistant.Automatic {
 		r.Assistant.Decision = nil
 		r.Assistant.Batches = nil
-		r.queueRun(RunAutoIntentions, "", r.Turn, now)
+		r.Assistant.queueRun(RunAutoIntentions, "", r.Operation, r.Turn, now)
 		return
 	}
 	if r.rules().d10Contests() && r.Assistant.On && r.Assistant.Suggest && len(r.LockedOrders()) > 0 {
-		r.queueRun(RunSuggest, "", r.Turn, now)
+		r.Assistant.queueRun(RunSuggest, "", r.Operation, r.Turn, now)
 	}
 }
 
 func (r *Room) assistAtPublish(now time.Time) {
 	if r.Assistant.On && r.Assistant.Narrative && !r.Assistant.Automatic {
-		r.queueRun(RunNarrative, "", r.Turn, now)
+		r.Assistant.queueRun(RunNarrative, "", r.Operation, r.Turn, now)
 	}
 }
 
 // --- What the model sees ---
 
 type promptUnit struct {
-	Character  *rules.WaywardCharacter `json:"character,omitempty"`
-	PublicName string                  `json:"publicName"`
-	Destroyed  bool                    `json:"destroyed,omitempty"`
-	ID         string                  `json:"id"`
-	Name       string                  `json:"name"`
-	Kind       string                  `json:"kind"`
-	Side       string                  `json:"side"`
-	Count      int                     `json:"count"`
-	Where      string                  `json:"where"`
-	Bonus      string                  `json:"usualBonus"`
-	Kit        string                  `json:"kit,omitempty"`
-	Status     string                  `json:"status,omitempty"`
-	Notes      string                  `json:"notes,omitempty"`
-	Facts      []string                `json:"facts,omitempty"`
-	Hidden     bool                    `json:"hiddenFromPlayers,omitempty"`
-	Intends    string                  `json:"intends,omitempty"`  // enemy units: the referee's intention for them this turn
-	Distance   string                  `json:"distance,omitempty"` // from the unit in question
-	Move       string                  `json:"movePerTurn,omitempty"`
-	Squad      string                  `json:"squad,omitempty"` // the formation it moves with, and whether it has split off
+	RevealedToEnemy bool                    `json:"revealedToEnemy,omitempty"`
+	Character       *rules.WaywardCharacter `json:"character,omitempty"`
+	PublicName      string                  `json:"publicName"`
+	Destroyed       bool                    `json:"destroyed,omitempty"`
+	ID              string                  `json:"id"`
+	Name            string                  `json:"name"`
+	Kind            string                  `json:"kind"`
+	Side            string                  `json:"side"`
+	Count           int                     `json:"count"`
+	Where           string                  `json:"where"`
+	Bonus           string                  `json:"usualBonus"`
+	Kit             string                  `json:"kit,omitempty"`
+	Status          string                  `json:"status,omitempty"`
+	Notes           string                  `json:"notes,omitempty"`
+	Facts           []string                `json:"facts,omitempty"`
+	Hidden          bool                    `json:"hiddenFromPlayers,omitempty"`
+	Intends         string                  `json:"intends,omitempty"`  // enemy units: the referee's intention for them this turn
+	Distance        string                  `json:"distance,omitempty"` // from the unit in question
+	Move            string                  `json:"movePerTurn,omitempty"`
+	Squad           string                  `json:"squad,omitempty"` // the formation it moves with, and whether it has split off
 }
 
 // where describes a point for the model: grid reference, nearest place, and
@@ -156,6 +145,7 @@ func (r *Room) promptUnit(mod *Module, u *Unit) promptUnit {
 	p := promptUnit{Character: cl.Character, Destroyed: u.Destroyed(), Count: u.Strength, ID: u.ID, Name: u.Name, Kind: cl.Name, Side: mod.Side(u.Side).Name, Where: r.where(mod, u.Pos()),
 		Bonus: bonusText(mod, u), Kit: KitOf(mod, u), Status: u.Status, Notes: u.Notes, Facts: r.acceptedFacts(u.ID),
 		Hidden: !r.PubliclyKnown(mod, u)}
+	p.RevealedToEnemy = u.RevealedToEnemy
 	p.PublicName = "Unidentified contact"
 	if r.PubliclyKnown(mod, u) && (mod.Side(u.Side).Playable || u.Identified) {
 		p.PublicName = u.Name
@@ -521,7 +511,7 @@ func (r *Room) NextRun(model, provider string, now time.Time) *Run {
 
 // HasPendingRun reports whether the worker has anything to do here.
 func (r *Room) HasPendingRun() bool {
-	return r.Assistant.On && slices.ContainsFunc(r.Assistant.Runs, func(x *Run) bool { return x.Status == RunPending })
+	return r.Assistant.hasPendingRun()
 }
 
 // FinishRun records a run's result. apply turns the reply into changes;
@@ -588,7 +578,7 @@ func (r *Room) CancelRuns(actor *Member, id, kind, target string, all bool, now 
 	default:
 		return 0, bad("say which request to cancel")
 	}
-	n := r.cancelRuns(match, now)
+	n := r.Assistant.cancelRuns(match, now)
 	for _, run := range r.Assistant.Runs {
 		if match(run) && run.Automatic() {
 			r.Assistant.Automatic = false
@@ -604,26 +594,17 @@ func (r *Room) CancelRuns(actor *Member, id, kind, target string, all bool, now 
 	return n, nil
 }
 
-func (r *Room) cancelRuns(match func(*Run) bool, now time.Time) int {
-	n := 0
-	for _, run := range r.Assistant.Runs {
-		if (run.Status == RunPending || run.Status == RunRunning) && match(run) {
-			run.Status, run.Finished, run.Error = RunCancelled, now.UTC(), ""
-			n++
-		}
-	}
-	return n
-}
-
 // RunCancelledNow reports whether a run has been called off, for the
 // worker to stop waiting on the model.
 func (r *Room) RunCancelledNow(id string) bool {
-	i := slices.IndexFunc(r.Assistant.Runs, func(x *Run) bool { return x.ID == id })
-	return i < 0 || r.Assistant.Runs[i].Status == RunCancelled
+	return r.Assistant.runCancelledNow(id)
 }
 
 // Label names what a run does, for the referee.
 func (run Run) Label() string {
+	if run.Kind == RunAutoResolve && run.Target == "merged-outcomes" {
+		return "AI referee: checking merged outcomes"
+	}
 	if run.Automatic() && run.Target != "" {
 		return runLabel(run.Kind) + " · " + run.Target
 	}
@@ -635,13 +616,7 @@ func (run Run) Active() bool { return run.Status == RunPending || run.Status == 
 
 // ResetRunning puts runs interrupted by a restart back in the queue.
 func (r *Room) ResetRunning() bool {
-	changed := false
-	for _, run := range r.Assistant.Runs {
-		if run.Status == RunRunning {
-			run.Status, changed = RunPending, true
-		}
-	}
-	return changed
+	return r.Assistant.resetRunning()
 }
 
 func runLabel(kind string) string {
@@ -665,7 +640,7 @@ func (r *Room) SetAssistant(actor *Member, on, suggest, narrative bool) error {
 		r.Assistant.Automatic = false
 		r.Assistant.Decision = nil
 		r.Assistant.Batches = nil
-		r.cancelRuns(func(*Run) bool { return true }, time.Now()) // switching it off ends what it was doing
+		r.Assistant.cancelRuns(func(*Run) bool { return true }, time.Now()) // switching it off ends what it was doing
 	}
 	if on != was {
 		r.logKind(VisReferee, "", "AI assistant switched %s.", map[bool]string{true: "on", false: "off"}[on])
@@ -695,7 +670,7 @@ func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 		if r.Phase != PhaseResolving {
 			return bad("rolls can be suggested once the turn is locked")
 		}
-		r.queueRun(RunSuggest, "", r.Turn, now)
+		r.Assistant.queueRun(RunSuggest, "", r.Operation, r.Turn, now)
 	case RunOutcome:
 		if r.Phase != PhaseResolving || r.Desk == nil {
 			return bad("outcomes can be drafted once the turn is locked")
@@ -704,29 +679,29 @@ func (r *Room) RunNow(actor *Member, kind, target string, now time.Time) error {
 			if r.lockedOrder(target) == nil {
 				return ErrNotFound
 			}
-			r.queueRun(RunOutcome, target, r.Turn, now)
+			r.Assistant.queueRun(RunOutcome, target, r.Operation, r.Turn, now)
 			return nil
 		}
 		for _, o := range r.LockedOrders() {
 			if oc := r.Desk.outcomeFor(o.ID); oc == nil || oc.Text == "" {
-				r.queueRun(RunOutcome, o.ID, r.Turn, now)
+				r.Assistant.queueRun(RunOutcome, o.ID, r.Operation, r.Turn, now)
 			}
 		}
 	case RunIntentions:
 		if err := r.intentionsOpen(); err != nil {
 			return err
 		}
-		r.queueRun(RunIntentions, "", r.Turn, now)
+		r.Assistant.queueRun(RunIntentions, "", r.Operation, r.Turn, now)
 	case RunQuestion:
 		if r.Phase != PhaseResolving || r.lockedOrder(target) == nil {
 			return bad("questions are drafted about a locked order")
 		}
-		r.queueRun(RunQuestion, target, r.Turn, now)
+		r.Assistant.queueRun(RunQuestion, target, r.Operation, r.Turn, now)
 	case RunNarrative:
 		if len(r.Reports) == 0 {
 			return bad("there's no report to write a narrative for yet")
 		}
-		r.queueRun(RunNarrative, "", r.Reports[len(r.Reports)-1].Turn, now)
+		r.Assistant.queueRun(RunNarrative, "", r.Operation, r.Reports[len(r.Reports)-1].Turn, now)
 	default:
 		return bad("unknown assistant task")
 	}
@@ -806,7 +781,7 @@ type AIView struct {
 func assistantView(r *Room) AIView {
 	a := r.Assistant
 	v := AIView{Automatic: a.Automatic, AutoStopped: r.AutomaticStopped(), On: a.On, Suggest: a.Suggest, Narrative: a.Narrative, Busy: map[string]bool{}}
-	if a.Batches != nil {
+	if a.Batches != nil && !a.Batches.Reporting {
 		v.BatchCurrent = a.Batches.Index + 1
 		v.BatchTotal = len(a.Batches.Groups)
 	}

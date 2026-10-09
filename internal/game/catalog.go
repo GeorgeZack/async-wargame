@@ -10,6 +10,7 @@ import (
 
 // Scenario defines a map, features, starting forces, and briefing text.
 type Scenario struct {
+	Awareness    *Awareness         `json:"awareness,omitempty"`
 	Challenges   []WaywardChallenge `json:"challenges,omitempty"`
 	Mission      []MissionRule      `json:"mission,omitempty"`
 	ID           string             `json:"id"`
@@ -43,7 +44,8 @@ func (s Spot) Pos() Pos {
 }
 
 type ScenarioUnit struct {
-	ID string `json:"id"`
+	RevealedToEnemy bool   `json:"revealedToEnemy,omitempty"`
+	ID              string `json:"id"`
 	Spot
 	Name     string `json:"name"`
 	Class    string `json:"class"`
@@ -141,6 +143,11 @@ func readJSON(fsys fs.FS, p string, v any) error {
 }
 
 func (s *Scenario) validate(m *Module) error {
+	if s.Awareness != nil {
+		if err := s.Awareness.Validate(); err != nil {
+			return err
+		}
+	}
 	if err := s.Map.validate(m); err != nil {
 		return err
 	}

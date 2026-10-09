@@ -327,7 +327,7 @@ func (r *Room) validateWaywardDecision(d *AutoDecision) error {
 		return bad("include exactly the successful precommitted destinations")
 	}
 	for _, e := range d.Units {
-		if e.Strength != nil || e.Status != nil || e.Known != nil || e.RadioDown != nil || e.Detached != nil {
+		if e.Strength != nil || e.Status != nil || e.Known != nil || e.RevealedToEnemy != nil || e.RadioDown != nil || e.Detached != nil {
 			return bad("Wayward exploration only allows movement state changes")
 		}
 		at, ok := expected[e.Unit]

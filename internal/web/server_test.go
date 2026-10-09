@@ -704,6 +704,66 @@ func TestAFullTurnAtTheDesk(t *testing.T) {
 	mustContain(t, body, "1808, at St. Ines Hospital", "ears ringing")
 }
 
+func TestRefereeWorkspaceStagesPlayerAndEnemyMoves(t *testing.T) {
+	_, store, ref, hicks, code, _ := setupSquad(t)
+	base := "/r/" + code
+	ref.post(base+"/start", nil)
+	hicks.post(base+"/orders", url.Values{"unit": {"m2"}, "text": {"Cover the canal."}, "submit": {"commit"}})
+	ref.post(base+"/turn/lock", nil)
+	var orderID string
+	var playerAt, enemyAt game.Pos
+	var enemyName string
+	store.Read(code, func(r *game.Room) {
+		orderID = r.LockedOrders()[0].ID
+		playerAt, enemyAt = r.Unit("m2").Pos(), r.Unit("z4").Pos()
+		enemyName = r.Unit("z4").Name
+	})
+	_, body := ref.get(base + "/desk")
+	mustContain(t, body, `id="map"`, `id="map-data"`, "Move player &amp; enemy chits", "Needs ruling", "Save ruling", "Review &amp; publish")
+	res, msg := ref.post(base+"/units/move", url.Values{"unit": {"m2", "z4"}, "x": {"150", "250"}, "y": {"120", "140"}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("stage moves: %d %s", res.StatusCode, msg)
+	}
+	store.Read(code, func(r *game.Room) {
+		if r.Unit("m2").Pos() != playerAt || r.Unit("z4").Pos() != enemyAt {
+			t.Error("referee movement did not stay staged")
+		}
+		playerPlanned, enemyPlanned := false, false
+		for _, p := range r.PlansFor(r.Referee()) {
+			playerPlanned = playerPlanned || p.Unit == "m2"
+			enemyPlanned = enemyPlanned || p.Unit == "z4"
+		}
+		if !playerPlanned || !enemyPlanned {
+			t.Error("one side's staged destination is missing")
+		}
+	})
+	_, body = ref.get(base + "/desk")
+	mustContain(t, body, "Staged destinations", `data-destination-x="150"`, `data-destination-x="250"`)
+	_, body = hicks.get(base)
+	mustNotContain(t, body, "Staged destinations", "Enemy actions", "data-destination-x", enemyName)
+	res, body = hicks.get(base + "/desk")
+	if res.Request.URL.Path != base {
+		t.Errorf("player was not redirected out of referee workspace: %s", res.Request.URL.Path)
+	}
+	mustNotContain(t, body, "referee-chits", "publish-review", enemyName)
+	ref.post(base+"/desk/outcome", url.Values{"order": {orderID}, "text": {"Okafor covers the canal."}, "seen": {"all"}})
+	ref.post(base+"/desk/outcome", url.Values{"title": {"Enemy flank"}, "text": {"The runners shift under cover."}, "seen": {"referee"}})
+	_, body = ref.get(base + "/desk")
+	mustContain(t, body, "Ruling saved", "Okafor covers the canal.", "The runners shift under cover.")
+	res, msg = ref.post(base+"/turn/next", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("publish: %d %s", res.StatusCode, msg)
+	}
+	store.Read(code, func(r *game.Room) {
+		if r.Unit("m2").Pos() != (game.Pos{X: 150, Y: 120}) || r.Unit("z4").Pos() != (game.Pos{X: 250, Y: 140}) {
+			t.Error("publication did not apply both sides' staged moves")
+		}
+	})
+	_, body = hicks.get(base)
+	mustContain(t, body, "Okafor covers the canal.")
+	mustNotContain(t, body, "The runners shift under cover.", enemyName, "referee-chits")
+}
+
 func TestOrdersOverHTTPAndClosing(t *testing.T) {
 	ts, store, ref, hicks, code, _ := setupSquad(t)
 	base := "/r/" + code
@@ -817,7 +877,7 @@ func TestRefereeSeesWhenAllOrdersAreIn(t *testing.T) {
 	mustNotContain(t, body, "Every player has committed")
 	order("m3")
 	_, body = ref.room(base)
-	mustContain(t, body, "Every order is in (2 of 2)", ">Lock turn 1 now</button>")
+	mustContain(t, body, "Every player order is in (2 of 2)", ">Lock turn 1 now</button>")
 	_, body = hicks.room(base)
 	mustNotContain(t, body, "Lock turn 1 now")
 	ref.post(base+"/turn/lock", nil)

@@ -70,6 +70,7 @@
           <input type="hidden" name="known_to_set" value="1">
           <div class="row tight">{{range .Viewers}}<label class="toggle"><input type="checkbox" name="known_to" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Name}}</label>{{end}}</div>
           <p class="muted small">A player's squad leader sees what they see. Use it for what one unit discovers and the others don't.</p></fieldset>{{end}}{{else}}<input type="hidden" name="radio_down_set" value="1"><label class="toggle"><input type="checkbox" name="radio_down"{{if .RadioDown}} checked{{end}}> Out of contact</label>{{end}}
+        {{if .Playable}}<input type="hidden" name="revealed_to_enemy_set" value="1"><label class="toggle"><input type="checkbox" name="revealed_to_enemy"{{if .RevealedToEnemy}} checked{{end}}> Revealed to enemies</label><p class="muted small">Enemies in range with a clear sight line can notice it through concealment. Clear this when it regains concealment. Only you see this setting.</p>{{end}}
         <div class="row"><button type="submit">Save</button></div>
       </form>
       {{if not .Unit.Destroyed}}<form method="post" action="{{$.Base}}/units/{{.RawID}}/edit" data-enhance data-confirm="Mark {{.Unit.Name}} destroyed? Its counter remains on the map and it cannot receive orders."><input type="hidden" name="strength" value="0"><button type="submit" class="secondary small-btn">Mark destroyed</button></form>{{else}}<p class="small destroyed-status">Destroyed · set strength above zero to restore this unit.</p>{{end}}

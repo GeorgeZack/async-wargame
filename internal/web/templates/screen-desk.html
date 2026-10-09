@@ -1,14 +1,30 @@
 {{define "content"}}{{template "shell-top" .}}
-<main id="main" class="screen screen-desk" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}">
-  {{template "sec-next" .}}
-  {{template "sec-steps" .}}
-  {{template "sec-intentions" .}}
-  {{template "sec-desk" .}}
-  <div class="cols cols-turn">
-    <div class="col">{{template "sec-fact-notes" .}}{{template "sec-assistant" .}}</div>
-    <div class="col">{{template "sec-events" .}}</div>
+<main id="main" class="screen screen-desk" data-base="{{.Base}}" data-version="{{.Version}}" data-turn="{{.Turn}}" data-phase="{{.Phase}}" data-operation="{{.Operation}}" data-seat="{{.Me.ID}}" data-referee="1" data-automatic="{{if .AI.Automatic}}1{{else}}0{{end}}">
+  {{if ne .Phase "resolving"}}{{template "sec-next" .}}{{end}}
+  {{template "judge-overview" .}}
+  <div class="judge-layout">
+    <div class="board-col judge-board">
+      {{template "map-window" .}}
+      {{template "referee-chits" .}}
+      <section class="panel selected-panel" aria-labelledby="sel-h"><h2 id="sel-h">Selected chit</h2>{{template "sec-inspector" .}}</section>
+    </div>
+    <div class="judge-work">
+      {{if ne .Phase "resolving"}}{{template "sec-steps" .}}{{template "sec-order-box" .}}{{template "sec-orders" .}}{{end}}
+      {{if .AI.Automatic}}{{template "sec-assistant" .}}{{end}}
+      {{template "sec-desk" .}}
+      {{template "sec-intentions" .}}
+      {{template "publish-review" .}}
+      {{if not .AI.Automatic}}{{template "sec-assistant" .}}{{end}}
+    </div>
   </div>
-  {{template "sec-odds" .}}
-  {{template "sec-log" .}}
+  <details class="panel judge-reference"{{if or .OpenFacts .Proposals}} open{{end}}>
+    <summary><h2>Other decisions &amp; reference{{with .OpenFacts}} · {{.}} facts waiting{{end}}{{with .Proposals}} · {{len .}} events waiting{{end}}</h2></summary>
+    <div class="cols cols-turn">
+      <div class="col">{{template "sec-fact-notes" .}}{{template "sec-talk" .}}</div>
+      <div class="col">{{template "sec-events" .}}{{template "sec-odds" .}}{{template "sec-log" .}}</div>
+    </div>
+  </details>
+  {{if eq .Phase "complete"}}{{template "sec-situation" .}}{{end}}
 </main>
+<script type="application/json" id="map-data" data-live>{{.Data}}</script>
 {{template "shell-bottom" .}}{{end}}

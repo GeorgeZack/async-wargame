@@ -582,3 +582,20 @@ access; do not request escalation or start a replacement for the shared daemon.
   gofmt -l, node --check and git diff --check pass. Final race results are
   recorded in the handoff. All model checks used mocks; no paid model runs or
   live-server changes. Disposable servers and browser sessions were stopped.
+
+
+## 2026-10-09 — Commit and membership decomposition
+
+- At the owner's request, committed the referee UI and original handoff
+  tasks 1–3 as d7ab658. Did not push.
+- Continued task 4 with one group: Membership now owns members, invites,
+  seat lookup, hierarchy queries, pending requests and invite bookkeeping.
+  Eleven direct Room methods moved. Room actions still handle authorization,
+  closure, logging and unit handovers. No sub-package or behavior changes.
+- Preserved the existing flat members/invites JSON. Added a regression using
+  an independent legacy wire fixture to check seat keys, hierarchy, privacy,
+  invite acceptance and persistence after save/reload.
+- Full go test -count=1 ./... (including the 100-player soak), race tests for
+  game/assist/web, go vet, gofmt -l, node --check and git diff --check pass.
+  The membership follow-up is uncommitted. No paid models or live data/server
+  use; real-player sessions are planned for 2026-10-10.

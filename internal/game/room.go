@@ -4,7 +4,6 @@ import (
 	"asyncwargame/internal/rules"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,22 +11,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-)
-
-type Role string
-
-const (
-	RoleReferee Role = "referee"
-	RolePlayer  Role = "player"
-)
-
-type Status string
-
-const (
-	StatusPending  Status = "pending"
-	StatusApproved Status = "approved"
-	StatusDeclined Status = "declined"
-	StatusRemoved  Status = "removed"
 )
 
 // Phase is the campaign's position in the play cycle.
@@ -43,6 +26,7 @@ const (
 
 // Room is one hosted campaign: its membership, canonical state, and history.
 type Room struct {
+	Membership
 	Awareness        *Awareness        `json:"awareness,omitempty"` // scenario override; otherwise module defaults
 	Wayward          *WaywardState     `json:"wayward,omitempty"`
 	Mission          *MissionState     `json:"mission,omitempty"`
@@ -62,7 +46,6 @@ type Room struct {
 	Deferred         bool              `json:"deferred,omitempty"` // the referee moved the deadline off the schedule
 	LockedAt         time.Time         `json:"lockedAt,omitzero"`
 	Threat           int               `json:"threat"`
-	Members          []*Member         `json:"members"`
 	Units            []*Unit           `json:"units"`
 	Features         []Feature         `json:"features"`
 	Map              *HexMap           `json:"map"`   // the drawn hex map (the background when Board.Background is hex)
@@ -71,7 +54,6 @@ type Room struct {
 	Briefing         []string          `json:"briefing"`
 	RefereeNotes     string            `json:"refereeNotes"`
 	Events           []*GameEvent      `json:"events,omitempty"`
-	Invites          []*Invite         `json:"invites,omitempty"`
 	Orders           []*Order          `json:"orders,omitempty"`
 	Operation        int               `json:"operation,omitempty"` // current operation number, from 1
 	Operations       []OperationRecord `json:"operations,omitempty"`
@@ -101,27 +83,6 @@ type Room struct {
 	ReadMarks map[string]map[string]int `json:"readMarks,omitempty"`
 	Seq       int                       `json:"seq"` // numbering for things created during play
 	Version   int64                     `json:"version"`
-}
-
-type Member struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Role        Role       `json:"role"`
-	Status      Status     `json:"status"`
-	TokenHash   string     `json:"tokenHash"`
-	RequestedAt time.Time  `json:"requestedAt"`
-	DecidedAt   *time.Time `json:"decidedAt,omitempty"`
-	Briefed     bool       `json:"briefed"`
-	// Test seats are puppet players the referee creates to try the game from
-	// several browser tabs. Their key is kept so the referee can reopen them.
-	TestKey string `json:"testKey,omitempty"`
-	// ReportsTo is the commander this player answers to; empty means the referee.
-	ReportsTo string `json:"reportsTo,omitempty"`
-	// AdminMode lets a referee see player orders during planning.
-	AdminMode bool `json:"adminMode,omitempty"`
-	// Push is where to send this member's notifications: one entry per
-	// browser that subscribed.
-	Push []PushSub `json:"push,omitempty"`
 }
 
 // Unit is a marine, a group of survivors, or a pack of infected on the map.
@@ -257,41 +218,10 @@ func CleanName(s string) (string, error) {
 	return s, nil
 }
 
-func (r *Room) MemberByToken(token string) *Member {
-	if token == "" {
-		return nil
-	}
-	h := HashToken(token)
-	for _, m := range r.Members {
-		if subtle.ConstantTimeCompare([]byte(m.TokenHash), []byte(h)) == 1 {
-			return m
-		}
-	}
-	return nil
-}
-
-func (r *Room) Member(id string) *Member {
-	for _, m := range r.Members {
-		if m.ID == id {
-			return m
-		}
-	}
-	return nil
-}
-
 func (r *Room) Unit(id string) *Unit {
 	for _, u := range r.Units {
 		if u.ID == id {
 			return u
-		}
-	}
-	return nil
-}
-
-func (r *Room) Referee() *Member {
-	for _, m := range r.Members {
-		if m.Role == RoleReferee {
-			return m
 		}
 	}
 	return nil
@@ -305,15 +235,6 @@ func (r *Room) logKind(vis Visibility, kind, format string, args ...any) {
 	r.Log = append(r.Log, LogEntry{At: time.Now().UTC(), Text: fmt.Sprintf(format, args...), Visibility: vis, Kind: kind, Turn: r.Turn})
 }
 
-func (r *Room) nameTaken(name string) bool {
-	for _, m := range r.Members {
-		if (m.Status == StatusApproved || m.Status == StatusPending) && strings.EqualFold(m.Name, name) {
-			return true
-		}
-	}
-	return false
-}
-
 // newRoom builds a campaign from a scenario with the creator as referee.
 func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash string) *Room {
 	now := time.Now().UTC()
@@ -321,7 +242,7 @@ func newRoom(code, name string, sc *Scenario, mod *Module, refName, tokenHash st
 		TokenHash: tokenHash, RequestedAt: now, DecidedAt: &now, Briefed: true}
 	r := &Room{
 		Code: code, Name: name, ScenarioID: sc.ID, ModuleID: mod.ID, ModuleVersion: mod.Version,
-		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Members: []*Member{ref},
+		CreatedAt: now, Phase: PhaseSetup, Threat: MinThreat, Operation: 1, Schedule: DefaultSchedule(), Membership: Membership{Members: []*Member{ref}},
 		Mission: newMission(sc.Mission), Map: sc.Map.Clone(), Board: sc.Board.withDefaults(), Briefing: slices.Clone(sc.Briefing), Objectives: slices.Clone(sc.Objectives), RefereeNotes: sc.RefereeNotes,
 	}
 	engineFor(mod).setup(r, sc)
@@ -366,21 +287,10 @@ func (r *Room) RequestJoin(name, tokenHash string) (*Member, error) {
 	if r.Closed {
 		return nil, bad("this room is closed")
 	}
-	pending := 0
-	for _, m := range r.Members {
-		if m.Status == StatusPending {
-			pending++
-		}
+	m, err := r.Membership.requestJoin(name, tokenHash)
+	if err != nil {
+		return nil, err
 	}
-	if pending >= MaxPendingPerRoom {
-		return nil, ErrRoomFull
-	}
-	if r.nameTaken(name) {
-		return nil, fmt.Errorf("%w: someone in this room already uses that name", ErrBadRequest)
-	}
-	m := &Member{ID: newID(), Name: name, Role: RolePlayer, Status: StatusPending,
-		TokenHash: tokenHash, RequestedAt: time.Now().UTC()}
-	r.Members = append(r.Members, m)
 	r.logf(VisReferee, "%s requested access.", name)
 	return m, nil
 }

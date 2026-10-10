@@ -1,4 +1,4 @@
-# Handoff (2026-10-08)
+# Handoff (2026-10-09)
 
 Where the project stands and what to do next. The detailed record of past
 work, measurements and failed runs is in [worklog.md](worklog.md); the plan is
@@ -13,9 +13,10 @@ in [roadmap.md](roadmap.md).
   (`.github/workflows/test.yml`) runs the Go checks on every push.
 - No human group has played a full game yet. Milestone 1 in the roadmap is
   open, and it is the next thing to close.
-- The referee UI and original handoff tasks 1–3 are committed locally.
-  Assistant run bookkeeping has moved onto `Assistant`; the remaining
-  `Room` decomposition is optional follow-up. The owner pushes when ready.
+- The referee UI and original handoff tasks 1–3 are committed locally as
+  `d7ab658`. Assistant run bookkeeping has moved onto `Assistant`; the
+  membership follow-up described below is uncommitted. The owner pushes
+  when ready.
 
 ## Changed on 2026-10-08
 
@@ -58,6 +59,17 @@ in [roadmap.md](roadmap.md).
   recovery now belong to `Assistant`, within the existing game package.
   Room authorization and worker APIs are unchanged.
 
+## Changed on 2026-10-09
+
+- **Membership state:** `Membership` owns members, invites, seat lookup,
+  the command hierarchy, pending requests and invite bookkeeping. Room
+  actions still enforce room closure/authorization, log events and handle
+  unit handovers. Eleven direct `Room` methods moved to the owning type.
+- The existing flat `members`/`invites` JSON and Room callers are preserved.
+  A regression loads the old wire format, checks seat access and private
+  data, accepts an invite, then saves/reloads to check use counts and the
+  new seat. No live data or server was used.
+
 ## Known limits, most important first
 
 1. **Judgment quality still needs people.** Batch reporting is regenerated
@@ -70,8 +82,9 @@ in [roadmap.md](roadmap.md).
    Revelation is explicit shared enemy knowledge, not per-observer memory.
    Clearing it when concealment returns is a referee/model decision.
 3. **`Room` is still large**: about 250 methods in one package. The engine
-   seam removed the cross-engine branching; assistant run bookkeeping is the
-   first state decomposition. Membership, board and turn work remain.
+   seam removed the cross-engine branching; assistant run bookkeeping and
+   membership now have owning types. Board and turn work remain, along with
+   room-level actions that coordinate membership with the game.
 4. **Storage.** One JSON file, rewritten and fsynced on every change under a
    global lock, with history never pruned. Fine for a few small rooms.
 5. **Seat keys in URLs** (`/r/CODE/k/KEY`) appear in browser history and in
@@ -80,8 +93,9 @@ in [roadmap.md](roadmap.md).
 ## Next
 
 Run the sessions in [playtest.md](playtest.md) and record rulings people
-disagree with. Fix what those sessions find before adding features. Do not
-claim Milestone 1 complete from mock tests and solo browser checks.
+disagree with; the owner plans to start on 2026-10-10. Fix what those sessions
+find before adding features. Do not claim Milestone 1 complete from mock
+tests and solo browser checks.
 
 ## Working rules
 
